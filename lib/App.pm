@@ -429,7 +429,7 @@ sub register {
     return $self->ok;
   }
 
-  return $self->forbidden;
+  return $self->unauthorized;
 }
 
 sub connections {

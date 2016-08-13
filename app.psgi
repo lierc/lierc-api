@@ -56,7 +56,7 @@ builder {
     return $name->($env)
       if ref $name eq "CODE";
 
-    return $app->forbidden
+    return $app->unauthorized
       unless $name =~ /^(?:auth|register)$/
         or $app->logged_in($session);
 
