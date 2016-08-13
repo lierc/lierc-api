@@ -18,14 +18,14 @@
   </head>
   <body>
     <h1>Login</h1>
-    <form method="POST" action="<: $self.path("/auth") :>">
+    <form method="POST" action="./auth">
       <input type="email" name="email" value="" placeholder="your@email.com">
       <input type="password" name="pass" value="" placeholder="password">
       <input type="submit" value="Log in">
     </form>
 
     <h1>Register</h1>
-    <form method="POST" action="<: $self.path("/register") :>">
+    <form method="POST" action="./register">
       <input type="email" name="email" value="" placeholder="your@email.com">
       <input type="password" name="pass" value="" placeholder="password">
       <input type="submit" value="Register">
