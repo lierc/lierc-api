@@ -1,0 +1,108 @@
+html {
+}
+body {
+  font-size: 18px;
+  line-height: 18px;
+  font-family: Inconsolata, monospace;
+  margin: 0;
+  background: #000;
+  color: #bbb;
+}
+.part-nick,
+.join-host,
+.status-wrap {
+  color: darkturquoise;
+}
+.own-nick,
+.join-chan {
+  color: #fff;
+}
+.join-nick {
+  color: aquamarine;
+}
+.info-mark {
+  color: blue;
+}
+.host-wrap,
+.nick-wrap {
+  color: #444;
+}
+#chats {
+  padding-top: 18px;
+  padding-bottom: 36px;
+}
+#chats ol {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: none;
+}
+#chats ol.focused {
+  display: block;
+}
+#chats ol li {
+  white-space: pre-wrap;
+}
+#chats ol li div.left {
+  white-space: nowrap;
+  padding-right: 9px;
+}
+#chats ol li a {
+  color: #fff;
+  text-decoration: underline;
+  word-break: break-all;
+}
+#chats ol li a img {
+  display: block;
+  border: 1px solid #333;
+}
+#topic {
+  position: fixed;
+  white-space: pre;
+  padding: 0;
+  top: 0px;
+  left: 0px;
+  right: 0px;
+  height: 18px;
+  background: blue;
+}
+#foot {
+  position: fixed;
+  bottom: 0px;
+  padding: 0;
+  left: 0px;
+  right: 0px;
+  background: #000;
+}
+#foot #status {
+  background: blue;
+  font-size: 18px;
+  font-family: Inconsolata, monospace;
+  padding: 0 4px;
+  white-space: pre-wrap;
+}
+.flex-wrap {
+  display: flex;
+  flex-flow: row nowrap;
+}
+.flex-wrap .left {
+  flex: 0 1 auto;
+}
+.flex-wrap .right {
+  flex: 1 1 auto;
+}
+#input-prefix {
+  white-space: pre-wrap;
+}
+#input input {
+  height: 18px;
+  font-size: 18px;
+  font-family: Inconsolata, monospace;
+  padding: 0;
+  background: #000;
+  color: #bbb;
+  border: none;
+  outline: none;
+  width: 100%;
+  display: block;
+}

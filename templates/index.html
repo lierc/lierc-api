@@ -1,0 +1,132 @@
+<html>
+  <head>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style type="text/css">
+    body {
+      font-size: 16px;
+      font-family: sans-serif;
+      background: #eee;
+      margin: 0;
+      padding: 0;
+    }
+    input {
+      display: block;
+      font-size: 18px;
+    }
+    input[type=text], input[type=number] {
+      border: 1px solid #ccc;
+      padding: 5px;
+    }
+    div#container {
+      width: 500px;
+      margin: 0 auto;
+      background: #fff;
+      padding: 10px 20px;
+    }
+    div.input-group {
+      padding: 5px 0;
+    }
+  </style>
+  </head>
+  <body>
+  <div id="container">
+:if $connections.size() > 0 {
+    <h2>Open connections</h2>
+    <ul id="connections">
+: for $connections -> $conn {
+      <li data-id="<: $conn.id :>"><a href="<: $self.path("/"~$conn.id) :>"><: $conn.Config.Host :></a></li>
+:}
+    </ul>
+: }
+    <h2>New connection</h2>
+    <form method="POST" action="<: $self.path("/create") :>" class="json-form">
+      <div class="input-group">
+      <label>Server address</label>
+      <input data-json-type="string" type="text" name="Host" value="" placeholder="irc.freenode.com">
+      </div>
+      <div class="input-group">
+      <label>Port</label>
+      <input data-json-type="int" type="number" name="Port" value="" placeholder="6667">
+      </div>
+      <div class="input-group">
+      <label>SSL</label>
+      <input data-json-type="bool" type="checkbox" name="Ssl" value="" checked>
+      </div>
+      <div class="input-group">
+      <label>Nickname</label>
+      <input data-json-type="string" type="text" name="Nick" value="" placeholder="Nick">
+      </div>
+      <div class="input-group">
+      <label>Username</label>
+      <input data-json-type="string" type="text" name="User" value="" placeholder="User">
+      </div>
+      <div class="input-group">
+      <label>Password</label>
+      <input data-json-type="string" type="text" name="Pass" value="" placeholder="Pass">
+      </div>
+      <div class="input-group">
+      <label>Channels (comma separated)</label>
+      <input data-json-type="array" type="text" name="Channels" value="" placeholder="#channel">
+      </div>
+      <div class="input-group">
+      <input type="submit" value="Connect">
+      </div>
+    </form>
+    <script type="text/javascript" src="<: asset("vendor/jquery/dist/jquery.min.js") :>"></script>
+    <script type="text/javascript">
+      $(document).ready(function() {
+        $("#connections li").each(function() {
+          var li = $(this);
+          var id = li.attr("data-id");
+          var url = window.location.toString().replace(/\/$/, "") + "/" + id + "/status"; 
+          $.ajax({
+            url: url,
+            method: "GET",
+            dataType: "json",
+            success: function(res) {
+              li.addClass("connected");
+            }
+          });
+        });
+        $("form.json-form").on("submit", function(e) {
+          e.preventDefault();
+
+          var form = $(this);
+          var data = {};
+
+          form.find("input").each(function() {
+            var input = $(this);
+
+            var name = input.attr("name")
+            var type = input.attr("data-json-type");
+
+            if (type == "string") {
+              data[name] = String(input.val());
+            }
+            else if (type == "int") {
+              data[name] = parseInt(input.val());
+            }
+            else if (type == "bool") {
+              data[name] = input.get(0).checked;
+            }
+            else if (type == "array") {
+              data[name] = [input.val()];
+            }
+          });
+
+          $.ajax({
+            type: form.attr("method"),
+            data: JSON.stringify(data),
+            dataType: "text",
+            url: form.attr("action"),
+            contentType: "application/javascript", 
+            success: function(res) {
+              window.location = window.location.toString().replace(/\/$/, "") + "/" + res;
+            }
+          });
+        });
+      });
+    </script>
+  </div>
+  </body>
+</html>
