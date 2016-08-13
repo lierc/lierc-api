@@ -335,7 +335,7 @@ sub slice {
 
   return $self->not_found unless @$rows;
 
-  my $data = [ map { $_->[0] } @$rows ];
+  my $data = [ map { decode_json $_->[0] } @$rows ];
   return $self->json($data);
 }
 
