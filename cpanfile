@@ -16,4 +16,3 @@ requires "Plack::App::File";
 requires "Text::Xslate";
 requires "Plack::Middleware::Session";
 requires "DBD::Pg";
-requires "Plack::Middleware::CrossOrigin";

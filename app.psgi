@@ -22,29 +22,23 @@ my $static = Plack::App::File->new(
 )->to_app;
 
 my $nsq = NSQ->tail(
-  fh => *STDIN,
+  %{ $config->{nsq} },
   on_message => sub { $app->irc_event(@_) },
 );
 
 my $router = Router::Boom::Method->new;
 
-$router->add( GET   => "/login",               "login"   );
-$router->add( GET   => "/logout",              "login"   );
 $router->add( POST  => "/auth",                "auth"    );
 $router->add( POST  => "/register",            "register" );
 $router->add( GET   => "/",                    "index"   );
 $router->add( POST  => "/create",              "create"  );
-$router->add( GET   => "/:id",                 "chat"    );
+$router->add( GET   => "/:id",                 "status"  );
 $router->add( GET   => "/:id/destroy",         "destroy" );
 $router->add( GET   => "/:id/events/:nick",    "events"  );
 $router->add( POST  => "/:id/raw",             "raw"     );
-$router->add( GET   => "/:id/status",          "status"  );
 $router->add( GET   => "/:id/:channel/:slice", "slice"   );
-$router->add( GET   => "/static/*",            $static   );
-$router->add( GET   => "/favicon.ico",         $app->nocontent );
 
 builder {
-  enable "CrossOrigin", origins => "*";
   enable "Session::Cookie",
     secret => $app->secret,
     expires => 3600 * 24,

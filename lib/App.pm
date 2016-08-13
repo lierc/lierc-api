@@ -30,16 +30,6 @@ sub dbh {
   ))->dbh;
 }
 
-sub template {
-  my $self = shift;
-  $self->{template} ||= Text::Xslate->new(
-    path => "./templates",
-    function => {
-      asset => sub { $self->path("/static/$_[0]") },
-    }
-  );
-}
-
 sub ua {
   my $self = shift;
   $self->{ua} ||= LWP::UserAgent->new;
@@ -243,20 +233,8 @@ sub raw {
 sub index {
   my ($self, $req, $captures, $session) = @_;
   my $conns = $self->connections($session->{user});
-  my $json = $req->headers->header("Accept") =~ m{application/json};
 
-  if ($json) {
-    return $self->json($conns);
-  }
-  return $self->html("index", {
-    self => $self,
-    connections => $conns,
-  });
-}
-
-sub login {
-  my ($self, $req, $captures) = @_;
-  return $self->html("login", {self => $self});
+  return $self->json($conns);
 }
 
 sub find_or_recreate_connection {
@@ -284,31 +262,6 @@ sub find_or_recreate_connection {
 
   $res = $self->ua->get($self->url("$id/status"));
   return $res;
-}
-
-sub chat {
-  my ($self, $req, $captures, $session) = @_;
-
-  my $id = $captures->{id};
-  my $res = $self->find_or_recreate_connection($id);
-
-  if ($res->code != 200) {
-    return [$res->code, [$res->flatten], [$res->decoded_content]];
-  }
-
-  my $status = decode_json($res->content);
-
-  my $html = $self->template->render(
-    "chat.html", {
-      init => encode_json($status),
-      self => $self
-    }
-  );
-  return [
-    200,
-    ["Content-Type", "text/html;charset=utf-8"],
-    [encode utf8 => $html]
-  ];
 }
 
 sub status {
@@ -530,15 +483,6 @@ sub text {
     200,
     ["Content-Type", "text/plain"],
     [$text]];
-}
-
-sub html {
-  my ($self, $template, $vars) = @_;
-  my $html = $self->template->render("$template.html", $vars);
-  return [
-    200,
-    ["Content-Type", "text/html;charset=utf-8"],
-    [encode utf8 => $html]];
 }
 
 sub nocontent {

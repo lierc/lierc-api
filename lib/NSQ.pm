@@ -1,24 +1,34 @@
 package NSQ;
 
 use AnyEvent;
-use Class::Tiny qw(fh on_error on_message);
+use Class::Tiny qw(on_error on_message path address topic);
+use IPC::Open3;
+use Symbol qw(gensym);
 
 sub tail {
   my $class = shift;
   my $self = $class->new(@_);
 
+  my ($w, $r, $err);
+  $err = gensym;
+  my @opts = ("-topic", $self->topic, "-nsqd-tcp-address", $self->address);
+  open3($w, $r, $err, $self->path, @opts) or die $!;
+  close($w);
+
   $self->{handle} = AnyEvent::Handle->new(
-    fh => $self->fh,
+    fh => $r,
     on_error => sub {
       my ($hdl, $fatal, $msg) = @_;
       $hdl->destroy;
       warn $msg;
+      undef $err; # hold a ref to err to keep pipe open
       $self->{on_error}->($msg) if $self->{on_error};
     },
     on_eof => sub {
       my ($hdl, $fatal, $msg) = @_;
       $hdl->destroy;
       warn "EOF";
+      undef $err;
     }
   );
 

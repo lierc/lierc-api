@@ -4,5 +4,10 @@
   "dsn": "dbi:Pg:dbname=lierc",
   "dbuser": null,
   "dbpass": null,
-  "secret": "asdffdas"
+  "secret": "asdffdas",
+  "nsq": {
+    "path": "nsq_tail",
+    "address": ":4150",
+    "topic": "chats"
+  }
 }
