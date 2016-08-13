@@ -14,17 +14,9 @@ apt-get install carton
 carton install
 ```
 
-install bower to install JS dependencies
-
-```
-apt-get install npm 
-npm install bower
-nodejs node_modules/.bin/bower install
-```
-
 start the server
 
 ```
 cp config.example.json config.json
-./start.sh
+carton exec plackup -Ilib app.psgi
 ```
