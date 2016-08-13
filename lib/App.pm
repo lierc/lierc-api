@@ -239,7 +239,7 @@ sub destroy {
   ];
 }
 
-sub raw {
+sub send {
   my ($self, $req, $captures) = @_;
 
   my $id  = $captures->{id};
@@ -328,7 +328,7 @@ sub slice {
 
   my $rows = $self->dbh->selectall_arrayref(q{
     SELECT message FROM log
-      WHERE channel=? AND connection=?
+      WHERE channel IN (?, '*') AND connection=?
       ORDER BY time DESC OFFSET ? LIMIT ?
     }, {}, url_decode($chan), $id, $start, $end - $start
   );
