@@ -69,7 +69,7 @@ sub url {
 
 sub login {
   my $self = shift;
-  $self->html("login", {self => $self});
+  $self->html("login");
 }
 
 sub events {
@@ -191,11 +191,9 @@ sub create {
 
   if ($res->code == 200) {
     my $user = $session->{user};
-    $self->dbh->do(q{
-      INSERT INTO connection
-      (id, "user", config)
-      VALUES(?,?,?)
-      }, {}, $id, $user, $req->content
+    $self->dbh->do(
+      q{INSERT INTO connection (id, "user", config) VALUES(?,?,?)},
+      {}, $id, $user, $req->content
     );
 
     return $self->text($id);
@@ -217,7 +215,7 @@ sub destroy {
   ) );
 
   if ($res->code == 200) {
-    $self->dbh->do('DELETE FROM connection WHERE id=?', {}, $id);
+    $self->dbh->do(q{DELETE FROM connection WHERE id=?}, {}, $id);
     return $self->redirect("/");
   }
 
@@ -256,7 +254,7 @@ sub find_or_recreate_connection {
   my ($self, $id, $user) = @_;
 
   my ($row) = $self->dbh->selectall_array(
-    "SELECT config FROM connection WHERE id=?",
+    q{SELECT config FROM connection WHERE id=?},
     {}, $id
   );
 
@@ -317,10 +315,8 @@ sub slice {
 
   my $rows = $self->dbh->selectall_arrayref(q{
     SELECT message FROM log
-    WHERE channel=?
-    AND connection=?
-    ORDER BY time DESC
-    OFFSET ? LIMIT ?
+      WHERE channel=? AND connection=?
+      ORDER BY time DESC OFFSET ? LIMIT ?
     }, {}, url_decode($chan), $id, $start, $end - $start
   );
 
@@ -363,9 +359,8 @@ sub auth {
   my $email = $req->parameters->{email};
   my $hashed = $self->hash_password($pass);
 
-  my ($row) = $self->dbh->selectall_array(q{
-    SELECT id FROM "user"
-    WHERE email=? AND password=?},
+  my ($row) = $self->dbh->selectall_array(
+    q{SELECT id FROM "user" WHERE email=? AND password=?},
     {}, $email, $hashed
   );
 
@@ -382,10 +377,8 @@ sub add_user {
   my $hashed = $self->hash_password($pass);
   my $id = $self->uuid;
 
-  $self->dbh->do(q{
-    INSERT INTO "user"
-    (id, email, password)
-    VALUES(?,?,?)},
+  $self->dbh->do(
+    q{INSERT INTO "user" (id, email, password) VALUES(?,?,?)},
     {}, $id, $email, $hashed
   );
 
@@ -409,8 +402,8 @@ sub lookup_user {
   my ($self, $id) = @_;
   return () unless defined $id;
 
-  my ($user) = $self->dbh->selectall_array(q{
-    SELECT * FROM "user" WHERE id=?},
+  my ($user) = $self->dbh->selectall_array(
+    q{SELECT * FROM "user" WHERE id=?},
     {}, $id
   );
 
@@ -434,10 +427,8 @@ sub register {
 
 sub connections {
   my ($self, $user) = @_;
-  my $rows = $self->dbh->selectall_arrayref(q{
-    SELECT id, config
-    FROM connection
-    WHERE "user"=?},
+  my $rows = $self->dbh->selectall_arrayref(
+    q{SELECT id, config FROM connection WHERE "user"=?},
     {}, $user
   );
   return [ map {
@@ -456,11 +447,8 @@ sub path {
 sub verify_owner {
   my ($self, $id, $user) = @_;
 
-  my $rows = $self->dbh->selectall_arrayref(q{
-    SELECT id
-    FROM connection
-    WHERE "user"=?
-    AND id=?},
+  my $rows = $self->dbh->selectall_arrayref(
+    q{SELECT id FROM connection WHERE "user"=? AND id=?},
     {}, $user, $id
   );
 

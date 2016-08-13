@@ -31,3 +31,5 @@ Start the server
 cp config.example.json config.json
 carton exec plackup -Ilib app.psgi
 ```
+
+Try the login page at `http://localhost:5000/login.html`
