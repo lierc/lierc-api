@@ -52,7 +52,7 @@ sub url {
 
 {
   my %handlers = map { $_ => 1} qw(
-    auth register list create show
+    user auth register list create show
     delete send events slice login
   );
 
@@ -349,6 +349,11 @@ sub logged_in {
   }
 
   return 1;
+}
+
+sub user {
+  my ($self, $req, $captures, $session) = @_;
+  return $self->json($session);
 }
 
 sub auth {

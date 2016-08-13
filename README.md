@@ -2,8 +2,9 @@ Goals
 =====
 
 This is an HTTP API responsible for user authentication, and gating access
-to the basic `liercd` functions. It also provides endpoints to access
-logs.
+to the basic `liercd` functions. It is also responsible for storing a user's
+connection configurations. It will use these configurations to create connections
+on liercd. The API also provides endpoints to access logs.
 
 Setup
 =====

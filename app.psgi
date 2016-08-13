@@ -30,6 +30,7 @@ my $router = Router::Boom::Method->new;
 
 $router->add( GET    => "/favicon.ico",         $app->nocontent );
 $router->add( GET    => "/login.html",          "login"    );
+$router->add( GET    => "/auth",                "user"     );
 $router->add( POST   => "/auth",                "auth"     );
 $router->add( POST   => "/register",            "register" );
 $router->add( GET    => "/",                    "list"     );
