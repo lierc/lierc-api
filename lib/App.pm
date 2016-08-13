@@ -30,6 +30,16 @@ sub dbh {
   ))->dbh;
 }
 
+sub template {
+  my $self = shift;
+  $self->{template} ||= Text::Xslate->new(
+    path => "./templates",
+    function => {
+      asset => sub { $self->path("/static/$_[0]") },
+    }
+  );
+}
+
 sub ua {
   my $self = shift;
   $self->{ua} ||= LWP::UserAgent->new;
@@ -42,8 +52,8 @@ sub url {
 
 {
   my %handlers = map { $_ => 1} qw(
-    index create chat status raw events
-    destroy slice auth login register
+    auth register list create show
+    delete send events slice login
   );
 
   sub handle {
@@ -55,6 +65,11 @@ sub url {
 
     return $self->not_found;
   }
+}
+
+sub login {
+  my $self = shift;
+  $self->html("login", {self => $self});
 }
 
 sub events {
@@ -230,7 +245,7 @@ sub raw {
   ];
 }
 
-sub index {
+sub list {
   my ($self, $req, $captures, $session) = @_;
   my $conns = $self->connections($session->{user});
 
@@ -264,7 +279,7 @@ sub find_or_recreate_connection {
   return $res;
 }
 
-sub status {
+sub show {
   my ($self, $req, $captures, $session) = @_;
 
   my $id = $captures->{id};
@@ -351,7 +366,7 @@ sub auth {
 
   if ($row) {
     $req->env->{'psgix.session'}->{user} = $row->[0];
-    return $self->redirect("/");
+    return $self->ok;
   }
 
   return $self->unauthorized;
@@ -406,10 +421,10 @@ sub register {
   if (defined $email and defined $pass) {
     my $id = $self->add_user($email, $pass);
     $req->env->{'psgix.session'}->{user} = $id;
-    return $self->redirect("/");
+    return $self->ok;
   }
 
-  return $self->redirect("/login");
+  return $self->forbidden;
 }
 
 sub connections {
@@ -450,8 +465,8 @@ sub verify_owner {
 sub not_found {
   return [
     404,
-    ["Content-Type", "text/plain"],
-    ["not found"]];
+    ["Content-Type", "application/javascript"],
+    [encode_json {"status" => "not found"}]];
 }
 
 sub redirect {
@@ -465,8 +480,8 @@ sub redirect {
 sub unauthorized {
   return [
     401,
-    ["Content-Type", "text/plain"],
-    ["unauthorized"]];
+    ["Content-Type", "application/javascript"],
+    [encode_json {"status" => "unauthorized"}]];
 }
 
 sub json {
@@ -488,5 +503,20 @@ sub text {
 sub nocontent {
   return [204, [], []];
 }
+
+sub ok {
+  my $self = shift;
+  return $self->json({status => "ok"});
+}
+
+
+sub html {
+  my ($self, $template, $vars) = @_;
+  my $html = $self->template->render("$template.html", $vars);
+  return [
+    200,
+    ["Content-Type", "text/html;charset=utf-8"],
+    [encode utf8 => $html]];
+};
 
 1;

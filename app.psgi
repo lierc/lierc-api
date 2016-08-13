@@ -28,15 +28,17 @@ my $nsq = NSQ->tail(
 
 my $router = Router::Boom::Method->new;
 
-$router->add( POST  => "/auth",                "auth"    );
-$router->add( POST  => "/register",            "register" );
-$router->add( GET   => "/",                    "index"   );
-$router->add( POST  => "/create",              "create"  );
-$router->add( GET   => "/:id",                 "status"  );
-$router->add( GET   => "/:id/destroy",         "destroy" );
-$router->add( GET   => "/:id/events/:nick",    "events"  );
-$router->add( POST  => "/:id/raw",             "raw"     );
-$router->add( GET   => "/:id/:channel/:slice", "slice"   );
+$router->add( GET    => "/favicon.ico",         $app->nocontent );
+$router->add( GET    => "/login.html",          "login"    );
+$router->add( POST   => "/auth",                "auth"     );
+$router->add( POST   => "/register",            "register" );
+$router->add( GET    => "/",                    "list"     );
+$router->add( POST   => "/",                    "create"   );
+$router->add( GET    => "/:id",                 "show"     );
+$router->add( DELETE => "/:id",                 "delete"   );
+$router->add( POST   => "/:id",                 "send"     );
+$router->add( GET    => "/:id/events/:nick",    "events"   );
+$router->add( GET    => "/:id/:channel/:slice", "slice"    );
 
 builder {
   enable "Session::Cookie",
@@ -46,18 +48,19 @@ builder {
 
   sub {
     my $env = shift;
+
     my ($name, $captured) = $router->match(@$env{qw(REQUEST_METHOD PATH_INFO)});
     my $session = $env->{'psgix.session'};
 
     return $name->($env)
       if ref $name eq "CODE";
 
-    return $app->redirect("/login")
-      unless $name =~ /^(?:login|auth|register)$/
+    return $app->forbidden
+      unless $name =~ /^(?:auth|register)$/
         or $app->logged_in($session);
 
     if ($captured->{id}) {
-      die "Invalid connection ID"
+      die "Invalid connection ID $captured->{id}"
         unless $app->verify_owner($captured->{id}, $session->{user});
     }
 
