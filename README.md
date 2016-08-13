@@ -1,4 +1,14 @@
-set database
+Goals
+=====
+
+This is an HTTP API responsible for user authentication, and gating access
+to the basic `liercd` functions. It also provides endpoints to access
+logs.
+
+Setup
+=====
+
+Create database
 
 ```
 apt-get install postgresql
@@ -7,14 +17,14 @@ sudo -u postgres createdb -O $USER lierc
 psql lierc < lierc.sql
 ```
 
-install carton for perl dependencies
+Install carton for perl dependencies
 
 ```
 apt-get install carton 
 carton install
 ```
 
-start the server
+Start the server
 
 ```
 cp config.example.json config.json
