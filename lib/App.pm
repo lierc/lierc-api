@@ -15,9 +15,22 @@ use AnyEvent::Handle;
 use DBIx::Connector;
 use Digest;
 
-use Class::Tiny qw(host dsn dbuser dbpass secret base), {
+use Class::Tiny qw(host dsn dbuser dbpass secret base timer), {
   streams => sub { {} },
 };
+
+sub BUILD {
+  my $self = shift;
+
+  # send a ping to every stream every 10s
+  $self->{ping} = AE::timer 0, 10, sub {
+    for my $writers (values %{$self->streams}) {
+      for my $writer (values %$writers) {
+        $writer->write("data: ping\n\n");
+      }
+    }
+  };
+}
 
 sub dbh {
   my $self = shift;
@@ -120,10 +133,10 @@ sub push_fake_events {
   if ($nick ne $status->{Nick}) {
     $writer->write(sprintf("data: %s\n\n", encode_json {
       Command => "NICK",
-      Prefix  => [$nick, 'lies', 'lies'],
+      Prefix  => {Name => $nick},
       Params  => [$status->{Nick}],
       Time    => time,
-      Raw     => ":$nick!lies\@lies NICK $status->{Nick}",
+      Raw     => ":$nick NICK $status->{Nick}",
     }));
   }
 
@@ -131,16 +144,16 @@ sub push_fake_events {
     my $channel = $status->{Channels}{$name};
     $writer->write(sprintf("data: %s\n\n", encode_json {
       Command => "JOIN",
-      Prefix  => [$status->{Nick}, 'lies', 'lies'],
+      Prefix  => {Name => $status->{Nick}},
       Params  => [$name],
       Time    => time,
-      Raw     => ":$status->{Nick}!lies\@lies JOIN $name"
+      Raw     => ":$status->{Nick} JOIN $name"
     }));
 
     if ($channel->{Topic}{Topic}) {
       $writer->write(sprintf("data: %s\n\n", encode_json {
         Command => "332",
-        Prefix  => [undef, undef, "lies"],
+        Prefix  => {Name => "lies"},
         Params  => [$status->{Nick}, $channel->{Name}, $channel->{Topic}{Topic}],
         Time    => time,
         Raw     => ":lies 332 $channel->{Name} :$channel->{Topic}{Topic}"
@@ -151,14 +164,14 @@ sub push_fake_events {
       my $nicks = join " ", keys %{ $channel->{Nicks} };
       $writer->write(sprintf("data: %s\n\n", encode_json {
         Command => "353",
-        Prefix  => [undef, undef, "lies"],
+        Prefix  => {Name => "lies"},
         Params  => [$status->{Nick}, "=", $channel->{Name}, $nicks],
         Time    => time,
         Raw     => ":lies 353 $status->{Nick} = $channel->{Name} :$nicks"
       }));
       $writer->write(sprintf("data: %s\n\n", encode_json {
         Command => "366",
-        Prefix  => [undef, undef, "lies"],
+        Prefix  => {Name => "lies"},
         Params  => [$status->{Nick}, $channel->{Name}, "End of /NAMES list."],
         Time    => time,
         Raw     => ":lies 366 $status->{Nick} $channel->{Name} :End of /NAMES list."
