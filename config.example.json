@@ -1,5 +1,5 @@
 {
-  "base": "/",
+  "base": "/api",
   "host": "127.0.0.1:5005",
   "dsn": "dbi:Pg:dbname=lierc",
   "dbuser": null,
