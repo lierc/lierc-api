@@ -343,12 +343,20 @@ sub add_user {
   my $hashed = Util->hash_password($pass, $self->secret);
   my $id = Util->uuid;
 
-  $self->dbh->do(
-    q{INSERT INTO "user" (id, email, password) VALUES(?,?,?)},
-    {}, $id, $email, $hashed
-  );
+  my $err;
 
-  return $id;
+  {
+    local $@;
+    eval {
+      $self->dbh->do(
+        q{INSERT INTO "user" (id, email, password) VALUES(?,?,?)},
+        {}, $id, $email, $hashed
+      );
+    };
+    $err = $@;
+  }
+
+  return ($id, $err);
 }
 
 sub lookup_user {
@@ -364,18 +372,20 @@ sub lookup_user {
 }
 
 sub register {
-  my ($self, $req) = @_;
+  my ($self, $req, $captures, $session) = @_;
 
   my $email = $req->parameters->{email};
   my $pass = $req->parameters->{pass};
 
   if (defined $email and defined $pass) {
-    my $id = $self->add_user($email, $pass);
-    $req->env->{'psgix.session'}->{user} = $id;
+    my ($id, $err) = $self->add_user($email, $pass);
+    return $self->error($err) if $err;
+
+    $session->{user} = $id;
     return $self->ok;
   }
 
-  return $self->unauthorized("Email and password required");
+  return $self->error("Email and password required");
 }
 
 sub connections {
