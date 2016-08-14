@@ -1,23 +1,29 @@
 create table "user" (
-  id varchar(24) not null,
-  email varchar(256) not null,
+  id       varchar(24) not null,
+  email    varchar(256) not null,
   password varchar(256) not null,
-  primary key (id),
-  unique (email)
+  primary  key (id)
 );
+
+create unique index on "user" (email);
 
 create table connection (
-  id   varchar(24) not null,
-  "user" varchar(24) not null,
-  config json not null,
-  primary key (id),
-  index ("user")
+  id      varchar(24) not null,
+  "user"  varchar(24) not null,
+  config  json not null,
+  primary key (id)
 );
 
-CREATE TABLE log (
-  connection char(24) not null,
-  channel    char(32) not null,
-  time       timestamp without time zone default (now() at time zone 'utc'),
-  message    varchar(512) not null,
-  primary key (connection, channel, time)
+create index on connection ("user");
+
+drop table log;
+create table log (
+  id          char(32) not null,
+  connection  char(24) not null,
+  channel     char(32) not null,
+  time        timestamp without time zone default (now() at time zone 'utc'),
+  message     varchar(512) not null,
+  primary key (id)
 );
+
+create index on log (connection, channel, time);
