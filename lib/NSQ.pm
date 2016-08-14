@@ -1,6 +1,6 @@
 package NSQ;
 
-use AnyEvent;
+use AnyEvent::Handle;
 use Class::Tiny qw(on_error on_message path address topic);
 use IPC::Open3;
 use Symbol qw(gensym);

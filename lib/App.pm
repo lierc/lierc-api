@@ -3,17 +3,16 @@ package App;
 use strict;
 use warnings;
 
-use Encode;
 use LWP::UserAgent;
 use Text::Xslate;
-use Data::UUID;
 use URL::Encode qw(url_decode);
 use JSON::XS;
+use AnyEvent;
 use List::Util qw(min);
-use Math::BaseConvert;
-use AnyEvent::Handle;
 use DBIx::Connector;
-use Digest;
+
+use Util;
+use Response;
 
 use Class::Tiny qw(host dsn dbuser dbpass secret base timer), {
   streams => sub { {} },
@@ -99,13 +98,9 @@ sub events {
   };
 }
 
-sub uuid {
-  return cnv(Data::UUID->new->create_hex, 16, 62);
-}
-
 sub add_writer {
   my ($self, $id, $writer) = @_;
-  my $wid = $self->uuid;
+  my $wid = Util->uuid;
 
   $self->streams->{$id} = {}
     unless defined $self->streams->{$id};
@@ -196,7 +191,7 @@ sub irc_event {
 sub create {
   my ($self, $req, $captures, $session) = @_;
 
-  my $id  = $self->uuid;
+  my $id  = Util->uuid;
   my $res = $self->ua->request( HTTP::Request->new(
     POST => $self->url("$id/create"),
     ["Content-Type", "application/javascript"],
@@ -300,7 +295,7 @@ sub show {
   return [
     $res->code,
     [$res->flatten],
-    [encode utf8 => $res->decoded_content]
+    [$res->content]
   ];
 }
 
@@ -371,7 +366,7 @@ sub auth {
 
   my $pass  = $req->parameters->{pass};
   my $email = $req->parameters->{email};
-  my $hashed = $self->hash_password($pass);
+  my $hashed = Util->hash_password($pass, $self->secret);
 
   my ($row) = $self->dbh->selectall_array(
     q{SELECT id FROM "user" WHERE email=? AND password=?},
@@ -388,8 +383,8 @@ sub auth {
 
 sub add_user {
   my ($self, $email, $pass) = @_;
-  my $hashed = $self->hash_password($pass);
-  my $id = $self->uuid;
+  my $hashed = Util->hash_password($pass, $self->secret);
+  my $id = Util->uuid;
 
   $self->dbh->do(
     q{INSERT INTO "user" (id, email, password) VALUES(?,?,?)},
@@ -397,19 +392,6 @@ sub add_user {
   );
 
   return $id;
-}
-
-sub hash_password {
-  my ($self, $password) = @_;
-
-  my $secret = sprintf("%16s", $self->secret);
-  my $bcrypt = Digest->new(
-    'Bcrypt',
-    cost => 15,
-    salt => $secret
-  );
-  $bcrypt->add($password);
-  $bcrypt->hexdigest;
 }
 
 sub lookup_user {
@@ -467,70 +449,6 @@ sub verify_owner {
   );
 
   return @$rows > 0;
-}
-
-sub not_found {
-  return [
-    404,
-    ["Content-Type", "application/javascript"],
-    [encode_json {"status" => "not found"}]];
-}
-
-sub redirect {
-  my ($self, $path) = @_;
-  return [
-    302,
-    ["Location", $self->path($path)],
-    ["go there"]];
-}
-
-sub unauthorized {
-  return [
-    401,
-    ["Content-Type", "application/javascript"],
-    [encode_json {"status" => "unauthorized"}]];
-}
-
-sub json {
-  my ($self, $data) = @_;
-  return [
-    200,
-    ["Content-Type", "application/javascript"],
-    [encode_json $data],];
-}
-
-sub text {
-  my ($self, $text) = @_;
-  return [
-    200,
-    ["Content-Type", "text/plain"],
-    [$text]];
-}
-
-sub nocontent {
-  return [204, [], []];
-}
-
-sub ok {
-  my $self = shift;
-  return $self->json({status => "ok"});
-}
-
-
-sub html {
-  my ($self, $template, $vars) = @_;
-  my $html = $self->template->render("$template.html", $vars);
-  return [
-    200,
-    ["Content-Type", "text/html;charset=utf-8"],
-    [encode utf8 => $html]];
-};
-
-package Util;
-
-sub event {
-  my ($class, $type, $data, $id) = @_;
-  return sprintf "event: %s\ndata: %s\n\n", $type, $data;
 }
 
 1;
