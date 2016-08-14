@@ -13,6 +13,4 @@ with 'API::Responses';
 with 'API::Liercd';
 with 'API::Events';
 
-sub BUILD { }
-
 1;

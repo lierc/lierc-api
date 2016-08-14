@@ -69,9 +69,11 @@ sub streams {
   $self->{streams} ||= {};
 }
 
-after BUILD => sub {
-  my $self = shift;
+around new => sub {
+  my $orig = shift;
+  my $self = $orig->(@_);
   $self->start_pings;
+  return $self;
 };
 
 1;
