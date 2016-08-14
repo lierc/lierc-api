@@ -277,21 +277,8 @@ sub slice {
 sub logged_in {
   my ($self, $session) = @_;
 
-  if (! defined $session) {
-    warn "no session";
-    return 0;
-  }
-
-  if (! defined $session->{user}) {
-    warn "no user in session";
-    return 0;
-  }
-
-  if (! $self->lookup_user($session->{user})) {
-    warn "user not in data base: '$session->{user}'";
-    return 0;
-  }
-
+  return () unless defined $session && defined $session->{user};
+  return () unless $self->lookup_user($session->{user});
   return 1;
 }
 
