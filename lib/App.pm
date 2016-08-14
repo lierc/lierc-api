@@ -3,7 +3,6 @@ package App;
 use strict;
 use warnings;
 
-use Text::Xslate;
 use URL::Encode qw(url_decode);
 use JSON::XS;
 use AnyEvent;
@@ -44,16 +43,6 @@ sub dbh {
   ))->dbh;
 }
 
-sub template {
-  my $self = shift;
-  $self->{template} ||= Text::Xslate->new(
-    path => "./templates",
-    function => {
-      asset => sub { $self->path("/static/$_[0]") },
-    }
-  );
-}
-
 {
   my %handlers = map { $_ => 1} qw(
     user auth register list create show
@@ -73,7 +62,8 @@ sub template {
 
 sub login {
   my $self = shift;
-  $self->html("login");
+  open my $fh, '<', 'templates/login.html' or die $!;
+  $self->html($fh);
 }
 
 sub events {
@@ -366,14 +356,6 @@ sub connections {
   return [ map {
     { id => $_->[0], Config => decode_json($_->[1]) }
   } @$rows ];
-}
-
-sub path {
-  my ($self, $path) = @_;
-  my $redir = $self->base . "/" . $path;
-  $redir =~ s{//}{/}g;
-  $redir = "/" if $redir eq "";
-  return $redir;
 }
 
 sub verify_owner {

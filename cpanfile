@@ -13,7 +13,6 @@ requires "Twiggy";
 requires "Plack::Builder";
 requires "Router::Boom";
 requires "Plack::App::File";
-requires "Text::Xslate";
 requires "Plack::Middleware::Session";
 requires "DBD::Pg";
 requires "IPC::Open3";

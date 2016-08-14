@@ -33,12 +33,12 @@ sub ok {
 
 
 sub html {
-  my ($self, $template, $vars) = @_;
-  my $html = $self->template->render("$template.html", $vars);
+  my ($self, $html) = @_;
   return [
     200,
     ["Content-Type", "text/html;charset=utf-8"],
-    [encode utf8 => $html]];
+    $html
+  ];
 };
 
 sub not_found {
