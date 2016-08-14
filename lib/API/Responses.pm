@@ -1,13 +1,9 @@
-package Response;
+package API::Responses;
 
 use Encode;
 use JSON::XS;
-use Exporter qw(import);
 
-our @EXPORT = qw(
-  html ok nocontent error pass
-  unauthorized not_found json event_stream
-);
+use Role::Tiny;
 
 sub unauthorized {
   my ($self, $msg) = @_;

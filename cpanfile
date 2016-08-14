@@ -16,3 +16,4 @@ requires "Plack::App::File";
 requires "Plack::Middleware::Session";
 requires "DBD::Pg";
 requires "IPC::Open3";
+requires "Role::Tiny";
