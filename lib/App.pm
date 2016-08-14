@@ -281,6 +281,7 @@ sub show {
   my $id = $captures->{id};
   my $res = $self->ua->get($self->url("$id/status"));
 
+  return $self->pass($res) if $res->code == 200;
   $self->error($res->decoded_content);
 }
 

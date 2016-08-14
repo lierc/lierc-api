@@ -5,7 +5,7 @@ use JSON::XS;
 use Exporter qw(import);
 
 our @EXPORT = qw(
-  html ok nocontent error
+  html ok nocontent error pass
   unauthorized not_found json
 );
 
@@ -50,6 +50,15 @@ sub error {
   my ($self, $error, $code) = @_;
   my $data = { status => "error", error => $error };
   $self->json($data, $code || 400);
+}
+
+sub pass {
+  my ($self, $res) = @_;
+  return [
+    $res->code,
+    [$res->flatten],
+    [$res->content],
+  ];
 }
 
 1;
