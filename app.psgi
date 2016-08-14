@@ -1,14 +1,13 @@
-package main;
+use strict;
+use warnings;
 
-use App;
-use NSQ;
 use Plack::Builder;
 use Router::Boom::Method;
 use Plack::App::File;
 use JSON::XS;
 
-use strict;
-use warnings;
+use App;
+use NSQ;
 
 my $config = decode_json do {
   open my $fh, '<', "config.json" or die $!;
@@ -33,7 +32,7 @@ $router->add( POST   => "/register",            "register" );
 $router->add( GET    => "/",                    "list"     );
 $router->add( POST   => "/",                    "create"   );
 
-$router->add( GET    => "/events",              "events" );
+$router->add( GET    => "/events",              "events"   );
 
 $router->add( GET    => "/connection/:id",      "show"     );
 $router->add( DELETE => "/connection/:id",      "delete"   );
