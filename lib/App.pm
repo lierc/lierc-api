@@ -23,10 +23,11 @@ sub BUILD {
   my $self = shift;
 
   # send a ping to every stream every 10s
-  $self->{ping} = AE::timer 0, 10, sub {
+  $self->{ping} = AE::timer 0, 30, sub {
+    my $event = Util->event(ping => time);
     for my $writers (values %{$self->streams}) {
       for my $writer (values %$writers) {
-        $writer->write("data: ping\n\n");
+        $writer->write($event);
       }
     }
   };
@@ -131,7 +132,7 @@ sub push_fake_events {
   my $status = decode_json($res->content);
 
   if ($nick ne $status->{Nick}) {
-    $writer->write(sprintf("data: %s\n\n", encode_json {
+    $writer->write(Util->event(irc => encode_json {
       Command => "NICK",
       Prefix  => {Name => $nick},
       Params  => [$status->{Nick}],
@@ -142,7 +143,7 @@ sub push_fake_events {
 
   for my $name (keys %{ $status->{Channels} }) {
     my $channel = $status->{Channels}{$name};
-    $writer->write(sprintf("data: %s\n\n", encode_json {
+    $writer->write(Util->event(irc => encode_json {
       Command => "JOIN",
       Prefix  => {Name => $status->{Nick}},
       Params  => [$name],
@@ -151,7 +152,7 @@ sub push_fake_events {
     }));
 
     if ($channel->{Topic}{Topic}) {
-      $writer->write(sprintf("data: %s\n\n", encode_json {
+      $writer->write(Util->event(irc => encode_json {
         Command => "332",
         Prefix  => {Name => "lies"},
         Params  => [$status->{Nick}, $channel->{Name}, $channel->{Topic}{Topic}],
@@ -162,14 +163,14 @@ sub push_fake_events {
 
     if ($channel->{Nicks}) {
       my $nicks = join " ", keys %{ $channel->{Nicks} };
-      $writer->write(sprintf("data: %s\n\n", encode_json {
+      $writer->write(Util->event(irc => encode_json {
         Command => "353",
         Prefix  => {Name => "lies"},
         Params  => [$status->{Nick}, "=", $channel->{Name}, $nicks],
         Time    => time,
         Raw     => ":lies 353 $status->{Nick} = $channel->{Name} :$nicks"
       }));
-      $writer->write(sprintf("data: %s\n\n", encode_json {
+      $writer->write(Util->event(irc => encode_json {
         Command => "366",
         Prefix  => {Name => "lies"},
         Params  => [$status->{Nick}, $channel->{Name}, "End of /NAMES list."],
@@ -187,7 +188,7 @@ sub irc_event {
   my $id = $data->{Id};
 
   if (my $streams = $self->streams->{$id}) {
-    my $event = sprintf("data: %s\n\n", encode_json($data->{Message}));
+    my $event = Util->event(irc => encode_json($data->{Message}), $data->{id});
     $_->write($event) for values %$streams;
   }
 }
@@ -209,7 +210,7 @@ sub create {
       {}, $id, $user, $req->content
     );
 
-    return $self->text($id);
+    return $self->json({success => "ok", "id" => $id});
   }
 
   return [
@@ -219,7 +220,7 @@ sub create {
   ];
 }
 
-sub destroy {
+sub delete {
   my ($self, $req, $captures) = @_;
 
   my $id  = $captures->{id};
@@ -229,7 +230,7 @@ sub destroy {
 
   if ($res->code == 200) {
     $self->dbh->do(q{DELETE FROM connection WHERE id=?}, {}, $id);
-    return $self->redirect("/");
+    return $self->ok;
   }
 
   return [
@@ -524,5 +525,12 @@ sub html {
     ["Content-Type", "text/html;charset=utf-8"],
     [encode utf8 => $html]];
 };
+
+package Util;
+
+sub event {
+  my ($class, $type, $data, $id) = @_;
+  return sprintf "event: %s\ndata: %s\n\n", $type, $data;
+}
 
 1;
