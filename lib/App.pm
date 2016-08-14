@@ -101,7 +101,7 @@ sub push_fake_events {
   my $status = decode_json($res->content);
   my $welcome = "Welcome to the Internet Relay Network $status->{Nick}";
 
-  $writer->irc_event(lies => "001", $status->{Nick}, $welcome);
+  $writer->irc_event(liercd => "001", $status->{Nick}, $welcome);
 
   for my $name (keys %{ $status->{Channels} }) {
     my $channel = $status->{Channels}{$name};
@@ -109,7 +109,7 @@ sub push_fake_events {
 
     if ($channel->{Topic}{Topic}) {
       $writer->irc_event(
-        lies => 332,
+        liercd => 332,
         $status->{Nick}, $channel->{Name}, $channel->{Topic}{Topic}
       );
     }
@@ -117,11 +117,11 @@ sub push_fake_events {
     if ($channel->{Nicks}) {
       my $nicks = join " ", keys %{ $channel->{Nicks} };
       $writer->irc_event(
-        lies => "353",
+        liercd => "353",
         $status->{Nick}, "=", $channel->{Name}, $nicks
       );
       $writer->irc_event(
-        lies => "366",
+        liercd => "366",
         $status->{Nick}, $channel->{Name}, "End of /NAMES list."
       );
     }
@@ -260,7 +260,8 @@ sub slice {
 
   return $self->not_found unless @$rows;
 
-  my $data = [ map { decode_json $_->[0] } @$rows ];
+  my $json = JSON::XS->new;
+  my $data = [ map { $json->decode($_->[0]) } @$rows ];
   return $self->json($data);
 }
 
