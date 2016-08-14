@@ -28,14 +28,17 @@ $router->add( GET    => "/login.html",          "login"    );
 $router->add( GET    => "/auth",                "user"     );
 $router->add( POST   => "/auth",                "auth"     );
 $router->add( POST   => "/register",            "register" );
+
 $router->add( GET    => "/",                    "list"     );
 $router->add( POST   => "/",                    "create"   );
-$router->add( GET    => "/:id",                 "show"     );
-$router->add( DELETE => "/:id",                 "delete"   );
-$router->add( POST   => "/:id",                 "send"     );
-$router->add( GET    => "/:id/events",          "events"   );
-$router->add( GET    => "/:id/events/:nick",    "events"   );
-$router->add( GET    => "/:id/:channel/:slice", "slice"    );
+
+$router->add( GET    => "/events",              "events" );
+
+$router->add( GET    => "/connection/:id",      "show"     );
+$router->add( DELETE => "/connection/:id",      "delete"   );
+$router->add( POST   => "/connection/:id",      "send"     );
+
+$router->add( GET    => "/connection/:id/:channel/:slice", "slice"  );
 
 builder {
   enable "Session::Cookie",

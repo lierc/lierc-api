@@ -68,30 +68,25 @@ sub login {
 
 sub events {
   my ($self, $req, $captures, $session) = @_;
-  my $id = $captures->{id};
+
+  my $user = $session->{user};
+  my $conns = $self->connections($user);
   
   return sub {
     my $response = shift;
+
     my $handle = $response->($self->event_stream);
-    my $writer = $self->add_writer($id, $handle);
-    $self->push_fake_events($id, $writer);
+    my $writer = Writer->new(
+      handle => $handle,
+      on_close => sub {
+        my $w = shift;
+        delete $self->streams->{$user}->{$w->id};
+      }
+    );
+
+    $self->streams->{$user}->{$writer->id} = $writer;
+    $self->push_fake_events($_->{id}, $writer) for @$conns;
   };
-}
-
-sub add_writer {
-  my ($self, $id, $handle) = @_;
-
-  my $writer = Writer->new(
-    handle => $handle,
-    on_close => sub {
-      my $w = shift;
-      delete $self->streams->{$id}->{$w->id};
-    }
-  );
-
-  $self->streams->{$id}->{$writer->id} = $writer;
-
-  return $writer;
 }
 
 sub push_fake_events {
@@ -101,15 +96,15 @@ sub push_fake_events {
   my $status = decode_json($res->content);
   my $welcome = "Welcome to the Internet Relay Network $status->{Nick}";
 
-  $writer->irc_event(liercd => "001", $status->{Nick}, $welcome);
+  $writer->irc_event($id, liercd => "001", $status->{Nick}, $welcome);
 
   for my $name (keys %{ $status->{Channels} }) {
     my $channel = $status->{Channels}{$name};
-    $writer->irc_event($status->{Nick} => "JOIN", $name);
+    $writer->irc_event($id, $status->{Nick} => "JOIN", $name);
 
     if ($channel->{Topic}{Topic}) {
       $writer->irc_event(
-        liercd => 332,
+        $id, liercd => 332,
         $status->{Nick}, $channel->{Name}, $channel->{Topic}{Topic}
       );
     }
@@ -117,11 +112,11 @@ sub push_fake_events {
     if ($channel->{Nicks}) {
       my $nicks = join " ", keys %{ $channel->{Nicks} };
       $writer->irc_event(
-        liercd => "353",
+        $id, liercd => "353",
         $status->{Nick}, "=", $channel->{Name}, $nicks
       );
       $writer->irc_event(
-        liercd => "366",
+        $id, liercd => "366",
         $status->{Nick}, $channel->{Name}, "End of /NAMES list."
       );
     }
@@ -132,11 +127,11 @@ sub irc_event {
   my ($self, $msg) = @_;
 
   my $data = decode_json($msg);
-  my $id = $data->{Id};
+  my $user = $self->lookup_owner($data->{Id});
 
-  if (my $streams = $self->streams->{$id}) {
+  if (my $streams = $self->streams->{$user}) {
     my $msg_id = $data->{Message}->{Id};
-    my $event = Util->event(irc => encode_json($data->{Message}), $msg_id);
+    my $event = Util->event(irc => encode_json($data), $msg_id);
     $_->write($event) for values %$streams;
   }
 }
@@ -325,6 +320,18 @@ sub lookup_user {
 
   my ($user) = $self->dbh->selectall_array(
     q{SELECT * FROM "user" WHERE id=?},
+    {}, $id
+  );
+
+  return $user;
+}
+
+sub lookup_owner {
+  my ($self, $id) = @_;
+  return () unless defined $id;
+
+  my ($user) = $self->dbh->selectrow_array(
+    q{SELECT "user" FROM connection WHERE id=?},
     {}, $id
   );
 

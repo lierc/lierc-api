@@ -32,12 +32,15 @@ sub uuid {
 }
 
 sub irc_event {
-  my ($class, $prefix, $command, @params) = @_;
+  my ($class, $id, $prefix, $command, @params) = @_;
   $class->event(irc => encode_json {
-    Command => $command,
-    Prefix  => {Name => $prefix},
-    Params  => [@params],
-    Time    => time,
+    Id => $id,
+    Message => {
+      Command => $command,
+      Prefix  => {Name => $prefix},
+      Params  => [@params],
+      Time    => time,
+    }
   });
 }
 
