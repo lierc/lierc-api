@@ -13,6 +13,7 @@ use DBIx::Connector;
 
 use Util;
 use Response;
+use Writer;
 
 use Class::Tiny qw(host dsn dbuser dbpass secret base), {
   streams => sub { {} },
@@ -23,10 +24,9 @@ sub BUILD {
 
   # send a ping to every stream every 10s
   $self->{ping} = AE::timer 0, 30, sub {
-    my $event = Util->event(ping => time);
     for my $writers (values %{$self->streams}) {
       for my $writer (values %$writers) {
-        $writer->write($event);
+        $writer->ping;
       }
     }
   };
@@ -88,90 +88,61 @@ sub login {
 sub events {
   my ($self, $req, $captures, $session) = @_;
   my $id = $captures->{id};
-  my $nick = $captures->{nick};
   
   return sub {
     my $response = shift;
-    my $writer = $response->([200, ["Content-Type", "text/event-stream"]]);
-    $self->add_writer($id, $writer);
-    $self->push_fake_events($id, $writer, $nick);
+    my $handle = $response->([200, ["Content-Type", "text/event-stream"]]);
+    my $writer = $self->add_writer($id, $handle);
+    $self->push_fake_events($id, $writer);
   };
 }
 
 sub add_writer {
-  my ($self, $id, $writer) = @_;
-  my $wid = Util->uuid;
+  my ($self, $id, $handle) = @_;
 
-  $self->streams->{$id} = {}
-    unless defined $self->streams->{$id};
+  my $writer = Writer->new(
+    handle => $handle,
+    on_close => sub {
+      my $w = shift;
+      delete $self->streams->{$id}->{$w->id};
+    }
+  );
 
-  $self->streams->{$id}->{$wid} = $writer;
+  $self->streams->{$id}->{$writer->id} = $writer;
 
-  $writer->{handle}->on_error(sub {
-    warn $_[2];
-    delete $self->streams->{$id}->{$wid};
-  });
-
-  $writer->{handle}->on_eof(sub {
-    warn "EOF";
-    delete $self->streams->{$id}->{$wid};
-  });
-
-  return $wid;
+  return $writer;
 }
 
 sub push_fake_events {
-  my ($self, $id, $writer, $nick) = @_;
+  my ($self, $id, $writer) = @_;
 
   my $res = $self->find_or_recreate_connection($id);
   my $status = decode_json($res->content);
+  my $welcome = "Welcome to the Internet Relay Network $status->{Nick}";
 
-  if ($nick ne $status->{Nick}) {
-    $writer->write(Util->event(irc => encode_json {
-      Command => "NICK",
-      Prefix  => {Name => $nick},
-      Params  => [$status->{Nick}],
-      Time    => time,
-      Raw     => ":$nick NICK $status->{Nick}",
-    }));
-  }
+  $writer->irc_event("lies" => "001", $status->{Nick}, $welcome);
 
   for my $name (keys %{ $status->{Channels} }) {
     my $channel = $status->{Channels}{$name};
-    $writer->write(Util->event(irc => encode_json {
-      Command => "JOIN",
-      Prefix  => {Name => $status->{Nick}},
-      Params  => [$name],
-      Time    => time,
-      Raw     => ":$status->{Nick} JOIN $name"
-    }));
+    $writer->irc_event($status->{Nick} => "JOIN", $name);
 
     if ($channel->{Topic}{Topic}) {
-      $writer->write(Util->event(irc => encode_json {
-        Command => "332",
-        Prefix  => {Name => "lies"},
-        Params  => [$status->{Nick}, $channel->{Name}, $channel->{Topic}{Topic}],
-        Time    => time,
-        Raw     => ":lies 332 $channel->{Name} :$channel->{Topic}{Topic}"
-      }));
+      $writer->irc_event(
+        lies => 332,
+        $status->{Nick}, $channel->{Name}, $channel->{Topic}{Topic}
+      );
     }
 
     if ($channel->{Nicks}) {
       my $nicks = join " ", keys %{ $channel->{Nicks} };
-      $writer->write(Util->event(irc => encode_json {
-        Command => "353",
-        Prefix  => {Name => "lies"},
-        Params  => [$status->{Nick}, "=", $channel->{Name}, $nicks],
-        Time    => time,
-        Raw     => ":lies 353 $status->{Nick} = $channel->{Name} :$nicks"
-      }));
-      $writer->write(Util->event(irc => encode_json {
-        Command => "366",
-        Prefix  => {Name => "lies"},
-        Params  => [$status->{Nick}, $channel->{Name}, "End of /NAMES list."],
-        Time    => time,
-        Raw     => ":lies 366 $status->{Nick} $channel->{Name} :End of /NAMES list."
-      }));
+      $writer->irc_event(
+        lies => "353",
+        $status->{Nick}, "=", $channel->{Name}, $nicks
+      );
+      $writer->irc_event(
+        lies => "366",
+        $status->{Nick}, $channel->{Name}, "End of /NAMES list."
+      );
     }
   }
 }
