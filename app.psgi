@@ -29,11 +29,10 @@ $router->add( GET    => "/auth",                "user"     );
 $router->add( POST   => "/auth",                "auth"     );
 $router->add( POST   => "/register",            "register" );
 
-$router->add( GET    => "/",                    "list"     );
-$router->add( POST   => "/",                    "create"   );
-
 $router->add( GET    => "/events",              "events"   );
 
+$router->add( GET    => "/connection",          "list"     );
+$router->add( POST   => "/connection",          "create"   );
 $router->add( GET    => "/connection/:id",      "show"     );
 $router->add( DELETE => "/connection/:id",      "delete"   );
 $router->add( POST   => "/connection/:id",      "send"     );
