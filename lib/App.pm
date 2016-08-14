@@ -3,7 +3,6 @@ package App;
 use strict;
 use warnings;
 
-use LWP::UserAgent;
 use Text::Xslate;
 use URL::Encode qw(url_decode);
 use JSON::XS;
@@ -14,9 +13,11 @@ use DBIx::Connector;
 use Util;
 use Response;
 use Writer;
+use Client;
 
 use Class::Tiny qw(host dsn dbuser dbpass secret base), {
   streams => sub { {} },
+  client  => sub { Client->new(host => $_[0]->host) },
 };
 
 sub BUILD {
@@ -51,16 +52,6 @@ sub template {
       asset => sub { $self->path("/static/$_[0]") },
     }
   );
-}
-
-sub ua {
-  my $self = shift;
-  $self->{ua} ||= LWP::UserAgent->new;
-}
-
-sub url {
-  my ($self, $path) = @_;
-  sprintf "http://%s/%s", $self->host, $path;
 }
 
 {
@@ -120,7 +111,7 @@ sub push_fake_events {
   my $status = decode_json($res->content);
   my $welcome = "Welcome to the Internet Relay Network $status->{Nick}";
 
-  $writer->irc_event("lies" => "001", $status->{Nick}, $welcome);
+  $writer->irc_event(lies => "001", $status->{Nick}, $welcome);
 
   for my $name (keys %{ $status->{Channels} }) {
     my $channel = $status->{Channels}{$name};
@@ -160,15 +151,16 @@ sub irc_event {
   }
 }
 
+sub request {
+  my $self = shift;
+  $self->client->request(@_);
+}
+
 sub create {
   my ($self, $req, $captures, $session) = @_;
 
   my $id  = Util->uuid;
-  my $res = $self->ua->request( HTTP::Request->new(
-    POST => $self->url("$id/create"),
-    ["Content-Type", "application/javascript"],
-    $req->content
-  ) );
+  my $res = $self->request(POST => "$id/create", $req->content);
 
   if ($res->code == 200) {
     my $user = $session->{user};
@@ -187,9 +179,7 @@ sub delete {
   my ($self, $req, $captures) = @_;
 
   my $id  = $captures->{id};
-  my $res = $self->ua->request( HTTP::Request->new(
-    POST => $self->url("$id/destroy"),
-  ) );
+  my $res = $self->request(POST => "$id/destroy");
 
   if ($res->code == 200) {
     $self->dbh->do(q{DELETE FROM connection WHERE id=?}, {}, $id);
@@ -203,11 +193,7 @@ sub send {
   my ($self, $req, $captures) = @_;
 
   my $id  = $captures->{id};
-  my $res = $self->ua->request( HTTP::Request->new(
-    POST => $self->url("$id/raw"),
-    ["Content-Type", "application/irc"],
-    $req->content
-  ) );
+  my $res = $self->request(POST => "$id/raw", $req->content);
 
   $self->error($res->decoded_content);
 }
@@ -230,19 +216,15 @@ sub find_or_recreate_connection {
   die "Connection does not exist"
     unless $row;
 
-  my $res = $self->ua->get($self->url("$id/status"));
+  my $res = $self->request(GET => "$id/status");
   return $res if $res->code == 200;
 
-  $res = $self->ua->request( HTTP::Request->new(
-    POST => $self->url("$id/create"),
-    ["Content-Type", "application/javascript"],
-    $row->[0]
-  ) );
+  $res = $self->request(POST => "$id/create", $row->[0]);
 
   die "Unable to create new connection: " . $res->status_line
     unless $res->code == 200;
 
-  $res = $self->ua->get($self->url("$id/status"));
+  $res = $self->request(GET => "$id/status");
   return $res;
 }
 
@@ -250,7 +232,7 @@ sub show {
   my ($self, $req, $captures, $session) = @_;
 
   my $id = $captures->{id};
-  my $res = $self->ua->get($self->url("$id/status"));
+  my $res = $self->request(GET => "$id/status");
 
   return $self->pass($res) if $res->code == 200;
   $self->error($res->decoded_content);
