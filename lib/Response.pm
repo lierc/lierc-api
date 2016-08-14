@@ -6,7 +6,7 @@ use Exporter qw(import);
 
 our @EXPORT = qw(
   html ok nocontent error pass
-  unauthorized not_found json
+  unauthorized not_found json event_stream
 );
 
 sub unauthorized {
@@ -58,6 +58,13 @@ sub pass {
     $res->code,
     [$res->flatten],
     [$res->content],
+  ];
+}
+
+sub event_stream {
+  return [
+    200,
+    ["Content-Type", "text/event-stream;charset=utf-8"]
   ];
 }
 
