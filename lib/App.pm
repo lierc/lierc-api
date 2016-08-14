@@ -209,11 +209,7 @@ sub create {
     return $self->json({success => "ok", "id" => $id});
   }
 
-  return [
-    $res->code,
-    [$res->flatten],
-    [$res->content]
-  ];
+  $self->error($res->decoded_content);
 }
 
 sub delete {
@@ -229,11 +225,7 @@ sub delete {
     return $self->ok;
   }
 
-  return [
-    $res->code,
-    [$res->flatten],
-    [$res->content]
-  ];
+  $self->error($res->decoded_content);
 }
 
 sub send {
@@ -246,11 +238,7 @@ sub send {
     $req->content
   ) );
 
-  return [
-    $res->code,
-    [$res->flatten],
-    [$res->content]
-  ];
+  $self->error($res->decoded_content);
 }
 
 sub list {
@@ -293,11 +281,7 @@ sub show {
   my $id = $captures->{id};
   my $res = $self->ua->get($self->url("$id/status"));
 
-  return [
-    $res->code,
-    [$res->flatten],
-    [$res->content]
-  ];
+  $self->error($res->decoded_content);
 }
 
 sub slice {
@@ -379,7 +363,7 @@ sub auth {
     return $self->ok;
   }
 
-  return $self->unauthorized;
+  return $self->unauthorized("Invalid email or password");
 }
 
 sub add_user {
@@ -419,7 +403,7 @@ sub register {
     return $self->ok;
   }
 
-  return $self->unauthorized;
+  return $self->unauthorized("Email and password required");
 }
 
 sub connections {

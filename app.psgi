@@ -54,7 +54,7 @@ builder {
         or $app->logged_in($session);
 
     if ($captured->{id}) {
-      die "Invalid connection ID $captured->{id}"
+      return $app->unauthorized("Invalid connection id '$captured->{id}'")
         unless $app->verify_owner($captured->{id}, $session->{user});
     }
 
