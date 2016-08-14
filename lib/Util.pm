@@ -6,6 +6,10 @@ use Math::BaseConvert;
 
 sub event {
   my ($class, $type, $data, $id) = @_;
+
+  return sprintf "event: %s\ndata: %s\nid: %s\n\n", $type, $data, $id
+    if defined $id;
+
   return sprintf "event: %s\ndata: %s\n\n", $type, $data;
 }
 

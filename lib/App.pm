@@ -14,7 +14,7 @@ use DBIx::Connector;
 use Util;
 use Response;
 
-use Class::Tiny qw(host dsn dbuser dbpass secret base timer), {
+use Class::Tiny qw(host dsn dbuser dbpass secret base), {
   streams => sub { {} },
 };
 
@@ -183,7 +183,8 @@ sub irc_event {
   my $id = $data->{Id};
 
   if (my $streams = $self->streams->{$id}) {
-    my $event = Util->event(irc => encode_json($data->{Message}), $data->{id});
+    my $msg_id = $data->{Message}->{Id};
+    my $event = Util->event(irc => encode_json($data->{Message}), $msg_id);
     $_->write($event) for values %$streams;
   }
 }
