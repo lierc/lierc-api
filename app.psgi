@@ -57,7 +57,7 @@ builder {
       if ref $name eq "CODE";
 
     return $app->unauthorized
-      unless $name =~ /^(?:auth|register)$/
+      unless $name =~ /^(?:auth|register|login)$/
         or $app->logged_in($session);
 
     if ($captured->{id}) {
