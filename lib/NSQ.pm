@@ -20,15 +20,14 @@ sub tail {
     on_error => sub {
       my ($hdl, $fatal, $msg) = @_;
       $hdl->destroy;
-      warn $msg;
-      undef $err; # hold a ref to err to keep pipe open
-      $self->{on_error}->($msg) if $self->{on_error};
+      undef $err;
+      $self->on_error->($msg) if $self->on_error;
     },
     on_eof => sub {
       my ($hdl, $fatal, $msg) = @_;
       $hdl->destroy;
-      warn "EOF";
       undef $err;
+      $self->on_error->("EOF") if $self->on_error;
     }
   );
 
@@ -36,11 +35,17 @@ sub tail {
   return $self;
 }
 
+sub DESTROY {
+  my $self = shift;
+  warn "Closing NSQ";
+  $self->{handle}->destroy if $self->{handle};
+}
+
 sub read_line {
   my $self = shift;
 
   $self->{handle}->push_read(line => sub {
-    $self->{on_message}->($_[1]) if $self->{on_message};
+    $self->on_message->($_[1]) if $self->on_message;
     $self->read_line;
   });
 }

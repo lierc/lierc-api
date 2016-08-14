@@ -20,6 +20,7 @@ my $app = App->new(%$config);
 my $nsq = NSQ->tail(
   %{ $config->{nsq} },
   on_message => sub { $app->irc_event(@_) },
+  on_error   => sub { warn @_ },
 );
 
 my $router = Router::Boom::Method->new;

@@ -9,12 +9,10 @@ sub BUILD {
   my $self = shift;
 
   $self->handle->{handle}->on_error(sub {
-    warn $_[2];
     $self->on_close->($self);
   });
 
   $self->handle->{handle}->on_eof(sub {
-    warn "EOF";
     $self->on_close->($self);
   });
 }
