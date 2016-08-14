@@ -13,9 +13,6 @@ with 'API::Responses';
 with 'API::Liercd';
 with 'API::Events';
 
-sub BUILD {
-  my $self = shift;
-  $self->start_pings;
-}
+sub BUILD { }
 
 1;
