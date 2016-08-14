@@ -3,11 +3,9 @@ package API;
 use strict;
 use warnings;
 
-use JSON::XS;
-use AnyEvent;
-use Role::Tiny::With;
-
 use Class::Tiny qw(host dsn dbuser dbpass secret base);
+
+use Role::Tiny::With;
 
 with 'API::Routes';
 with 'API::DB';

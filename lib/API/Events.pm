@@ -3,6 +3,7 @@ package API::Events;
 use Util;
 use JSON::XS;
 use Role::Tiny;
+use AnyEvent;
 
 sub push_fake_events {
   my ($self, $id, $writer) = @_;
