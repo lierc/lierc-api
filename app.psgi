@@ -33,7 +33,8 @@ $router->add( POST   => "/",                    "create"   );
 $router->add( GET    => "/:id",                 "show"     );
 $router->add( DELETE => "/:id",                 "delete"   );
 $router->add( POST   => "/:id",                 "send"     );
-$router->add( GET    => "/:id/events*",         "events"   );
+$router->add( GET    => "/:id/events",          "events"   );
+$router->add( GET    => "/:id/events/:nick",    "events"   );
 $router->add( GET    => "/:id/:channel/:slice", "slice"    );
 
 builder {
