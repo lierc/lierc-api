@@ -18,7 +18,7 @@ sub json {
   my ($self, $data, $code) = @_;
   return [
     $code || 200,
-    ["Content-Type", "application/javascript"],
+    ["Content-Type", "application/javascript;charset=utf-8"],
     [encode_json $data]];
 }
 
