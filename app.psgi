@@ -17,10 +17,6 @@ my $config = decode_json do {
 
 my $app = App->new(%$config);
 
-my $static = Plack::App::File->new(
-  root => "."
-)->to_app;
-
 my $nsq = NSQ->tail(
   %{ $config->{nsq} },
   on_message => sub { $app->irc_event(@_) },
@@ -28,7 +24,6 @@ my $nsq = NSQ->tail(
 
 my $router = Router::Boom::Method->new;
 
-$router->add( GET    => "/favicon.ico",         $app->nocontent );
 $router->add( GET    => "/login.html",          "login"    );
 $router->add( GET    => "/auth",                "user"     );
 $router->add( POST   => "/auth",                "auth"     );
@@ -52,9 +47,6 @@ builder {
 
     my ($name, $captured) = $router->match(@$env{qw(REQUEST_METHOD PATH_INFO)});
     my $session = $env->{'psgix.session'};
-
-    return $name->($env)
-      if ref $name eq "CODE";
 
     return $app->unauthorized
       unless $name =~ /^(?:auth|register|login)$/
