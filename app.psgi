@@ -40,6 +40,7 @@ builder {
   enable "Session::Cookie",
     secret => $app->secret,
     expires => 3600 * 24,
+    httponly => 1,
     session_key => "chats";
 
   sub {
