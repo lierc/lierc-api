@@ -180,6 +180,10 @@ sub send {
   my $id  = $captures->{id};
   my $res = $self->request(POST => "$id/raw", $req->content);
 
+  if ($res->code == 200) {
+    return $self->ok;
+  }
+
   $self->error($res->decoded_content);
 }
 
