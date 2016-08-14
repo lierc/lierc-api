@@ -72,7 +72,7 @@ sub events {
   
   return sub {
     my $response = shift;
-    my $handle = $response->([200, ["Content-Type", "text/event-stream"]]);
+    my $handle = $response->([200, ["Content-Type", "text/event-stream;charset=utf-8"]]);
     my $writer = $self->add_writer($id, $handle);
     $self->push_fake_events($id, $writer);
   };
