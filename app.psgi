@@ -6,7 +6,7 @@ use Router::Boom::Method;
 use Plack::App::File;
 use JSON::XS;
 
-use App;
+use API;
 use NSQ;
 
 my $config = decode_json do {
@@ -14,11 +14,11 @@ my $config = decode_json do {
   join "", <$fh>;
 };
 
-my $app = App->new(%$config);
+my $api = API->new(%$config);
 
 my $nsq = NSQ->tail(
   %{ $config->{nsq} },
-  on_message => sub { $app->irc_event(@_) },
+  on_message => sub { $api->irc_event(@_) },
   on_error   => sub { warn @_ },
 );
 
@@ -42,7 +42,7 @@ $router->add( GET    => "/connection/:id/:channel/:slice", "slice"  );
 
 builder {
   enable "Session::Cookie",
-    secret => $app->secret,
+    secret => $api->secret,
     expires => 3600 * 24,
     httponly => 1,
     session_key => "chats";
@@ -53,15 +53,15 @@ builder {
     my ($name, $captured) = $router->match(@$env{qw(REQUEST_METHOD PATH_INFO)});
     my $session = $env->{'psgix.session'};
 
-    return $app->unauthorized
+    return $api->unauthorized
       unless $name =~ /^(?:auth|register|login)$/
-        or $app->logged_in($session);
+        or $api->logged_in($session);
 
     if ($captured->{id}) {
-      return $app->unauthorized("Invalid connection id '$captured->{id}'")
-        unless $app->verify_owner($captured->{id}, $session->{user});
+      return $api->unauthorized("Invalid connection id '$captured->{id}'")
+        unless $api->verify_owner($captured->{id}, $session->{user});
     }
 
-    return $app->handle($name, $env, $captured, $session);
+    return $api->handle($name, $env, $captured, $session);
   };
 };
