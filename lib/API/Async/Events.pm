@@ -52,7 +52,7 @@ sub irc_event {
   my $cv = $self->lookup_owner($data->{Id});
 
   $cv->cb(sub {
-    my $user = shift;
+    my $user = $_[0]->recv;
     if (my $streams = $self->streams->{$user}) {
       my $msg_id = $data->{Message}->{Id};
       my $event = Util->event(irc => encode_json($data), $msg_id);
