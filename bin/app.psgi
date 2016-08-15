@@ -7,29 +7,20 @@ use Plack::App::File;
 use JSON::XS;
 
 use API;
-use NSQ;
 
 my $config = decode_json do {
   open my $fh, '<', "config.json" or die $!;
   join "", <$fh>;
 };
 
-my $api = API->new(%$config);
-
-my $nsq = NSQ->tail(
-  %{ $config->{nsq} },
-  on_message => sub { $api->irc_event(@_) },
-  on_error   => sub { warn @_ },
-);
-
+my $api    = API->new(%$config);
 my $router = Router::Boom::Method->new;
 
+$router->add( GET    => "",                     "default"  );
 $router->add( GET    => "/login.html",          "login"    );
 $router->add( GET    => "/auth",                "user"     );
 $router->add( POST   => "/auth",                "auth"     );
 $router->add( POST   => "/register",            "register" );
-
-$router->add( GET    => "/events",              "events"   );
 
 $router->add( GET    => "/connection",          "list"     );
 $router->add( POST   => "/connection",          "create"   );

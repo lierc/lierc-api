@@ -11,7 +11,7 @@ use Role::Tiny;
 
 my %routes = map { $_ => 1} qw(
   user auth register list create show
-  delete send events slice login
+  delete send slice login
 );
 
 sub handle {
@@ -27,29 +27,6 @@ sub handle {
 sub is_route {
   my ($self, $name) = @_;
   return $routes{$name};
-}
-
-sub events {
-  my ($self, $req, $captures, $session) = @_;
-
-  my $user = $session->{user};
-  my $conns = $self->connections($user);
-  
-  return sub {
-    my $response = shift;
-
-    my $handle = $response->($self->event_stream);
-    my $writer = Writer->new(
-      handle => $handle,
-      on_close => sub {
-        my $w = shift;
-        delete $self->streams->{$user}->{$w->id};
-      }
-    );
-
-    $self->streams->{$user}->{$writer->id} = $writer;
-    $self->push_fake_events($_->{id}, $writer) for @$conns;
-  };
 }
 
 

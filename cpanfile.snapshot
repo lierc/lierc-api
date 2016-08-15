@@ -49,6 +49,23 @@ DISTRIBUTIONS
     requirements:
       Canary::Stability 0
       ExtUtils::MakeMaker 6.52
+  AnyEvent-DBI-2.3
+    pathname: M/ML/MLEHMANN/AnyEvent-DBI-2.3.tar.gz
+    provides:
+      AnyEvent::DBI 2.3
+    requirements:
+      AnyEvent 4.15
+      DBI 1
+      ExtUtils::MakeMaker 0
+      common::sense 3.3
+  AnyEvent-HTTP-2.22
+    pathname: M/ML/MLEHMANN/AnyEvent-HTTP-2.22.tar.gz
+    provides:
+      AnyEvent::HTTP 2.22
+    requirements:
+      AnyEvent 5.33
+      ExtUtils::MakeMaker 0
+      common::sense 3.3
   Apache-LogFormat-Compiler-0.33
     pathname: K/KA/KAZEBURO/Apache-LogFormat-Compiler-0.33.tar.gz
     provides:
@@ -254,6 +271,20 @@ DISTRIBUTIONS
       Test::MockModule 0.05
       Test::More 0.88
       perl 5.006002
+  Data-Dump-1.23
+    pathname: G/GA/GAAS/Data-Dump-1.23.tar.gz
+    provides:
+      Data::Dump 1.23
+      Data::Dump::FilterContext undef
+      Data::Dump::Filtered undef
+      Data::Dump::Trace 0.02
+      Data::Dump::Trace::Call 0.02
+      Data::Dump::Trace::Wrapper 0.02
+    requirements:
+      ExtUtils::MakeMaker 0
+      Symbol 0
+      Test 0
+      perl 5.006
   Data-MessagePack-0.50
     pathname: S/SY/SYOHEX/Data-MessagePack-0.50.tar.gz
     provides:
@@ -576,6 +607,14 @@ DISTRIBUTIONS
       ExtUtils::MakeMaker 0
       HTTP::Headers 6
       perl 5.008001
+  HTTP-Parser-XS-0.17
+    pathname: K/KA/KAZUHO/HTTP-Parser-XS-0.17.tar.gz
+    provides:
+      HTTP::Parser::XS 0.17
+      HTTP::Parser::XS::PP undef
+    requirements:
+      ExtUtils::MakeMaker 6.36
+      Test::More 0.96
   Hash-MultiValue-0.16
     pathname: A/AR/ARISTOTLE/Hash-MultiValue-0.16.tar.gz
     provides:
@@ -763,6 +802,39 @@ DISTRIBUTIONS
       IO::Uncompress::Gunzip 0
       URI 0
       perl 5.006002
+  Net-Server-2.008
+    pathname: R/RH/RHANDOM/Net-Server-2.008.tar.gz
+    provides:
+      Net::Server 2.008
+      Net::Server::Daemonize 0.06
+      Net::Server::Fork undef
+      Net::Server::HTTP undef
+      Net::Server::INET undef
+      Net::Server::INET::Handle undef
+      Net::Server::Log::Log::Log4perl undef
+      Net::Server::Log::Sys::Syslog undef
+      Net::Server::MultiType undef
+      Net::Server::Multiplex undef
+      Net::Server::Multiplex::MUX undef
+      Net::Server::PSGI undef
+      Net::Server::PreFork undef
+      Net::Server::PreForkSimple undef
+      Net::Server::Proto undef
+      Net::Server::Proto::SSL undef
+      Net::Server::Proto::SSLEAY undef
+      Net::Server::Proto::TCP undef
+      Net::Server::Proto::UDP undef
+      Net::Server::Proto::UNIX undef
+      Net::Server::Proto::UNIXDGRAM undef
+      Net::Server::SIG 0.03
+      Net::Server::Single undef
+      Net::Server::TiedHandle 2.008
+    requirements:
+      ExtUtils::MakeMaker 0
+      IO::Socket 0
+      POSIX 0
+      Socket 0
+      Time::HiRes 0
   POSIX-strftime-Compiler-0.42
     pathname: K/KA/KAZEBURO/POSIX-strftime-Compiler-0.42.tar.gz
     provides:
@@ -933,6 +1005,14 @@ DISTRIBUTIONS
       Pod::Find 0.21
       Pod::Parser 1.13
       Test::More 0
+  Role-Tiny-2.000003
+    pathname: H/HA/HAARG/Role-Tiny-2.000003.tar.gz
+    provides:
+      Role::Tiny 2.000003
+      Role::Tiny::With 2.000003
+    requirements:
+      Exporter 5.57
+      perl 5.006
   Router-Boom-1.03
     pathname: T/TO/TOKUHIROM/Router-Boom-1.03.tar.gz
     provides:
@@ -952,6 +1032,24 @@ DISTRIBUTIONS
       Sub::Identify 0.03
       Test::Simple 0.61
       perl v5.6.2
+  Starman-0.4014
+    pathname: M/MI/MIYAGAWA/Starman-0.4014.tar.gz
+    provides:
+      HTTP::Server::PSGI::Net::Server::PreFork undef
+      Plack::Handler::Starman undef
+      Starman 0.4014
+      Starman::Server undef
+    requirements:
+      Data::Dump 0
+      HTTP::Date 0
+      HTTP::Parser::XS 0
+      HTTP::Status 0
+      Module::Build::Tiny 0.039
+      Net::Server 2.007
+      Plack 0.9971
+      Test::TCP 2.00
+      parent 0
+      perl 5.008001
   Stream-Buffered-0.03
     pathname: D/DO/DOY/Stream-Buffered-0.03.tar.gz
     provides:
