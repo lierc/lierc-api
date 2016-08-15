@@ -1,3 +1,4 @@
+# Main app
 requires "Encode";
 requires "LWP::UserAgent";
 requires "Data::UUID";
@@ -5,7 +6,6 @@ requires "URL::Encode";
 requires "JSON::XS";
 requires "List::Util";
 requires "Math::BaseConvert";
-requires "AnyEvent";
 requires "DBIx::Connector";
 requires "Digest";
 requires "Digest::Bcrypt";
@@ -17,6 +17,17 @@ requires "Plack::Middleware::Session";
 requires "DBD::Pg";
 requires "IPC::Open3";
 requires "Role::Tiny";
+
+# Async stuff bin/events.psgi
 requires "AnyEvent::DBI";
 requires "AnyEvent::HTTP";
-requires "Starman";
+requires "AnyEvent";
+
+# preforking server bin/app.psgi
+requires "Gazelle";
+
+# AE recommended
+requires "EV";
+requires "Async::Interrupt";
+requires "Guard";
+requires "AnyEvent::AIO";
