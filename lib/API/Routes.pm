@@ -11,7 +11,7 @@ use Role::Tiny;
 
 my %routes = map { $_ => 1} qw(
   user auth register list create show
-  delete send slice login
+  delete send logs login
 );
 
 sub handle {
@@ -99,37 +99,18 @@ sub show {
   $self->error($res->decoded_content);
 }
 
-sub slice {
+sub logs {
   my ($self, $req, $captures, $session) = @_;
-  my $id    = $captures->{id};
-  my $chan  = $captures->{channel};
-  my $slice = $captures->{slice};
-
-  my ($start, $end);
-
-  if ( $slice =~ /^(\d+):(\d+)$/) {
-    $start = $1;
-    $end   = $2;
-  }
-  elsif ($slice =~ /^:(\d+)$/) {
-    $start = 0;
-    $end   = $1;
-  }
-  elsif ($slice =~ /^(\d+):$/) {
-    $start = $1;
-    $end   = $start + 100; 
-  }
-
-  $end = min($end, $start + 100);
+  my $id   = $captures->{id};
+  my $chan = $captures->{channel};
+  my $time = $captures->{time};
 
   my $rows = $self->dbh->selectall_arrayref(q{
     SELECT message FROM log
-      WHERE channel IN (?, '*') AND connection=?
-      ORDER BY time DESC OFFSET ? LIMIT ?
-    }, {}, url_decode($chan), $id, $start, $end - $start
+      WHERE channel=? AND connection=? AND time <= to_timestamp(?)
+      ORDER BY id DESC LIMIT ?
+    }, {}, url_decode($chan), $id, $time, 100
   );
-
-  return $self->not_found unless @$rows;
 
   my $json = JSON::XS->new;
   my $data = [ map { $json->decode($_->[0]) } @$rows ];

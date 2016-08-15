@@ -18,10 +18,10 @@ create index on connection ("user");
 
 drop table log;
 create table log (
-  id          char(32) not null,
+  id          serial,
   connection  char(24) not null,
   channel     char(32) not null,
-  time        timestamp without time zone default (now() at time zone 'utc'),
+  time        timestamp not null,
   message     varchar(512) not null,
   primary key (id)
 );
