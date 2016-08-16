@@ -3,6 +3,7 @@ package API::Routes;
 use Util;
 use Writer;
 
+use Time::HiRes ();
 use List::Util qw(min);
 use JSON::XS;
 use URL::Encode qw(url_decode);
@@ -103,7 +104,7 @@ sub logs {
   my ($self, $req, $captures, $session) = @_;
   my $id   = $captures->{id};
   my $chan = $captures->{channel};
-  my $time = $captures->{time};
+  my $time = $captures->{time} || Time::HiRes::time;
 
   my $rows = $self->dbh->selectall_arrayref(q{
     SELECT message FROM log

@@ -17,6 +17,7 @@ requires "Plack::Middleware::Session";
 requires "DBD::Pg";
 requires "IPC::Open3";
 requires "Role::Tiny";
+requires "Time::HiRes";
 
 # Async stuff bin/events.psgi
 requires "AnyEvent::DBI";

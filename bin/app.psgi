@@ -28,6 +28,7 @@ $router->add( GET    => "/connection/:id",      "show"     );
 $router->add( DELETE => "/connection/:id",      "delete"   );
 $router->add( POST   => "/connection/:id",      "send"     );
 
+$router->add( GET    => "/connection/:id/channel/:channel/events",       "logs" );
 $router->add( GET    => "/connection/:id/channel/:channel/events/:time", "logs" );
 
 builder {

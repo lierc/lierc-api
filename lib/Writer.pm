@@ -1,6 +1,7 @@
 package Writer;
 
 use Util;
+use Time::HiRes ();
 use Class::Tiny qw(handle on_close), {
   id => sub { Util->uuid }
 };
@@ -29,7 +30,7 @@ sub write {
 
 sub ping {
   my $self = shift;
-  my $ping = Util->event(ping => time);
+  my $ping = Util->event(ping => Time::HiRes::time);
   $self->write($ping);
 }
 
