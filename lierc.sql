@@ -22,7 +22,7 @@ create table log (
   connection  char(24) not null,
   channel     char(32) not null,
   time        timestamp not null,
-  message     varchar(512) not null,
+  message     json not null,
   primary key (id)
 );
 

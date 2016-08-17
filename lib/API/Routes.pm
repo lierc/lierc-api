@@ -12,7 +12,7 @@ use Role::Tiny;
 
 my %routes = map { $_ => 1} qw(
   user auth register list create show
-  delete send logs login
+  delete send logs logs_id login
 );
 
 sub handle {
@@ -104,17 +104,50 @@ sub logs {
   my ($self, $req, $captures, $session) = @_;
   my $id   = $captures->{id};
   my $chan = $captures->{channel};
-  my $time = $captures->{time} || Time::HiRes::time;
 
   my $rows = $self->dbh->selectall_arrayref(q{
-    SELECT message FROM log
-      WHERE channel=? AND connection=? AND time <= to_timestamp(?)
+    SELECT id, message, connection FROM log
+      WHERE channel=? AND connection=?
       ORDER BY id DESC LIMIT ?
-    }, {}, url_decode($chan), $id, $time, 100
+    }, {}, url_decode($chan), $id, 100
   );
 
   my $json = JSON::XS->new;
-  my $data = [ map { $json->decode($_->[0]) } @$rows ];
+  my $data = [
+    map {
+      {
+        MessageId    => $_->[0],
+        Message      => $json->decode($_->[1]),
+        ConnectionId => $_->[2],
+      }
+    } @$rows
+  ];
+  return $self->json($data);
+}
+
+sub logs_id {
+  my ($self, $req, $captures, $session) = @_;
+  my $id   = $captures->{id};
+  my $chan = $captures->{channel};
+  my $event = $captures->{event};
+
+  my $rows = $self->dbh->selectall_arrayref(q{
+    SELECT id, message, connection FROM log
+      WHERE channel=? AND connection=? AND id < ?
+      ORDER BY id DESC LIMIT ?
+    }, {}, url_decode($chan), $id, $event, 100
+  );
+
+  my $json = JSON::XS->new;
+  my $data = [
+    map {
+      {
+        MessageId    => $_->[0],
+        Message      => $json->decode($_->[1]),
+        ConnectionId => $_->[2],
+      }
+    } @$rows
+  ];
   return $self->json($data);
 }
 

@@ -49,12 +49,12 @@ sub irc_event {
   my ($self, $msg) = @_;
 
   my $data = decode_json($msg);
-  my $cv = $self->lookup_owner($data->{Id});
+  my $cv = $self->lookup_owner($data->{ConnectionId});
 
   $cv->cb(sub {
     my $user = $_[0]->recv;
     if (my $streams = $self->streams->{$user}) {
-      my $msg_id = $data->{Message}->{Id};
+      my $msg_id = $data->{MessageId};
       my $event = Util->event(irc => encode_json($data), $msg_id);
       $_->write($event) for values %$streams;
     }

@@ -9,7 +9,7 @@ sub event {
   my ($class, $type, $data, $id) = @_;
 
   return sprintf "event: %s\ndata: %s\nid: %s\n\n", $type, $data, $id
-    if defined $id;
+    if $id;
 
   return sprintf "event: %s\ndata: %s\n\n", $type, $data;
 }
@@ -34,7 +34,7 @@ sub uuid {
 sub irc_event {
   my ($class, $id, $prefix, $command, @params) = @_;
   $class->event(irc => encode_json {
-    Id => $id,
+    ConnectionId => $id,
     Message => {
       Command => $command,
       Prefix  => {Name => $prefix},
