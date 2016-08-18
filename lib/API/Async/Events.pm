@@ -75,7 +75,7 @@ sub push_fake_nicks {
       while (my @chunk = splice @nicks, 0, 50) {
         $writer->irc_event(
           $id, liercd => "353",
-          $status->{Nick}, "=", $channel->{Name}, @chunk
+          $status->{Nick}, "=", $channel->{Name}, join " ", @chunk
         );
       }
       $writer->irc_event(
