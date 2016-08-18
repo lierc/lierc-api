@@ -16,13 +16,15 @@ sub push_fake_events {
 
     my $status = decode_json($res->content);
     my $welcome = "Welcome to the Internet Relay Network $status->{Nick}";
+    my @channels = values %{ $status->{Channels} };
 
     $writer->irc_event($id, liercd => "001", $status->{Nick}, $welcome);
 
-    for my $name (keys %{ $status->{Channels} }) {
-      my $channel = $status->{Channels}{$name};
-      $writer->irc_event($id, $status->{Nick} => "JOIN", $name);
+    for my $channel (@channels) {
+      $writer->irc_event($id, $status->{Nick} => "JOIN", $channel->{Name});
+    }
 
+    for my $channel (@channels) {
       if ($channel->{Topic}{Topic}) {
         $writer->irc_event(
           $id, liercd => 332,
