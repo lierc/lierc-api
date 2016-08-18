@@ -31,11 +31,13 @@ sub push_fake_events {
       }
 
       if ($channel->{Nicks}) {
-        my $nicks = join " ", keys %{ $channel->{Nicks} };
-        $writer->irc_event(
-          $id, liercd => "353",
-          $status->{Nick}, "=", $channel->{Name}, $nicks
-        );
+        my @nicks = keys %{ $channel->{Nicks} };
+        while (my @chunk = splice @nicks, 0, 50) {
+          $writer->irc_event(
+            $id, liercd => "353",
+            $status->{Nick}, "=", $channel->{Name}, @chunk
+          );
+        }
         $writer->irc_event(
           $id, liercd => "366",
           $status->{Nick}, $channel->{Name}, "End of /NAMES list."
