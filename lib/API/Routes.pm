@@ -39,6 +39,13 @@ sub login {
 sub create {
   my ($self, $req, $captures, $session) = @_;
 
+  my $params = decode_json $req->content;
+  for (qw(Host Port Nick)) {
+    return $self->error("$_ is required")
+      unless defined $params->{$_}
+        && $params->{$_} =~ /\S/;
+  }
+
   my $id  = Util->uuid;
   my $res = $self->request(POST => "$id/create", $req->content);
 
@@ -173,18 +180,20 @@ sub auth {
 sub register {
   my ($self, $req, $captures, $session) = @_;
 
+  for (qw(email pass)) {
+    die "$_ is required"
+      unless defined $req->parameters->{$_}
+        && $req->parameters->{$_} =~ /\S/;
+  }
+
   my $email = $req->parameters->{email};
   my $pass = $req->parameters->{pass};
 
-  if (defined $email and defined $pass) {
-    my ($id, $err) = $self->add_user($email, $pass);
-    return $self->error($err) if $err;
+  my ($id, $err) = $self->add_user($email, $pass);
+  return $self->error($err) if $err;
 
-    $session->{user} = $id;
-    return $self->ok;
-  }
-
-  return $self->error("Email and password required");
+  $session->{user} = $id;
+  return $self->ok;
 }
 
 sub user {
