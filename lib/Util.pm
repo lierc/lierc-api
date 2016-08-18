@@ -2,6 +2,7 @@ package Util;
 
 use JSON::XS;
 use Data::UUID;
+use Time::HiRes ();
 use Digest;
 use Math::BaseConvert;
 
@@ -39,7 +40,7 @@ sub irc_event {
       Command => $command,
       Prefix  => {Name => $prefix},
       Params  => [@params],
-      Time    => time,
+      Time    => Time::HiRes::time,
     }
   });
 }

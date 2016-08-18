@@ -3,7 +3,6 @@ package API::Routes;
 use Util;
 use Writer;
 
-use Time::HiRes ();
 use List::Util qw(min);
 use JSON::XS;
 use URL::Encode qw(url_decode);
