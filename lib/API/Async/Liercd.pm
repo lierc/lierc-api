@@ -16,6 +16,8 @@ sub request {
   $type = "application/javascript" unless defined $type;
 
   AnyEvent::HTTP::http_request $meth, $self->url($path),
+    persistent => 0,
+    keepalive => 0,
     headers => { "Content-Type" => $type },
     $content ? (body => $content) : (),
     sub {
