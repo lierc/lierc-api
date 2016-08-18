@@ -7,46 +7,83 @@ use Role::Tiny;
 use AnyEvent;
 
 sub push_fake_events {
-  my ($self, $id, $writer) = @_;
+  my ($self, $writer, $conns) = @_;
+  my %status;
 
-  my $cv = $self->find_or_recreate_connection($id);
+  my $cv = AE::cv;
+  $cv->begin;
+
+  for my $conn (@$conns) {
+    $cv->begin;
+    my $id = $conn->{id};
+    my $res = $self->find_or_recreate_connection($id);
+
+    $res->cb(sub {
+      $status{$id} = decode_json $_[0]->recv->content;
+      $cv->end;
+      undef $res;
+    });
+  }
+
+  $cv->end;
 
   $cv->cb(sub {
-    my $res = $_[0]->recv;
-
-    my $status = decode_json($res->content);
-    my $welcome = "Welcome to the Internet Relay Network $status->{Nick}";
-    my @channels = values %{ $status->{Channels} };
-
-    $writer->irc_event($id, liercd => "001", $status->{Nick}, $welcome);
-
-    for my $channel (@channels) {
-      $writer->irc_event($id, $status->{Nick} => "JOIN", $channel->{Name});
-    }
-
-    for my $channel (@channels) {
-      if ($channel->{Topic}{Topic}) {
-        $writer->irc_event(
-          $id, liercd => 332,
-          $status->{Nick}, $channel->{Name}, $channel->{Topic}{Topic}
-        );
-      }
-
-      if ($channel->{Nicks}) {
-        my @nicks = keys %{ $channel->{Nicks} };
-        while (my @chunk = splice @nicks, 0, 50) {
-          $writer->irc_event(
-            $id, liercd => "353",
-            $status->{Nick}, "=", $channel->{Name}, @chunk
-          );
-        }
-        $writer->irc_event(
-          $id, liercd => "366",
-          $status->{Nick}, $channel->{Name}, "End of /NAMES list."
-        );
-      }
-    }
+    my @ids = keys %status;
+    $self->push_fake_welcome ($status{$_}, $_, $writer) for @ids;
+    $self->push_fake_joins   ($status{$_}, $_, $writer) for @ids;
+    $self->push_fake_topics  ($status{$_}, $_, $writer) for @ids;
+    $self->push_fake_nicks   ($status{$_}, $_, $writer) for @ids;
+    undef $cv;
   });
+}
+
+sub push_fake_welcome {
+  my ($self, $status, $id, $writer) = @_;
+  my $welcome = "Welcome to the Internet Relay Network $status->{Nick}";
+  $writer->irc_event($id, liercd => "001", $status->{Nick}, $welcome);
+}
+
+sub push_fake_joins {
+  my ($self, $status, $id, $writer) = @_;
+  my @channels = values %{ $status->{Channels} };
+
+  for my $channel (@channels) {
+    $writer->irc_event($id, $status->{Nick} => "JOIN", $channel->{Name});
+  }
+}
+
+sub push_fake_topics {
+  my ($self, $status, $id, $writer) = @_;
+  my @channels = values %{ $status->{Channels} };
+
+  for my $channel (@channels) {
+    if ($channel->{Topic}{Topic}) {
+      $writer->irc_event(
+        $id, liercd => 332,
+        $status->{Nick}, $channel->{Name}, $channel->{Topic}{Topic}
+      );
+    }
+  }
+}
+
+sub push_fake_nicks {
+  my ($self, $status, $id, $writer) = @_;
+  my @channels = values %{ $status->{Channels} };
+  for my $channel (@channels) {
+    if ($channel->{Nicks}) {
+      my @nicks = keys %{ $channel->{Nicks} };
+      while (my @chunk = splice @nicks, 0, 50) {
+        $writer->irc_event(
+          $id, liercd => "353",
+          $status->{Nick}, "=", $channel->{Name}, @chunk
+        );
+      }
+      $writer->irc_event(
+        $id, liercd => "366",
+        $status->{Nick}, $channel->{Name}, "End of /NAMES list."
+      );
+    }
+  }
 }
 
 sub irc_event {
@@ -89,7 +126,7 @@ sub events {
   my $cv = $self->connections($user);
 
   $cv->cb(sub {
-    my $conns = $cv->recv;
+    my $conns = $_[0]->recv;
     my $handle = $respond->($self->event_stream);
 
     my $writer = Writer->new(
@@ -101,7 +138,7 @@ sub events {
     );
 
     $self->streams->{$user}->{$writer->id} = $writer;
-    $self->push_fake_events($_->{id}, $writer) for @$conns;
+    $self->push_fake_events($writer, $conns);
   });
 }
 
