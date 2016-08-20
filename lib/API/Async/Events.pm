@@ -59,11 +59,11 @@ sub push_topics {
   for my $channel (@channels) {
     if ($channel->{Topic}{Topic}) {
       $writer->irc_event(
-        $status->{Id}, liercd => 332,
+        $status->{Id}, liercd => "332",
         $status->{Nick}, $channel->{Name}, $channel->{Topic}{Topic}
       );
       $writer->irc_event(
-        $status->{Id}, liercd => 333,
+        $status->{Id}, liercd => "333",
         $status->{Nick}, $channel->{Name},
         $channel->{Topic}{User}, $channel->{Topic}{Time}
       );
