@@ -10,8 +10,9 @@ use URL::Encode qw(url_decode);
 use Role::Tiny;
 
 my %routes = map { $_ => 1} qw(
-  user auth register list create show
-  delete send logs logs_id login
+  user auth register logout
+  list create show delete send
+  logs logs_id
 );
 
 sub handle {
@@ -26,14 +27,7 @@ sub handle {
 
 sub is_route {
   my ($self, $name) = @_;
-  return $routes{$name};
-}
-
-
-sub login {
-  my $self = shift;
-  open my $fh, '<', 'templates/login.html' or die $!;
-  $self->html($fh);
+  return $name && exists $routes{$name};
 }
 
 sub create {
@@ -175,6 +169,12 @@ sub auth {
   }
 
   return $self->unauthorized("Invalid email or password");
+}
+
+sub logout {
+  my ($self, $req, $captures) = @_;
+  delete $req->env->{'psgix.session'}->{user};
+  return $self->ok;
 }
 
 sub register {

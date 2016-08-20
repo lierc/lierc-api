@@ -14,6 +14,7 @@ requires "Plack::Builder";
 requires "Router::Boom";
 requires "Plack::App::File";
 requires "Plack::Middleware::Session";
+requires "Plack::Middleware::ReverseProxy";
 requires "DBD::Pg";
 requires "IPC::Open3";
 requires "Role::Tiny";

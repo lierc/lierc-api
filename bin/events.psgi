@@ -22,6 +22,9 @@ my $nsq = NSQ->tail(
 );
 
 builder {
+  enable_if { $_[0]->{REMOTE_ADDR} eq '127.0.0.1' }
+    "Plack::Middleware::ReverseProxy";
+
   enable "Session::Cookie",
     secret => $api->secret,
     expires => 3600 * 24,

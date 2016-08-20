@@ -29,57 +29,62 @@ sub push_fake_events {
 
   $cv->cb(sub {
     my @ids = keys %status;
-    $self->push_fake_welcome ($status{$_}, $_, $writer) for @ids;
-    $self->push_fake_joins   ($status{$_}, $_, $writer) for @ids;
-    $self->push_fake_topics  ($status{$_}, $_, $writer) for @ids;
-    $self->push_fake_nicks   ($status{$_}, $_, $writer) for @ids;
+    $self->push_welcome ($status{$_}, $writer) for @ids;
+    $self->push_joins   ($status{$_}, $writer) for @ids;
+    $self->push_topics  ($status{$_}, $writer) for @ids;
+    $self->push_nicks   ($status{$_}, $writer) for @ids;
     undef $cv;
   });
 }
 
-sub push_fake_welcome {
-  my ($self, $status, $id, $writer) = @_;
+sub push_welcome {
+  my ($self, $status, $writer) = @_;
   my $welcome = "Welcome to the Internet Relay Network $status->{Nick}";
-  $writer->irc_event($id, liercd => "001", $status->{Nick}, $welcome);
+  $writer->irc_event($status->{Id}, liercd => "001", $status->{Nick}, $welcome);
 }
 
-sub push_fake_joins {
-  my ($self, $status, $id, $writer) = @_;
+sub push_joins {
+  my ($self, $status, $writer) = @_;
   my @channels = values %{ $status->{Channels} };
 
   for my $channel (@channels) {
-    $writer->irc_event($id, $status->{Nick} => "JOIN", $channel->{Name});
+    $writer->irc_event($status->{Id}, $status->{Nick} => "JOIN", $channel->{Name});
   }
 }
 
-sub push_fake_topics {
-  my ($self, $status, $id, $writer) = @_;
+sub push_topics {
+  my ($self, $status, $writer) = @_;
   my @channels = values %{ $status->{Channels} };
 
   for my $channel (@channels) {
     if ($channel->{Topic}{Topic}) {
       $writer->irc_event(
-        $id, liercd => 332,
+        $status->{Id}, liercd => 332,
         $status->{Nick}, $channel->{Name}, $channel->{Topic}{Topic}
+      );
+      $writer->irc_event(
+        $status->{Id}, liercd => 333,
+        $status->{Nick}, $channel->{Name},
+        $channel->{Topic}{User}, $channel->{Topic}{Time}
       );
     }
   }
 }
 
-sub push_fake_nicks {
-  my ($self, $status, $id, $writer) = @_;
+sub push_nicks {
+  my ($self, $status, $writer) = @_;
   my @channels = values %{ $status->{Channels} };
   for my $channel (@channels) {
     if ($channel->{Nicks}) {
       my @nicks = keys %{ $channel->{Nicks} };
       while (my @chunk = splice @nicks, 0, 50) {
         $writer->irc_event(
-          $id, liercd => "353",
+          $status->{Id}, liercd => "353",
           $status->{Nick}, "=", $channel->{Name}, join " ", @chunk
         );
       }
       $writer->irc_event(
-        $id, liercd => "366",
+        $status->{Id}, liercd => "366",
         $status->{Nick}, $channel->{Name}, "End of /NAMES list."
       );
     }

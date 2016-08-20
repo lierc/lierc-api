@@ -27,16 +27,6 @@ sub ok {
   return $self->json({status => "ok"});
 }
 
-
-sub html {
-  my ($self, $html) = @_;
-  return [
-    200,
-    ["Content-Type", "text/html;charset=utf-8"],
-    $html
-  ];
-};
-
 sub not_found {
   my $self = shift;
   $self->error("not found", 404);

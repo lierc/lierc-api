@@ -16,11 +16,10 @@ my $config = decode_json do {
 my $api    = API->new(%$config);
 my $router = Router::Boom::Method->new;
 
-$router->add( GET    => "",                     "default"  );
-$router->add( GET    => "/login.html",          "login"    );
 $router->add( GET    => "/auth",                "user"     );
 $router->add( POST   => "/auth",                "auth"     );
 $router->add( POST   => "/register",            "register" );
+$router->add( undef  ,  "/logout",              "logout"   );
 
 $router->add( GET    => "/connection",          "list"     );
 $router->add( POST   => "/connection",          "create"   );
@@ -32,6 +31,9 @@ $router->add( GET    => "/connection/:id/channel/:channel/events",        "logs"
 $router->add( GET    => "/connection/:id/channel/:channel/events/:event", "logs_id" );
 
 builder {
+  enable_if { $_[0]->{REMOTE_ADDR} eq '127.0.0.1' }
+    "Plack::Middleware::ReverseProxy";
+
   enable "Session::Cookie",
     secret => $api->secret,
     expires => 3600 * 24,
@@ -45,7 +47,7 @@ builder {
     my $session = $env->{'psgix.session'};
 
     return $api->unauthorized
-      unless $name =~ /^(?:auth|register|login)$/
+      unless ($name && $name =~ /^(?:auth|register|logout)$/)
         or $api->logged_in($session);
 
     if ($captured->{id}) {
