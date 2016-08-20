@@ -6,6 +6,7 @@ use Writer;
 use List::Util qw(min);
 use JSON::XS;
 use URL::Encode qw(url_decode);
+use Data::Validate::Email;
 
 use Role::Tiny;
 
@@ -19,7 +20,16 @@ sub handle {
   my ($self, $name, $env, $captured, $session) = @_;
   if ($self->is_route($name)) {
     my $req = Plack::Request->new($env);
-    return $self->$name($req, $captured, $session);
+
+    my ($res, $err);
+    {
+      local $@;
+      $res = eval { $self->$name($req, $captured, $session) };
+      $err = $@;
+    }
+
+    return $self->error($err) if $err;
+    return $res;
   }
 
   return $self->not_found;
@@ -35,7 +45,7 @@ sub create {
 
   my $params = decode_json $req->content;
   for (qw(Host Port Nick)) {
-    return $self->error("$_ is required")
+    die "$_ is required"
       unless defined $params->{$_}
         && $params->{$_} =~ /\S/;
   }
@@ -53,7 +63,7 @@ sub create {
     return $self->json({success => "ok", "id" => $id});
   }
 
-  $self->error($res->decoded_content);
+  die $res->decoded_content;
 }
 
 sub delete {
@@ -67,7 +77,7 @@ sub delete {
     return $self->ok;
   }
 
-  $self->error($res->decoded_content);
+  die $res->decoded_content;
 }
 
 sub send {
@@ -80,7 +90,7 @@ sub send {
     return $self->ok;
   }
 
-  $self->error($res->decoded_content);
+  die $res->decoded_content;
 }
 
 sub list {
@@ -97,7 +107,7 @@ sub show {
   my $res = $self->request(GET => "$id/status");
 
   return $self->pass($res) if $res->code == 200;
-  $self->error($res->decoded_content);
+  die $res->decoded_content;
 }
 
 sub logs {
@@ -189,9 +199,10 @@ sub register {
   my $email = $req->parameters->{email};
   my $pass = $req->parameters->{pass};
 
-  my ($id, $err) = $self->add_user($email, $pass);
-  return $self->error($err) if $err;
+  die "Invalid email address"
+    unless Data::Validate::Email::is_email($email);
 
+  my $id = $self->add_user($email, $pass);
   $session->{user} = $id;
   return $self->ok;
 }

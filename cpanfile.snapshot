@@ -293,6 +293,24 @@ DISTRIBUTIONS
     requirements:
       Digest::MD5 0
       ExtUtils::MakeMaker 0
+  Data-Validate-Domain-0.12
+    pathname: D/DR/DROLSKY/Data-Validate-Domain-0.12.tar.gz
+    provides:
+      Data::Validate::Domain 0.12
+    requirements:
+      Exporter 0
+      ExtUtils::MakeMaker 0
+      Net::Domain::TLD 0
+      strict 0
+      warnings 0
+  Data-Validate-Email-0.04
+    pathname: S/SO/SONNEN/Data-Validate-Email-0.04.tar.gz
+    provides:
+      Data::Validate::Email 0.04
+    requirements:
+      Data::Validate::Domain 0.04
+      Email::Address 0
+      ExtUtils::MakeMaker 0
   Devel-CheckCompiler-0.06
     pathname: S/SY/SYOHEX/Devel-CheckCompiler-0.06.tar.gz
     provides:
@@ -381,6 +399,15 @@ DISTRIBUTIONS
       Canary::Stability 0
       ExtUtils::MakeMaker 6.52
       common::sense 0
+  Email-Address-1.908
+    pathname: R/RJ/RJBS/Email-Address-1.908.tar.gz
+    provides:
+      Email::Address 1.908
+    requirements:
+      ExtUtils::MakeMaker 0
+      overload 0
+      strict 0
+      warnings 0
   Encode-Locale-1.05
     pathname: G/GA/GAAS/Encode-Locale-1.05.tar.gz
     provides:
@@ -771,6 +798,14 @@ DISTRIBUTIONS
       perl 5.006
       strict 0
       warnings 0
+  Net-Domain-TLD-1.74
+    pathname: A/AL/ALEXP/Net-Domain-TLD-1.74.tar.gz
+    provides:
+      Net::Domain::TLD 1.74
+    requirements:
+      Carp 0
+      ExtUtils::MakeMaker 0
+      Storable 0
   Net-HTTP-6.09
     pathname: E/ET/ETHER/Net-HTTP-6.09.tar.gz
     provides:

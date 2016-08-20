@@ -80,20 +80,12 @@ sub add_user {
   my $hashed = Util->hash_password($pass, $self->secret);
   my $id = Util->uuid;
 
-  my $err;
+  $self->dbh->do(
+    q{INSERT INTO "user" (id, email, password) VALUES(?,?,?)},
+    {}, $id, $email, $hashed
+  );
 
-  {
-    local $@;
-    eval {
-      $self->dbh->do(
-        q{INSERT INTO "user" (id, email, password) VALUES(?,?,?)},
-        {}, $id, $email, $hashed
-      );
-    };
-    $err = $@;
-  }
-
-  return ($id, $err);
+  return $id;
 }
 
 sub logged_in {
