@@ -34,6 +34,11 @@ sub not_found {
 
 sub error {
   my ($self, $error, $code) = @_;
+  $error =~ s/ at [^\s]+ line \d+.*$//;
+  if ($error =~ /^DBD::/) {
+    ($error) = $error =~ /^DETAIL:\s*(.*)\s*$/m;
+  }
+  $error =~ s/\n+$//;
   my $data = { status => "error", error => $error };
   $self->json($data, $code || 400);
 }
