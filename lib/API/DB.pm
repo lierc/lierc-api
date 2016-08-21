@@ -96,4 +96,29 @@ sub logged_in {
   return 1;
 }
 
+sub save_connection {
+  my ($self, $id, $user, $config) = @_;
+
+  $self->dbh->do(
+    q{INSERT INTO connection (id, "user", config) VALUES(?,?,?)},
+    {}, $id, $user, $config
+  );
+}
+
+sub delete_connection {
+  my ($self, $id) = @_;
+  $self->dbh->do(q{DELETE FROM connection WHERE id=?}, {}, $id);
+}
+
+sub find_logs {
+  my ($self, $channel, $id) = @_;
+
+   $self->dbh->selectall_arrayref(q{
+    SELECT id, message, connection FROM log
+      WHERE channel=? AND connection=?
+      ORDER BY id DESC LIMIT ?
+    }, {}, $channel, $id, 100
+  );
+}
+
 1;

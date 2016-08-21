@@ -139,8 +139,8 @@ sub events {
       handle => $handle,
       on_close => sub {
         my $w = shift;
-        $self->save_channels($user);
         delete $self->streams->{$user}->{$w->id};
+        $self->save_channels($user);
       }
     );
 

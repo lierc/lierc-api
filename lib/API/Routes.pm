@@ -55,11 +55,7 @@ sub create {
 
   if ($res->code == 200) {
     my $user = $session->{user};
-    $self->dbh->do(
-      q{INSERT INTO connection (id, "user", config) VALUES(?,?,?)},
-      {}, $id, $user, $req->content
-    );
-
+    $self->save_connection($id, $user, $req->content);
     return $self->json({success => "ok", "id" => $id});
   }
 
@@ -73,7 +69,7 @@ sub delete {
   my $res = $self->request(POST => "$id/destroy");
 
   if ($res->code == 200) {
-    $self->dbh->do(q{DELETE FROM connection WHERE id=?}, {}, $id);
+    $self->delete_connection($id);
     return $self->ok;
   }
 
@@ -114,13 +110,7 @@ sub logs {
   my ($self, $req, $captures, $session) = @_;
   my $id   = $captures->{id};
   my $chan = $captures->{channel};
-
-  my $rows = $self->dbh->selectall_arrayref(q{
-    SELECT id, message, connection FROM log
-      WHERE channel=? AND connection=?
-      ORDER BY id DESC LIMIT ?
-    }, {}, url_decode($chan), $id, 100
-  );
+  my $logs = $self->find_logs(url_decode($chan), $id);
 
   my $json = JSON::XS->new;
   my $data = [
@@ -130,7 +120,7 @@ sub logs {
         Message      => $json->decode($_->[1]),
         ConnectionId => $_->[2],
       }
-    } @$rows
+    } @$logs
   ];
   return $self->json($data);
 }
