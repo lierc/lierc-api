@@ -1,6 +1,8 @@
 use strict;
 use warnings;
 
+use URI;
+use URI::QueryParam;
 use Plack::Builder;
 use Router::Boom::Method;
 use JSON::XS;
@@ -37,13 +39,14 @@ builder {
     sub {
       my $respond = shift;
       my $session = $env->{'psgix.session'};
+      my $params = URI->new($env->{'REQUEST_URI'})->query_form_hash;
 
       my $cv = $api->logged_in($session);
 
       $cv->cb(sub {
         my $logged_in = $_[0]->recv;
         return $respond->($api->unauthorized) unless $logged_in;
-        $api->events($session, $respond);
+        $api->events($session, $respond, $params);
       });
     };
   }

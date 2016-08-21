@@ -7,7 +7,7 @@ use Role::Tiny;
 use AnyEvent;
 
 sub push_fake_events {
-  my ($self, $writer, $conns) = @_;
+  my ($self, $writer, $conns, $options) = @_;
   my %status;
 
   my $cv = AE::cv;
@@ -32,8 +32,10 @@ sub push_fake_events {
     my @ids = keys %status;
     $self->push_welcome ($status{$_}, $writer) for @ids;
     $self->push_joins   ($status{$_}, $writer) for @ids;
-    $self->push_topics  ($status{$_}, $writer) for @ids;
-    $self->push_nicks   ($status{$_}, $writer) for @ids;
+    unless (exists $options->{'skip-post-join-events'}) {
+      $self->push_topics  ($status{$_}, $writer) for @ids;
+      $self->push_nicks   ($status{$_}, $writer) for @ids;
+    }
     undef $cv;
   });
 }
@@ -126,7 +128,7 @@ sub streams {
 }
 
 sub events {
-  my ($self, $session, $respond) = @_;
+  my ($self, $session, $respond, $options) = @_;
 
   my $user = $session->{user};
   my $cv = $self->connections($user);
@@ -145,7 +147,7 @@ sub events {
     );
 
     $self->streams->{$user}->{$writer->id} = $writer;
-    $self->push_fake_events($writer, $conns);
+    $self->push_fake_events($writer, $conns, $options);
   });
 }
 
