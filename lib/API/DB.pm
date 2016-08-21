@@ -67,7 +67,7 @@ sub lookup_user {
   my ($self, $id) = @_;
   return () unless defined $id;
 
-  my ($user) = $self->dbh->selectall_array(
+  my $user = $self->dbh->selectrow_hashref(
     q{SELECT * FROM "user" WHERE id=?},
     {}, $id
   );

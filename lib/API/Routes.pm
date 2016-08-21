@@ -199,7 +199,11 @@ sub register {
 
 sub user {
   my ($self, $req, $captures, $session) = @_;
-  return $self->json($session);
+  my $user = $self->lookup_user($session->{user});
+  return $self->json({
+    email => $user->{email},
+    user => $user->{id},
+  });
 }
 
 1;
