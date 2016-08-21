@@ -160,7 +160,7 @@ sub save_channels {
     for my $conn (@$conns) {
       my $cv = $self->request(GET => "$conn->{id}/status");
       $cv->cb(sub {
-        my $status = decode_json $_[0]->content;
+        my $status = decode_json $_[0]->recv->content;
         $status->{Config}->{Channels} = [ keys %{$status->{Channels}} ];
         $self->update_config($status->{Id}, encode_json $status->{Config});
       });
