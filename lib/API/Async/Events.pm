@@ -13,6 +13,7 @@ sub push_fake_events {
   my $cv = AE::cv;
   $cv->begin;
 
+  # TODO: talk to sync API to initialize connections
   for my $conn (@$conns) {
     $cv->begin;
     my $id = $conn->{id};
@@ -138,12 +139,30 @@ sub events {
       handle => $handle,
       on_close => sub {
         my $w = shift;
+        $self->save_channels($user);
         delete $self->streams->{$user}->{$w->id};
       }
     );
 
     $self->streams->{$user}->{$writer->id} = $writer;
     $self->push_fake_events($writer, $conns);
+  });
+}
+
+sub save_channels {
+  my ($self, $user) = @_;
+  my $cv = $self->connections($user);
+  $cv->cb(sub {
+    my $conns = $_[0]->recv;
+
+    for my $conn (@$conns) {
+      my $cv = $self->request(GET => "$conn->{id}/status");
+      $cv->cb(sub {
+        my $status = decode_json $_[0]->content;
+        $status->{Config}->{Channels} = [ keys %{$status->{Channels}} ];
+        $self->update_config($status->{Id}, encode_json $status->{Config});
+      });
+    }
   });
 }
 

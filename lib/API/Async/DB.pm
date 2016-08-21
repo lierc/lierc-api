@@ -73,6 +73,15 @@ sub lookup_owner {
   $cv;
 }
 
+sub update_config {
+  my ($self, $id, $config) = @_;
+
+  $self->dbh->exec(
+    q{UPDATE connection SET config=? WHERE id=?},
+    $config, $id, sub { }
+  );
+}
+
 sub lookup_config {
   my ($self, $id) = @_;
 
