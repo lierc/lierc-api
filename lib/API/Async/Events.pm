@@ -162,6 +162,7 @@ sub save_channels {
       $cv->cb(sub {
         my $status = decode_json $_[0]->recv->content;
         $status->{Config}->{Channels} = [ keys %{$status->{Channels}} ];
+        $status->{Config}->{Nick} = $status->{Nick};
         $self->update_config($status->{Id}, encode_json $status->{Config});
       });
     }
