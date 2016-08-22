@@ -241,7 +241,12 @@ sub set_pref {
 
   $self->dbh->do(q{
     INSERT INTO pref ("user",name,value) VALUES(?,?,?)
-  }, {}, $user, $pref, $req->content);
+    ON CONFLICT ("user", name)
+    DO UPDATE SET value=? WHERE pref.user=? AND pref.name=?
+    }, {},
+    $user, $pref, $req->content,
+    $req->content, $user, $pref
+  );
 
   $self->ok;
 }
