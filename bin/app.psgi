@@ -21,6 +21,10 @@ $router->add( POST   => "/auth",                "auth"     );
 $router->add( POST   => "/register",            "register" );
 $router->add( undef  ,  "/logout",              "logout"   );
 
+$router->add( GET    => "/preference",          "prefs"    );
+$router->add( GET    => "/preference/:pref",    "pref"     );
+$router->add( POST   => "/preference/:pref",    "pref"     );
+
 $router->add( GET    => "/connection",          "list"     );
 $router->add( POST   => "/connection",          "create"   );
 $router->add( GET    => "/connection/:id",      "show"     );

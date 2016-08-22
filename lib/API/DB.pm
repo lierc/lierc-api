@@ -117,7 +117,7 @@ sub find_logs {
     SELECT id, message, connection FROM log
       WHERE channel=? AND connection=?
       ORDER BY id DESC LIMIT ?
-    }, {}, $channel, $id, 100
+    }, {}, $channel, $id, 50
   );
 }
 

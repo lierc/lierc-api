@@ -13,7 +13,7 @@ use Role::Tiny;
 my %routes = map { $_ => 1} qw(
   user auth register logout
   list create show delete send
-  logs logs_id
+  logs logs_id pref prefs set_pref
 );
 
 sub handle {
@@ -135,7 +135,7 @@ sub logs_id {
     SELECT id, message, connection FROM log
       WHERE channel=? AND connection=? AND id < ?
       ORDER BY id DESC LIMIT ?
-    }, {}, url_decode($chan), $id, $event, 100
+    }, {}, url_decode($chan), $id, $event, 50
   );
 
   my $json = JSON::XS->new;
@@ -204,6 +204,46 @@ sub user {
     email => $user->{email},
     user => $user->{id},
   });
+}
+
+sub prefs {
+  my ($self, $req, $captures, $session) = @_;
+  my $user = $session->{user};
+  my $pref = $session->{pref};
+
+  my $rows = $self->dbh->selectall_arrayref(q{
+    SELECT name, value FROM pref
+    WHERE user=?
+  }, {Slice => {}}, $user);
+
+  return $self->not_found unless $rows;
+  return $self->json($rows);
+}
+
+sub pref {
+  my ($self, $req, $captures, $session) = @_;
+  my $user = $session->{user};
+  my $pref = $session->{pref};
+
+  my $row = $self->dbh->selectrow_hashref(q{
+    SELECT name, value FROM pref
+    WHERE user=? AND name=?
+  }, {}, $user, $pref);
+
+  return $self->not_found unless $row;
+  return $self->json($row);
+}
+
+sub set_pref {
+  my ($self, $req, $captures, $session) = @_;
+  my $user = $session->{user};
+  my $pref = $session->{pref};
+
+  $self->dbh->do(q{
+    INSERT INTO pref (user,name,value) VALUES(?,?,?)
+  }, {}, $user, $pref, $req->content);
+
+  $self->ok;
 }
 
 1;

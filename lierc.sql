@@ -16,14 +16,20 @@ create table connection (
 
 create index on connection ("user");
 
-drop table log;
 create table log (
   id          serial,
   connection  char(24) not null,
   channel     char(32) not null,
   time        timestamp not null,
-  message     json not null,
+  message     jsonb not null,
   primary key (id)
 );
 
 create index on log (connection, channel, time);
+
+create table "pref" (
+  "user"  varchar(24) not null,
+  name    varchar(128) not null,
+  value   bytea not null,
+  primary key ("user", name)
+)
