@@ -209,11 +209,11 @@ sub user {
 sub prefs {
   my ($self, $req, $captures, $session) = @_;
   my $user = $session->{user};
-  my $pref = $session->{pref};
+  my $pref = $captures->{pref};
 
   my $rows = $self->dbh->selectall_arrayref(q{
     SELECT name, value FROM pref
-    WHERE user=?
+    WHERE "user"=?
   }, {Slice => {}}, $user);
 
   return $self->not_found unless $rows;
@@ -223,11 +223,11 @@ sub prefs {
 sub pref {
   my ($self, $req, $captures, $session) = @_;
   my $user = $session->{user};
-  my $pref = $session->{pref};
+  my $pref = $captures->{pref};
 
   my $row = $self->dbh->selectrow_hashref(q{
     SELECT name, value FROM pref
-    WHERE user=? AND name=?
+    WHERE "user"=? AND name=?
   }, {}, $user, $pref);
 
   return $self->not_found unless $row;
@@ -237,10 +237,10 @@ sub pref {
 sub set_pref {
   my ($self, $req, $captures, $session) = @_;
   my $user = $session->{user};
-  my $pref = $session->{pref};
+  my $pref = $captures->{pref};
 
   $self->dbh->do(q{
-    INSERT INTO pref (user,name,value) VALUES(?,?,?)
+    INSERT INTO pref ("user",name,value) VALUES(?,?,?)
   }, {}, $user, $pref, $req->content);
 
   $self->ok;

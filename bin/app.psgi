@@ -23,7 +23,7 @@ $router->add( undef  ,  "/logout",              "logout"   );
 
 $router->add( GET    => "/preference",          "prefs"    );
 $router->add( GET    => "/preference/:pref",    "pref"     );
-$router->add( POST   => "/preference/:pref",    "pref"     );
+$router->add( POST   => "/preference/:pref",    "set_pref" );
 
 $router->add( GET    => "/connection",          "list"     );
 $router->add( POST   => "/connection",          "create"   );
