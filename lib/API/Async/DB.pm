@@ -85,6 +85,16 @@ sub update_config {
   );
 }
 
+sub save_last_id {
+  my ($self, $user, $last_id) = @_;
+
+  return $self->query(
+    q{UPDATE "user" SET last_id=$1 WHERE id=$2},
+    [$last_id, $user],
+    sub {}
+  );
+}
+
 sub lookup_config {
   my ($self, $id) = @_;
 

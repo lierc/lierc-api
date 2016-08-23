@@ -2,7 +2,7 @@ package Writer;
 
 use Util;
 use Time::HiRes ();
-use Class::Tiny qw(handle on_close), {
+use Class::Tiny qw(handle on_close last_id), {
   id => sub { Util->uuid }
 };
 
