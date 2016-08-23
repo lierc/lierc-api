@@ -4,36 +4,50 @@ use strict;
 use warnings;
 
 use AnyEvent;
-use AnyEvent::DBI;
+use AnyEvent::Pg::Pool;
 use JSON::XS;
 use Role::Tiny;
 
-sub dbh {
+sub pg {
   my $self = shift;
-  $self->{dbh} ||= AnyEvent::DBI->new(
-    $self->dsn, $self->dbuser, $self->dbpass,
-    RaiseError => 1,
-    AutoCommit => 1,
+  $self->{dbh} ||= do {
+    AnyEvent::Pg::Pool->new(
+      {
+        dbname => "lierc",
+        $self->dbuser ? (user => $self->dbuser) : (),
+        $self->dbpass ? (user => $self->dbpass) : (),
+      },
+      on_transient_error => sub { warn "transient connect error",  },
+      on_connect_error   => sub { warn $_[1]->dbc->errorMessage },
+    );
+  };
+}
+
+sub query {
+  my ($self, $query, $bind, $cb) = @_;
+  my $cv = AE::cv;
+  $self->pg->push_query(
+    query => [$query, @$bind],
+    on_error => sub { $cv->croak },
+    on_result => sub {
+      $cv->send($cb->($_[2]));
+    }
   );
+  return $cv;
 }
 
 sub connections {
   my ($self, $user) = @_;
-  my $cv = AE::cv;
 
-  my $rows = $self->dbh->exec(
-    q{SELECT id, config FROM connection WHERE "user"=?},
-    $user, sub {
-      my ($dbh, $rows, $rv) = @_;
-      $cv->send([
-        map {
+  return $self->query(
+    q{SELECT id, config FROM connection WHERE "user"=$1},
+    [$user],
+    sub {
+      [ map {
           { id => $_->[0], Config => decode_json($_->[1]) }
-        } @$rows
-      ]);
+        } $_[0]->rows ]
     }
   );
-
-  $cv;
 }
 
 sub logged_in {
@@ -43,61 +57,42 @@ sub logged_in {
 
 sub lookup_user {
   my ($self, $id) = @_;
-  my $cv = AE::cv;
 
-  $self->dbh->exec(
-    q{SELECT * FROM "user" WHERE id=?},
-    $id, sub {
-      my ($dbh, $rows, $rv) = @_;
-      $cv->send($rows->[0]);
-    }
+  return $self->query(
+    q{SELECT * FROM "user" WHERE id=$1},
+    [$id],
+    sub { $_[0]->row(0) }
   );
-
-  $cv;
 }
 
 sub lookup_owner {
   my ($self, $id) = @_;
 
-  my $cv = AE::cv;
-  $cv->send() unless defined $id;
-
-  $self->dbh->exec(
-    q{SELECT "user" FROM connection WHERE id=?},
-    $id, sub {
-      my ($dbh, $row, $rv) = @_;
-      $cv->send($row->[0][0]);
-    }
+  return $self->query(
+    q{SELECT "user" FROM connection WHERE id=$1},
+    [$id],
+    sub { ($_[0]->row(0))[0] }
   );
-
-  $cv;
 }
 
 sub update_config {
   my ($self, $id, $config) = @_;
 
-  $self->dbh->exec(
-    q{UPDATE connection SET config=? WHERE id=?},
-    $config, $id, sub { }
+  return $self->query(
+    q{UPDATE connection SET config=$1 WHERE id=$2},
+    [$config, $id],
+    sub {}
   );
 }
 
 sub lookup_config {
   my ($self, $id) = @_;
 
-  my $cv = AE::cv;
-  $cv->send() unless $id;
-
-  $self->dbh->exec(
-    q{SELECT config FROM connection WHERE id=?},
-    $id, sub {
-      my ($dbh, $rows, $rv) = @_;
-
-      $cv->send($rows->[0][0]);
-    }
+  return $self->query(
+    q{SELECT config FROM connection WHERE id=$1},
+    [$id],
+    sub { ($_[0]->row(0))[0] }
   );
-
-  $cv;
 }
 
 1;

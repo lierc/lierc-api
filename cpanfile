@@ -22,7 +22,7 @@ requires "Time::HiRes";
 requires "Data::Validate::Email";
 
 # Async stuff bin/events.psgi
-requires "AnyEvent::DBI";
+requires "AnyEvent::Pg::Pool";
 requires "AnyEvent::HTTP";
 requires "AnyEvent";
 

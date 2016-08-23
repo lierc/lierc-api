@@ -74,6 +74,20 @@ DISTRIBUTIONS
       AnyEvent 5.33
       ExtUtils::MakeMaker 0
       common::sense 3.3
+  AnyEvent-Pg-0.15
+    pathname: S/SA/SALVA/AnyEvent-Pg-0.15.tar.gz
+    provides:
+      AnyEvent::Pg 0.15
+      AnyEvent::Pg::Pool 0.14
+      AnyEvent::Pg::Pool::ListenerWatcher 0.14
+      AnyEvent::Pg::Pool::QueryWatcher 0.14
+      AnyEvent::Pg::Pool::Watcher 0.14
+      AnyEvent::Pg::Watcher 0.15
+    requirements:
+      AnyEvent 5.34
+      ExtUtils::MakeMaker 0
+      Method::WeakCallback 0.01
+      Pg::PQ 0.14
   Apache-LogFormat-Compiler-0.33
     pathname: K/KA/KAZEBURO/Apache-LogFormat-Compiler-0.33.tar.gz
     provides:
@@ -723,6 +737,12 @@ DISTRIBUTIONS
       Test 0
       Test::Pod 0
       Test::Pod::Coverage 0
+  Method-WeakCallback-0.04
+    pathname: S/SA/SALVA/Method-WeakCallback-0.04.tar.gz
+    provides:
+      Method::WeakCallback 0.04
+    requirements:
+      ExtUtils::MakeMaker 0
   Module-Build-0.4218
     pathname: L/LE/LEONT/Module-Build-0.4218.tar.gz
     provides:
@@ -862,6 +882,15 @@ DISTRIBUTIONS
       perl 5.006001
       strict 0
       warnings 0
+  Pg-PQ-0.14
+    pathname: S/SA/SALVA/Pg-PQ-0.14.tar.gz
+    provides:
+      Pg::PQ 0.14
+      Pg::PQ::Cancel 0.14
+      Pg::PQ::Conn 0.14
+      Pg::PQ::Result 0.14
+    requirements:
+      ExtUtils::MakeMaker 0
   Plack-1.0039
     pathname: M/MI/MIYAGAWA/Plack-1.0039.tar.gz
     provides:
