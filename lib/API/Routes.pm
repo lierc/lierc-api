@@ -14,6 +14,7 @@ my %routes = map { $_ => 1} qw(
   user auth register logout
   list create show delete send
   logs logs_id pref prefs set_pref
+  unread
 );
 
 sub handle {
@@ -249,6 +250,36 @@ sub set_pref {
   );
 
   $self->ok;
+}
+
+sub unread {
+  my ($self, $req, $captures, $session) = @_;
+  my $user = $session->{user};
+  my $last = $captures->{event};
+
+  my $sth = $self->dbh->prepare(q{
+    SELECT COUNT(*), channel, privmsg
+    FROM log
+    JOIN connection
+      ON connection.id=log.connection
+    JOIN "user"
+      ON "user".id=connection.user
+    WHERE
+      "user".id=?
+    AND log.id > ?
+    GROUP BY channel, privmsg
+  });
+
+  my %channels;
+
+  $sth->execute($user, $last);
+
+  while (my $row = $sth->fetchrow_hashref) {
+    my $key = $row->{privmsg} ? "messages" : "events";
+    $channels{$row->{channel}}{$key} += $row->{count};
+  }
+
+  $self->json(\%channels);
 }
 
 1;

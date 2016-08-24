@@ -9,8 +9,8 @@ create table "user" (
 create unique index on "user" (email);
 
 create table connection (
-  id      varchar(24) not null,
-  "user"  varchar(24) not null,
+  id      char(24) not null,
+  "user"  char(24) not null,
   config  json not null,
   primary key (id)
 );
@@ -20,7 +20,7 @@ create index on connection ("user");
 create table log (
   id          serial,
   connection  char(24) not null,
-  channel     char(32) not null,
+  channel     varchar(32) not null,
   privmsg     bool not null default false,
   time        timestamp not null,
   message     jsonb not null,

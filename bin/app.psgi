@@ -21,6 +21,8 @@ $router->add( POST   => "/auth",                "auth"     );
 $router->add( POST   => "/register",            "register" );
 $router->add( undef  ,  "/logout",              "logout"   );
 
+$router->add( GET    => "/unread/:event",       "unread"   );
+
 $router->add( GET    => "/preference",          "prefs"    );
 $router->add( GET    => "/preference/:pref",    "pref"     );
 $router->add( POST   => "/preference/:pref",    "set_pref" );
