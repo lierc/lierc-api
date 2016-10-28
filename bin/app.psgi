@@ -22,6 +22,7 @@ $router->add( POST   => "/register",            "register" );
 $router->add( undef  ,  "/logout",              "logout"   );
 
 $router->add( GET    => "/unread/:event",       "unread"   );
+$router->add( GET    => "/privates",            "privates" );
 
 $router->add( GET    => "/preference",          "prefs"    );
 $router->add( GET    => "/preference/:pref",    "pref"     );
@@ -30,6 +31,7 @@ $router->add( POST   => "/preference/:pref",    "set_pref" );
 $router->add( GET    => "/connection",          "list"     );
 $router->add( POST   => "/connection",          "create"   );
 $router->add( GET    => "/connection/:id",      "show"     );
+$router->add( PUT    => "/connection/:id",      "edit"     );
 $router->add( DELETE => "/connection/:id",      "delete"   );
 $router->add( POST   => "/connection/:id",      "send"     );
 

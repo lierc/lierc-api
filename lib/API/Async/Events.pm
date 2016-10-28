@@ -29,15 +29,22 @@ sub push_fake_events {
   $cv->end;
 
   $cv->cb(sub {
-    my @ids = keys %status;
+    my @ids = grep { $status{$_}{Registered} } keys %status;
+    $self->push_connect ($status{$_}, $writer) for @ids;
     $self->push_welcome ($status{$_}, $writer) for @ids;
     $self->push_joins   ($status{$_}, $writer) for @ids;
-    unless (exists $options->{'skip-post-join-events'}) {
-      $self->push_topics  ($status{$_}, $writer) for @ids;
-      $self->push_nicks   ($status{$_}, $writer) for @ids;
-    }
+    $self->push_topics  ($status{$_}, $writer) for @ids;
+    $self->push_nicks   ($status{$_}, $writer) for @ids;
     undef $cv;
   });
+}
+
+sub push_connect {
+  my ($self, $status, $writer) = @_;
+  $writer->write( Util->event( connect => encode_json {
+    Id => $status->{Id},
+    Connected => \1,
+  } ) );
 }
 
 sub push_welcome {
@@ -92,6 +99,23 @@ sub push_nicks {
       );
     }
   }
+}
+
+sub connect_event {
+  my ($self, $msg) =@_;
+
+  my $data = decode_json($msg);
+  my $cv = $self->lookup_owner($data->{Id});
+
+  $cv->cb(sub {
+    my $user = $_[0]->recv;
+    if (my $streams = $self->streams->{$user}) {
+      my $event = Util->event(connection => $msg);
+      for (values %$streams) {
+        $_->write($event);
+      }
+    }
+  });
 }
 
 sub irc_event {

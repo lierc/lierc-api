@@ -5,16 +5,16 @@ use Writer;
 
 use List::Util qw(min);
 use JSON::XS;
-use URL::Encode qw(url_decode);
 use Data::Validate::Email;
+use Encode;
 
 use Role::Tiny;
 
 my %routes = map { $_ => 1} qw(
   user auth register logout
-  list create show delete send
+  list create show delete send edit
   logs logs_id pref prefs set_pref
-  unread
+  unread privates
 );
 
 sub handle {
@@ -51,7 +51,7 @@ sub create {
         && $params->{$_} =~ /\S/;
   }
 
-  my $id  = Util->uuid;
+  my $id  = $captures->{id} || Util->uuid;
   my $res = $self->request(POST => "$id/create", $req->content);
 
   if ($res->code == 200) {
@@ -75,6 +75,15 @@ sub delete {
   }
 
   die $res->decoded_content;
+}
+
+sub edit {
+  my ($self, $req, $captures, $session) = @_;
+
+  $self->delete($req, $captures, $session);
+  $self->create($req, $captures, $session);
+
+  return $self->ok;
 }
 
 sub send {
@@ -110,8 +119,8 @@ sub show {
 sub logs {
   my ($self, $req, $captures, $session) = @_;
   my $id   = $captures->{id};
-  my $chan = $captures->{channel};
-  my $logs = $self->find_logs(url_decode($chan), $id);
+  my $chan = decode utf8 => $captures->{channel};
+  my $logs = $self->find_logs($chan, $id);
 
   my $json = JSON::XS->new;
   my $data = [
@@ -129,14 +138,14 @@ sub logs {
 sub logs_id {
   my ($self, $req, $captures, $session) = @_;
   my $id   = $captures->{id};
-  my $chan = $captures->{channel};
+  my $chan = decode utf8 => $captures->{channel};
   my $event = $captures->{event};
 
   my $rows = $self->dbh->selectall_arrayref(q{
     SELECT id, message, connection FROM log
       WHERE channel=? AND connection=? AND id < ?
       ORDER BY id DESC LIMIT ?
-    }, {}, url_decode($chan), $id, $event, 50
+    }, {}, $chan, $id, $event, 50
   );
 
   my $json = JSON::XS->new;
@@ -258,7 +267,7 @@ sub unread {
   my $last = $captures->{event};
 
   my $sth = $self->dbh->prepare(q{
-    SELECT COUNT(*), channel, privmsg
+    SELECT COUNT(*), channel, privmsg, connection
     FROM log
     JOIN connection
       ON connection.id=log.connection
@@ -267,7 +276,7 @@ sub unread {
     WHERE
       "user".id=?
     AND log.id > ?
-    GROUP BY channel, privmsg
+    GROUP BY channel, connection, privmsg
   });
 
   my %channels;
@@ -276,10 +285,34 @@ sub unread {
 
   while (my $row = $sth->fetchrow_hashref) {
     my $key = $row->{privmsg} ? "messages" : "events";
-    $channels{$row->{channel}}{$key} += $row->{count};
+    my $conn = $row->{connection};
+    my $chan = $row->{channel};
+    $channels{ $conn }{ $chan }{ $key } += $row->{count};
   }
 
   $self->json(\%channels);
+}
+
+sub privates {
+  my ($self, $req, $captures, $session) = @_;
+  my $user = $session->{user};
+
+  my $rows = $self->dbh->selectall_arrayref(q{
+    SELECT DISTINCT(log.channel) as nick, log.connection
+    FROM log
+    JOIN connection
+      ON log.connection=connection.id
+    JOIN "user"
+      ON connection.user="user".id
+    WHERE log.privmsg = TRUE
+    AND connection.user=?
+    AND (
+      log.time > NOW() - INTERVAL '1 day'
+      OR log.id > "user".last_id
+    )
+  }, {Slice => {}}, $user);
+
+  $self->json([ grep { $_->{nick} =~ /^[^#&+!]/ } @$rows ]);
 }
 
 1;

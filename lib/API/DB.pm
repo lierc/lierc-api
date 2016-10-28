@@ -3,6 +3,7 @@ package API::DB;
 use Util;
 use JSON::XS;
 use DBIx::Connector;
+use Encode;
 
 use Role::Tiny;
 
@@ -113,7 +114,7 @@ sub delete_connection {
 sub find_logs {
   my ($self, $channel, $id) = @_;
 
-   $self->dbh->selectall_arrayref(q{
+  $self->dbh->selectall_arrayref(q{
     SELECT id, message, connection FROM log
       WHERE channel=? AND connection=?
       ORDER BY id DESC LIMIT ?

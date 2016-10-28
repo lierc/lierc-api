@@ -989,6 +989,18 @@ DISTRIBUTIONS
       URI 1.59
       parent 0
       perl 5.008001
+  Plack-Middleware-Deflater-0.12
+    pathname: K/KA/KAZEBURO/Plack-Middleware-Deflater-0.12.tar.gz
+    provides:
+      Plack::Middleware::Deflater 0.12
+      Plack::Middleware::Deflater::Encoder 0.12
+    requirements:
+      Compress::Zlib 0
+      ExtUtils::MakeMaker 6.59
+      Plack 0
+      Test::More 0.96
+      Test::Requires 0
+      perl 5.008001
   Plack-Middleware-ReverseProxy-0.15
     pathname: M/MI/MIYAGAWA/Plack-Middleware-ReverseProxy-0.15.tar.gz
     provides:
