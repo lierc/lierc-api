@@ -30,7 +30,7 @@ sub push_fake_events {
 
   $cv->cb(sub {
     my @ids = grep { $status{$_}{Registered} } keys %status;
-    $self->push_connect ($status{$_}, $writer) for @ids;
+    $self->push_connect ($status{$_}, $writer) for keys %status;
     $self->push_welcome ($status{$_}, $writer) for @ids;
     $self->push_joins   ($status{$_}, $writer) for @ids;
     $self->push_topics  ($status{$_}, $writer) for @ids;
@@ -41,10 +41,9 @@ sub push_fake_events {
 
 sub push_connect {
   my ($self, $status, $writer) = @_;
-  $writer->write( Util->event( connection => encode_json {
-    Id => $status->{Id},
-    Connected => \1,
-  } ) );
+  $writer->write( Util->event(
+    connection => encode_json $status->{ConnectMessage}
+  ) );
 }
 
 sub push_welcome {
@@ -111,9 +110,7 @@ sub connect_event {
     my $user = $_[0]->recv;
     if (my $streams = $self->streams->{$user}) {
       my $event = Util->event(connection => $msg);
-      for (values %$streams) {
-        $_->write($event);
-      }
+      $_->write($event) for values %$streams;
     }
   });
 }
