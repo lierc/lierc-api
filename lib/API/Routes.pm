@@ -120,7 +120,8 @@ sub logs {
   my ($self, $req, $captures, $session) = @_;
   my $id   = $captures->{id};
   my $chan = decode utf8 => $captures->{channel};
-  my $logs = $self->find_logs($chan, $id);
+  my $limit = min($req->parameters->{limit} || 50, 150);
+  my $logs = $self->find_logs($chan, $id, $limit);
 
   my $json = JSON::XS->new;
   my $data = [
@@ -139,13 +140,14 @@ sub logs_id {
   my ($self, $req, $captures, $session) = @_;
   my $id   = $captures->{id};
   my $chan = decode utf8 => $captures->{channel};
+  my $limit = min($req->parameters->{limit} || 50, 150);
   my $event = $captures->{event};
 
   my $rows = $self->dbh->selectall_arrayref(q{
     SELECT id, message, connection FROM log
       WHERE channel=? AND connection=? AND id < ?
       ORDER BY id DESC LIMIT ?
-    }, {}, $chan, $id, $event, 50
+    }, {}, $chan, $id, $event, $limit
   );
 
   my $json = JSON::XS->new;

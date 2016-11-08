@@ -112,13 +112,13 @@ sub delete_connection {
 }
 
 sub find_logs {
-  my ($self, $channel, $id) = @_;
+  my ($self, $channel, $id, $limit) = @_;
 
   $self->dbh->selectall_arrayref(q{
     SELECT id, message, connection FROM log
       WHERE channel=? AND connection=?
       ORDER BY id DESC LIMIT ?
-    }, {}, $channel, $id, 50
+    }, {}, $channel, $id, $limit
   );
 }
 
