@@ -50,6 +50,10 @@ sub push_welcome {
   my ($self, $status, $writer) = @_;
   my $welcome = "Welcome to the Internet Relay Network $status->{Nick}";
   $writer->irc_event($status->{Id}, liercd => "001", $status->{Nick}, $welcome);
+
+  if ( my @isupport = @{ $status->{Isupport} } ) {
+    $writer->irc_event($status->{Id}, liercd => "005", join " ", @isupport);
+  }
 }
 
 sub push_joins {
