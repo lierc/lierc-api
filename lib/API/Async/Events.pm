@@ -1,5 +1,8 @@
 package API::Async::Events;
 
+use strict;
+use warnings;
+
 use Util;
 use Writer;
 use JSON::XS;
@@ -200,9 +203,11 @@ sub save_channels {
       my $cv = $self->request(GET => "$conn->{id}/status");
       $cv->cb(sub {
         my $status = decode_json $_[0]->recv->content;
-        $status->{Config}->{Channels} = [ keys %{$status->{Channels}} ];
-        $status->{Config}->{Nick} = $status->{Nick};
-        $self->update_config($status->{Id}, encode_json $status->{Config});
+        if ( my @channels = keys %{ $status->{Channels} } ) {
+          $status->{Config}->{Channels} = [ @channels ];
+          $status->{Config}->{Nick} = $status->{Nick};
+          $self->update_config($status->{Id}, encode_json $status->{Config});
+        }
       });
     }
   });
