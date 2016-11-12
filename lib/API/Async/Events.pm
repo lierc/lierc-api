@@ -80,12 +80,22 @@ sub push_topics {
   }
 }
 
+sub nick_prefix {
+  my ( $self, $mode ) = @_;
+
+  return "@" if $mode =~ /o/;
+  return "+" if $mode =~ /v/;
+  return "";
+}
+
 sub push_nicks {
   my ($self, $status, $writer) = @_;
   my @channels = values %{ $status->{Channels} };
   for my $channel (@channels) {
     if ($channel->{Nicks}) {
-      my @nicks = keys %{ $channel->{Nicks} };
+      my @nicks = map {
+        $self->nick_prefix($channel->{Nicks}{$_}) . $_;
+      } keys %{ $channel->{Nicks} };
       while (my @chunk = splice @nicks, 0, 50) {
         $writer->irc_event(
           $status->{Id}, liercd => "353",
