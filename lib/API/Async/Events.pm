@@ -74,10 +74,12 @@ sub push_modes {
   my @channels = values %{ $status->{Channels} };
 
   for my $channel (@channels) {
-    $writer->irc_event(
-      $status->{Id}, liercd => "324",
-      $channel->{Name}, "+" . $channel->{Mode}
-    );
+    if ($channel->{Mode}) {
+      $writer->irc_event(
+        $status->{Id}, liercd => "324",
+        $channel->{Name}, "+" . $channel->{Mode}
+      );
+    }
   }
 }
 
