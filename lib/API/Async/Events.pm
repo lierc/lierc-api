@@ -38,6 +38,7 @@ sub push_fake_events {
     $self->push_joins   ($status{$_}, $writer) for @ids;
     $self->push_topics  ($status{$_}, $writer) for @ids;
     $self->push_nicks   ($status{$_}, $writer) for @ids;
+    $self->push_modes   ($status{$_}, $writer) for @ids;
     undef $cv;
   });
 }
@@ -65,6 +66,18 @@ sub push_joins {
 
   for my $channel (@channels) {
     $writer->irc_event($status->{Id}, $status->{Nick} => "JOIN", $channel->{Name});
+  }
+}
+
+sub push_modes {
+  my ($self, $status, $writer) = @_;
+  my @channels = values %{ $status->{Channels} };
+
+  for my $channel (@channels) {
+    $writer->irc_event(
+      $status->{Id}, liercd => "324",
+      $channel->{Name}, "+" . $channel->{Mode}
+    );
   }
 }
 
