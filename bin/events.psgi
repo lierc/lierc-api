@@ -37,7 +37,7 @@ builder {
 
   enable "Session::Cookie",
     secret => $api->secret,
-    expires => 3600 * 24,
+    expires => 3600 * 24 * 7,
     httponly => 1,
     session_key => "chats";
 
