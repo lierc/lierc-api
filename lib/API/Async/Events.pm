@@ -62,7 +62,7 @@ sub push_welcome {
 
 sub push_joins {
   my ($self, $status, $writer) = @_;
-  my @channels = values %{ $status->{Channels} };
+  my @channels = @{ $status->{Channels} };
 
   for my $channel (@channels) {
     $writer->irc_event($status->{Id}, $status->{Nick} => "JOIN", $channel->{Name});
@@ -71,13 +71,13 @@ sub push_joins {
 
 sub push_modes {
   my ($self, $status, $writer) = @_;
-  my @channels = values %{ $status->{Channels} };
+  my @channels = @{ $status->{Channels} };
 
   for my $channel (@channels) {
     if ($channel->{Mode}) {
       $writer->irc_event(
         $status->{Id}, liercd => "324",
-        $channel->{Name}, "+" . $channel->{Mode}
+        $channel->{Name}, $channel->{Mode}
       );
     }
   }
@@ -85,7 +85,7 @@ sub push_modes {
 
 sub push_topics {
   my ($self, $status, $writer) = @_;
-  my @channels = values %{ $status->{Channels} };
+  my @channels = @{ $status->{Channels} };
 
   for my $channel (@channels) {
     if ($channel->{Topic}{Topic}) {
@@ -102,22 +102,12 @@ sub push_topics {
   }
 }
 
-sub nick_prefix {
-  my ( $self, $mode ) = @_;
-
-  return "@" if $mode =~ /o/;
-  return "+" if $mode =~ /v/;
-  return "";
-}
-
 sub push_nicks {
   my ($self, $status, $writer) = @_;
-  my @channels = values %{ $status->{Channels} };
+  my @channels = @{ $status->{Channels} };
   for my $channel (@channels) {
     if ($channel->{Nicks}) {
-      my @nicks = map {
-        $self->nick_prefix($channel->{Nicks}{$_}) . $_;
-      } keys %{ $channel->{Nicks} };
+      my @nicks = @{ $channel->{Nicks} };
       while (my @chunk = splice @nicks, 0, 50) {
         $writer->irc_event(
           $status->{Id}, liercd => "353",
@@ -218,8 +208,8 @@ sub save_channels {
       my $cv = $self->request(GET => "$conn->{id}/status");
       $cv->cb(sub {
         my $status = decode_json $_[0]->recv->content;
-        if ( my @channels = keys %{ $status->{Channels} } ) {
-          $status->{Config}->{Channels} = [ @channels ];
+        if ( my @channels = @{ $status->{Channels} } ) {
+          $status->{Config}->{Channels} = [ map {$_->{Name}} @channels ];
           $status->{Config}->{Nick} = $status->{Nick};
           $self->update_config($status->{Id}, encode_json $status->{Config});
         }
