@@ -3,7 +3,6 @@ use warnings;
 
 use Plack::Builder;
 use Router::Boom::Method;
-use Plack::App::File;
 use JSON::XS;
 
 use API;
@@ -21,6 +20,7 @@ $router->add( POST   => "/auth",                "auth"     );
 $router->add( POST   => "/register",            "register" );
 $router->add( undef  ,  "/logout",              "logout"   );
 
+$router->add( GET    => "/unread",              "unread"   );
 $router->add( GET    => "/unread/:event",       "unread"   );
 $router->add( GET    => "/privates",            "privates" );
 

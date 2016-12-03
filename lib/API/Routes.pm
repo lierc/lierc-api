@@ -266,7 +266,7 @@ sub set_pref {
 sub unread {
   my ($self, $req, $captures, $session) = @_;
   my $user = $session->{user};
-  my $last = $captures->{event};
+  my $last = $captures->{event} || $self->last_id($user);
 
   my $sth = $self->dbh->prepare(q{
     SELECT COUNT(*), channel, privmsg, connection
@@ -309,7 +309,7 @@ sub privates {
     WHERE log.privmsg = TRUE
     AND connection.user=?
     AND (
-      log.time > NOW() - INTERVAL '1 day'
+      log.time > NOW() - INTERVAL '2 days'
       OR log.id > "user".last_id
     )
   }, {Slice => {}}, $user);

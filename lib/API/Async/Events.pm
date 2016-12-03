@@ -159,7 +159,7 @@ sub irc_event {
 sub start_pings {
   my $self = shift;
 
-  $self->{ping} = AE::timer 0, 30, sub {
+  $self->{ping} = AE::timer 0, 15, sub {
     for my $writers (values %{$self->streams}) {
       for my $writer (values %$writers) {
         $writer->ping;

@@ -122,4 +122,14 @@ sub find_logs {
   );
 }
 
+sub last_id {
+  my ($self, $user) = @_;
+
+  my ($last_id) = $self->dbh->selectrow_array(q{
+    SELECT last_id FROM "user" WHERE id=?
+  }, {}, $user);
+
+  return $last_id;
+}
+
 1;
