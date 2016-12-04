@@ -38,3 +38,11 @@ create table pref (
   value   bytea not null,
   primary key ("user", name)
 )
+
+create table seen (
+  "user" varchar(24) not null,
+  connection varchar(24) not null,
+  channel    varchar(32) not null,
+  message_id int not null,
+  primary key ("user", connection, channel)
+)

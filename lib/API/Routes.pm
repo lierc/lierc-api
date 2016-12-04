@@ -3,7 +3,7 @@ package API::Routes;
 use Util;
 use Writer;
 
-use List::Util qw(min);
+use List::Util qw(min max);
 use JSON::XS;
 use Data::Validate::Email;
 use Encode;
@@ -14,7 +14,7 @@ my %routes = map { $_ => 1} qw(
   user auth register logout
   list create show delete send edit
   logs logs_id pref prefs set_pref
-  unread privates
+  missed privates set_seen seen
 );
 
 sub handle {
@@ -263,27 +263,33 @@ sub set_pref {
   $self->ok;
 }
 
-sub unread {
+sub missed {
   my ($self, $req, $captures, $session) = @_;
   my $user = $session->{user};
-  my $last = $captures->{event} || $self->last_id($user);
+  my (@where, @bind);
+
+  for my $key (keys %{ $req->parameters }) {
+    my ($connection, $channel) = split "-", $key, 2;
+    push @where, sprintf "(log.connection=? AND log.channel=? AND log.id > ?)";
+    push @bind, $connection, $channel, $req->parameters->{$key};
+  }
 
   my $sth = $self->dbh->prepare(q{
     SELECT COUNT(*), channel, privmsg, connection
     FROM log
     JOIN connection
       ON connection.id=log.connection
-    JOIN "user"
-      ON "user".id=connection.user
     WHERE
-      "user".id=?
-    AND log.id > ?
+      connection."user"=?
+    AND (
+  } . join(" OR ", @where) . q{
+    )
     GROUP BY channel, connection, privmsg
   });
 
   my %channels;
 
-  $sth->execute($user, $last);
+  $sth->execute($user, @bind);
 
   while (my $row = $sth->fetchrow_hashref) {
     my $key = $row->{privmsg} ? "messages" : "events";
@@ -315,6 +321,39 @@ sub privates {
   }, {Slice => {}}, $user);
 
   $self->json([ grep { $_->{nick} =~ /^[^#&+!]/ } @$rows ]);
+}
+
+sub seen {
+  my ($self, $req, $captures, $session) = @_;
+  my $user = $session->{user};
+
+  my $rows = $self->dbh->selectall_arrayref(q{
+    SELECT connection,channel,message_id FROM seen WHERE "user"=?
+  }, {Slice => {}}, $user);
+
+  return $self->json($rows);
+}
+
+sub set_seen {
+  my ($self, $req, $captures, $session) = @_;
+
+  my $user = $session->{user};
+  my $channel = $captures->{channel};
+  my $connection = $captures->{id};
+  my $position = $req->content;
+
+  my ($value) = $self->dbh->do(q{
+    INSERT into seen ("user", connection, channel, message_id)
+    VALUES(?,?,?,?)
+    ON CONFLICT ("user", connection, channel)
+    DO UPDATE SET message_id=?
+    WHERE seen.user=? AND seen.connection=? AND seen.channel=?
+    }, {},
+    $user, $connection, $channel, $position,
+    $position, $user, $connection, $channel
+  );
+
+  $self->ok;
 }
 
 1;

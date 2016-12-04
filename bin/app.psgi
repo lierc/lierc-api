@@ -20,8 +20,8 @@ $router->add( POST   => "/auth",                "auth"     );
 $router->add( POST   => "/register",            "register" );
 $router->add( undef  ,  "/logout",              "logout"   );
 
-$router->add( GET    => "/unread",              "unread"   );
-$router->add( GET    => "/unread/:event",       "unread"   );
+$router->add( GET    => "/missed",              "missed"   );
+$router->add( GET    => "/seen",                "seen"     );
 $router->add( GET    => "/privates",            "privates" );
 
 $router->add( GET    => "/preference",          "prefs"    );
@@ -35,8 +35,9 @@ $router->add( PUT    => "/connection/:id",      "edit"     );
 $router->add( DELETE => "/connection/:id",      "delete"   );
 $router->add( POST   => "/connection/:id",      "send"     );
 
-$router->add( GET    => "/connection/:id/channel/:channel/events",        "logs" );
-$router->add( GET    => "/connection/:id/channel/:channel/events/:event", "logs_id" );
+$router->add( GET    => "/connection/:id/channel/:channel/events",        "logs"     );
+$router->add( GET    => "/connection/:id/channel/:channel/events/:event", "logs_id"  );
+$router->add( POST   => "/connection/:id/channel/:channel/seen",          "set_seen" );
 
 builder {
   enable_if { $_[0]->{REMOTE_ADDR} eq '127.0.0.1' }
