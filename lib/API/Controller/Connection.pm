@@ -2,12 +2,12 @@ package API::Controller::Connection;
 
 use parent 'API::Controller';
 
-API->register("connection.list", [__PACKAGE__, "list"]);
+API->register("connection.list",   [__PACKAGE__, "list"]);
 API->register("connection.create", [__PACKAGE__, "create"]);
-API->register("connection.show", [__PACKAGE__, "show"]);
+API->register("connection.show",   [__PACKAGE__, "show"]);
 API->register("connection.delete", [__PACKAGE__, "delete"]);
-API->register("connection.send", [__PACKAGE__, "send"]);
-API->register("connection.edit", [__PACKAGE__, "edit"]);
+API->register("connection.send",   [__PACKAGE__, "send"]);
+API->register("connection.edit",   [__PACKAGE__, "edit"]);
 
 sub list {
   my ($self, $req, $captures, $session) = @_;

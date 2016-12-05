@@ -5,8 +5,8 @@ use parent 'API::Controller';
 use List::Util qw(min);
 use Encode;
 
-API->register( "channel.logs", [__PACKAGE__, "logs"]);
-API->register( "channel.logs_id", [__PACKAGE__, "logs_id"]);
+API->register( "channel.logs",     [__PACKAGE__, "logs"]);
+API->register( "channel.logs_id",  [__PACKAGE__, "logs_id"]);
 API->register( "channel.set_seen", [__PACKAGE__, "set_seen"]);
 
 sub logs {

@@ -2,9 +2,9 @@ package API::Controller::Pref;
 
 use parent 'API::Controller';
 
-API->register( "pref.pref", [__PACKAGE__, "pref"]);
-API->register( "pref.prefs", [__PACKAGE__, "prefs"]);
-API->register( "pref.set_pref", [__PACKAGE__, "set_pref"]);
+API->register( "pref.show",   [__PACKAGE__, "show"]);
+API->register( "pref.list",   [__PACKAGE__, "list"]);
+API->register( "pref.upsert", [__PACKAGE__, "upsert"]);
 
 sub prefs {
   my ($self, $req, $captures, $session) = @_;

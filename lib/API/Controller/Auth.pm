@@ -4,8 +4,8 @@ use parent 'API::Controller';
 
 use Data::Validate::Email;
 
-API->register("auth.user",     [__PACKAGE__, "user"]);
-API->register("auth.auth",     [__PACKAGE__, "auth"]);
+API->register("auth.show",     [__PACKAGE__, "show"]);
+API->register("auth.login",    [__PACKAGE__, "login"]);
 API->register("auth.register", [__PACKAGE__, "register"]);
 API->register("auth.logout",   [__PACKAGE__, "logout"]);
 

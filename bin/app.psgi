@@ -21,8 +21,8 @@ my $config = decode_json do {
 my $api    = API->new(%$config);
 my $router = Router::Boom::Method->new;
 
-$router->add( GET    => "/auth",                "auth.user" );
-$router->add( POST   => "/auth",                "auth.auth" );
+$router->add( GET    => "/auth",                "auth.show" );
+$router->add( POST   => "/auth",                "auth.login" );
 $router->add( POST   => "/register",            "auth.register" );
 $router->add( undef  ,  "/logout",              "auth.logout" );
 
@@ -30,9 +30,9 @@ $router->add( GET    => "/missed",              "message.missed");
 $router->add( GET    => "/seen",                "message.seen");
 $router->add( GET    => "/privates",            "message.privates");
 
-$router->add( GET    => "/preference",          "pref.prefs" );
-$router->add( GET    => "/preference/:pref",    "pref.pref" );
-$router->add( POST   => "/preference/:pref",    "pref.set_pref" );
+$router->add( GET    => "/preference",          "pref.list" );
+$router->add( GET    => "/preference/:pref",    "pref.show" );
+$router->add( POST   => "/preference/:pref",    "pref.upsert" );
 
 $router->add( GET    => "/connection",          "connection.list" );
 $router->add( POST   => "/connection",          "connection.create" );
