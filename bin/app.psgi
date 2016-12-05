@@ -7,6 +7,12 @@ use JSON::XS;
 
 use API;
 
+use API::Controller::Auth;
+use API::Controller::Pref;
+use API::Controller::Message;
+use API::Controller::Connection;
+use API::Controller::Channel;
+
 my $config = decode_json do {
   open my $fh, '<', "config.json" or die $!;
   join "", <$fh>;
@@ -15,29 +21,29 @@ my $config = decode_json do {
 my $api    = API->new(%$config);
 my $router = Router::Boom::Method->new;
 
-$router->add( GET    => "/auth",                "user"     );
-$router->add( POST   => "/auth",                "auth"     );
-$router->add( POST   => "/register",            "register" );
-$router->add( undef  ,  "/logout",              "logout"   );
+$router->add( GET    => "/auth",                "auth.user" );
+$router->add( POST   => "/auth",                "auth.auth" );
+$router->add( POST   => "/register",            "auth.register" );
+$router->add( undef  ,  "/logout",              "auth.logout" );
 
-$router->add( GET    => "/missed",              "missed"   );
-$router->add( GET    => "/seen",                "seen"     );
-$router->add( GET    => "/privates",            "privates" );
+$router->add( GET    => "/missed",              "message.missed");
+$router->add( GET    => "/seen",                "message.seen");
+$router->add( GET    => "/privates",            "message.privates");
 
-$router->add( GET    => "/preference",          "prefs"    );
-$router->add( GET    => "/preference/:pref",    "pref"     );
-$router->add( POST   => "/preference/:pref",    "set_pref" );
+$router->add( GET    => "/preference",          "pref.prefs" );
+$router->add( GET    => "/preference/:pref",    "pref.pref" );
+$router->add( POST   => "/preference/:pref",    "pref.set_pref" );
 
-$router->add( GET    => "/connection",          "list"     );
-$router->add( POST   => "/connection",          "create"   );
-$router->add( GET    => "/connection/:id",      "show"     );
-$router->add( PUT    => "/connection/:id",      "edit"     );
-$router->add( DELETE => "/connection/:id",      "delete"   );
-$router->add( POST   => "/connection/:id",      "send"     );
+$router->add( GET    => "/connection",          "connection.list" );
+$router->add( POST   => "/connection",          "connection.create" );
+$router->add( GET    => "/connection/:id",      "connection.show" );
+$router->add( PUT    => "/connection/:id",      "connection.edit" );
+$router->add( DELETE => "/connection/:id",      "connection.delete" );
+$router->add( POST   => "/connection/:id",      "connection.send" );
 
-$router->add( GET    => "/connection/:id/channel/:channel/events",        "logs"     );
-$router->add( GET    => "/connection/:id/channel/:channel/events/:event", "logs_id"  );
-$router->add( POST   => "/connection/:id/channel/:channel/seen",          "set_seen" );
+$router->add( GET    => "/connection/:id/channel/:channel/events",        "channel.logs" );
+$router->add( GET    => "/connection/:id/channel/:channel/events/:event", "channel.logs_id" );
+$router->add( POST   => "/connection/:id/channel/:channel/seen",          "channel.set_seen" );
 
 builder {
   enable_if { $_[0]->{REMOTE_ADDR} eq '127.0.0.1' }

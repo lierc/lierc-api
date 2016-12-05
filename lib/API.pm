@@ -7,7 +7,7 @@ use Class::Tiny qw(host dsn dbuser dbpass secret base);
 
 use Role::Tiny::With;
 
-with 'API::Routes';
+with 'API::Dispatch';
 with 'API::DB';
 with 'API::Responses';
 with 'API::Liercd';
