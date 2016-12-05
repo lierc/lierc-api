@@ -9,7 +9,7 @@ API->register("auth.login",    [__PACKAGE__, "login"]);
 API->register("auth.register", [__PACKAGE__, "register"]);
 API->register("auth.logout",   [__PACKAGE__, "logout"]);
 
-sub user {
+sub show {
   my ($self, $req, $captures, $session) = @_;
   my $user = $self->lookup_user($session->{user});
   return $self->json({
@@ -18,7 +18,7 @@ sub user {
   });
 }
 
-sub auth {
+sub login {
   my ($self, $req, $captures, $session) = @_;
 
   my $pass  = $req->parameters->{pass};

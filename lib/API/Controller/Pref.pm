@@ -6,7 +6,7 @@ API->register( "pref.show",   [__PACKAGE__, "show"]);
 API->register( "pref.list",   [__PACKAGE__, "list"]);
 API->register( "pref.upsert", [__PACKAGE__, "upsert"]);
 
-sub prefs {
+sub list {
   my ($self, $req, $captures, $session) = @_;
   my $user = $session->{user};
   my $pref = $captures->{pref};
@@ -20,7 +20,7 @@ sub prefs {
   return $self->json($rows);
 }
 
-sub pref {
+sub show {
   my ($self, $req, $captures, $session) = @_;
   my $user = $session->{user};
   my $pref = $captures->{pref};
@@ -34,7 +34,7 @@ sub pref {
   return $self->json($row);
 }
 
-sub set_pref {
+sub upsert {
   my ($self, $req, $captures, $session) = @_;
   my $user = $session->{user};
   my $pref = $captures->{pref};
