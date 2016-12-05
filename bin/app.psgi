@@ -62,7 +62,7 @@ builder {
     my $session = $env->{'psgix.session'};
 
     return $api->unauthorized
-      unless ($name && $name =~ /^(?:auth|register|logout)$/)
+      unless ($name && $name =~ /^auth\.(?:login|register|logout)$/)
         or $api->logged_in($session);
 
     if ($captured->{id}) {
