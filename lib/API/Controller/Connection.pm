@@ -2,6 +2,8 @@ package API::Controller::Connection;
 
 use parent 'API::Controller';
 
+use JSON::XS;
+
 API->register("connection.list",   [__PACKAGE__, "list"]);
 API->register("connection.create", [__PACKAGE__, "create"]);
 API->register("connection.show",   [__PACKAGE__, "show"]);
@@ -65,8 +67,8 @@ sub delete {
 sub edit {
   my ($self, $req, $captures, $session) = @_;
 
-  $self->delete($req, $captures, $session);
-  $self->create($req, $captures, $session);
+  $self->handle("connection.delete", $req, $captures, $session);
+  $self->handle("connection.create", $req, $captures, $session);
 
   return $self->ok;
 }
