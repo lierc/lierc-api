@@ -1,0 +1,20 @@
+#!/usr/bin/env perl
+
+use DBI;
+use LWP::UserAgent;
+
+my $dbh = DBI->connect("dbi:Pg:dbname=lierc");
+my $sth = $dbh->prepare(q{SELECT id, config FROM connection});
+$sth->execute;
+
+my $ua = LWP::UserAgent->new;
+
+while (my ($id, $config) = $sth->fetchrow_array) {
+  my $status = $ua->get("http://127.0.0.1:5005/$id/status");
+  next if $status->code == 200;
+
+  my $create = $ua->post("http://127.0.0.1:5005/$id/create", Content => $config);
+  next if $create->code == 200;
+
+  warn $create->status_line;
+}
