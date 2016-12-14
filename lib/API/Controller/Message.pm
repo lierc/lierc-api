@@ -63,7 +63,7 @@ sub privates {
     )
   }, {Slice => {}}, $user);
 
-  $app->json($rows);
+  $self->json([ grep { $_->{nick} =~ /^[^#&+!]/ } @$rows ]);
 }
 
 sub seen {
