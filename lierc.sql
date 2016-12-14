@@ -3,6 +3,7 @@ create table "user" (
   email    varchar(256) not null,
   password varchar(256) not null,
   last_id  int not null default 0,
+  last_login timestamp not null,
   primary  key (id)
 );
 
