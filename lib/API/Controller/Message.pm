@@ -7,8 +7,8 @@ API->register( "message.privates", [__PACKAGE__, "privates"]);
 API->register( "message.seen",     [__PACKAGE__, "seen"]);
 
 sub missed {
-  my ($self, $req, $captures, $session) = @_;
-  my $user = $session->{user};
+  my ($app, $req) = @_;
+  my $user = $req->session->{user};
   my (@where, @bind);
 
   for my $key (keys %{ $req->parameters }) {
@@ -17,7 +17,7 @@ sub missed {
     push @bind, $connection, $channel, $req->parameters->{$key};
   }
 
-  my $sth = $self->dbh->prepare(q{
+  my $sth = $app->dbh->prepare(q{
     SELECT COUNT(*), channel, privmsg, connection
     FROM log
     JOIN connection
@@ -41,14 +41,14 @@ sub missed {
     $channels{ $conn }{ $chan }{ $key } += $row->{count};
   }
 
-  $self->json(\%channels);
+  $app->json(\%channels);
 }
 
 sub privates {
-  my ($self, $req, $captures, $session) = @_;
-  my $user = $session->{user};
+  my ($app, $req) = @_;
+  my $user = $req->session->{user};
 
-  my $rows = $self->dbh->selectall_arrayref(q{
+  my $rows = $app->dbh->selectall_arrayref(q{
     SELECT DISTINCT(log.channel) as nick, log.connection
     FROM log
     JOIN connection
@@ -63,18 +63,18 @@ sub privates {
     )
   }, {Slice => {}}, $user);
 
-  $self->json([ grep { $_->{nick} =~ /^[^#&+!]/ } @$rows ]);
+  $app->json($rows);
 }
 
 sub seen {
-  my ($self, $req, $captures, $session) = @_;
-  my $user = $session->{user};
+  my ($app, $req) = @_;
+  my $user = $req->session->{user};
 
-  my $rows = $self->dbh->selectall_arrayref(q{
+  my $rows = $app->dbh->selectall_arrayref(q{
     SELECT connection,channel,message_id FROM seen WHERE "user"=?
   }, {Slice => {}}, $user);
 
-  return $self->json($rows);
+  return $app->json($rows);
 }
 
 1;

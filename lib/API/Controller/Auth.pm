@@ -10,42 +10,42 @@ API->register("auth.register", [__PACKAGE__, "register"]);
 API->register("auth.logout",   [__PACKAGE__, "logout"]);
 
 sub show {
-  my ($self, $req, $captures, $session) = @_;
-  my $user = $self->lookup_user($session->{user});
-  return $self->json({
+  my ($app, $req) = @_;
+  my $user = $app->lookup_user($req->session->{user});
+  return $app->json({
     email => $user->{email},
     user => $user->{id},
   });
 }
 
 sub login {
-  my ($self, $req, $captures, $session) = @_;
+  my ($app, $req) = @_;
 
   my $pass  = $req->parameters->{pass};
   my $email = $req->parameters->{email};
-  my $hashed = Util->hash_password($pass, $self->secret);
+  my $hashed = Util->hash_password($pass, $app->secret);
 
-  my ($row) = $self->dbh->selectall_array(
+  my ($row) = $app->dbh->selectall_array(
     q{SELECT id FROM "user" WHERE email=? AND password=?},
     {}, $email, $hashed
   );
 
   if ($row) {
     $req->env->{'psgix.session'}->{user} = $row->[0];
-    return $self->ok;
+    return $app->ok;
   }
 
-  return $self->unauthorized("Invalid email or password");
+  return $app->unauthorized("Invalid email or password");
 }
 
 sub logout {
-  my ($self, $req, $captures) = @_;
+  my ($app, $req) = @_;
   delete $req->env->{'psgix.session'}->{user};
-  return $self->ok;
+  return $app->ok;
 }
 
 sub register {
-  my ($self, $req, $captures, $session) = @_;
+  my ($app, $req) = @_;
 
   for (qw(email pass)) {
     die "$_ is required"
@@ -59,9 +59,9 @@ sub register {
   die "Invalid email address"
     unless Data::Validate::Email::is_email($email);
 
-  my $id = $self->add_user($email, $pass);
-  $session->{user} = $id;
-  return $self->ok;
+  my $id = $app->add_user($email, $pass);
+  $req->session->{user} = $id;
+  return $app->ok;
 }
 
 1;

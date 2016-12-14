@@ -12,24 +12,24 @@ API->register("connection.send",   [__PACKAGE__, "send"]);
 API->register("connection.edit",   [__PACKAGE__, "edit"]);
 
 sub list {
-  my ($self, $req, $captures, $session) = @_;
-  my $conns = $self->connections($session->{user});
+  my ($app, $req) = @_;
+  my $conns = $app->connections($req->session->{user});
 
-  return $self->json($conns);
+  return $app->json($conns);
 }
 
 sub show {
-  my ($self, $req, $captures, $session) = @_;
+  my ($app, $req) = @_;
 
-  my $id = $captures->{id};
-  my $res = $self->request(GET => "$id/status");
+  my $id = $req->captures->{id};
+  my $res = $app->request(GET => "$id/status");
 
-  return $self->pass($res) if $res->code == 200;
+  return $app->pass($res) if $res->code == 200;
   die $res->decoded_content;
 }
 
 sub create {
-  my ($self, $req, $captures, $session) = @_;
+  my ($app, $req) = @_;
 
   my $params = decode_json $req->content;
   for (qw(Host Port Nick)) {
@@ -38,49 +38,49 @@ sub create {
         && $params->{$_} =~ /\S/;
   }
 
-  my $id  = $captures->{id} || Util->uuid;
-  my $res = $self->request(POST => "$id/create", $req->content);
+  my $id  = $req->captures->{id} || Util->uuid;
+  my $res = $app->request(POST => "$id/create", $req->content);
 
   if ($res->code == 200) {
-    my $user = $session->{user};
-    $self->save_connection($id, $user, $req->content);
-    return $self->json({success => "ok", "id" => $id});
+    my $user = $req->session->{user};
+    $app->save_connection($id, $user, $req->content);
+    return $app->json({success => "ok", "id" => $id});
   }
 
   die $res->decoded_content;
 }
 
 sub delete {
-  my ($self, $req, $captures) = @_;
+  my ($app, $req) = @_;
 
-  my $id  = $captures->{id};
-  my $res = $self->request(POST => "$id/destroy");
+  my $id  = $req->captures->{id};
+  my $res = $app->request(POST => "$id/destroy");
 
   if ($res->code == 200) {
-    $self->delete_connection($id);
-    return $self->ok;
+    $app->delete_connection($id);
+    return $app->ok;
   }
 
   die $res->decoded_content;
 }
 
 sub edit {
-  my ($self, $req, $captures, $session) = @_;
+  my ($app, $req) = @_;
 
-  $self->handle("connection.delete", $req, $captures, $session);
-  $self->handle("connection.create", $req, $captures, $session);
+  $app->handle("connection.delete", $req);
+  $app->handle("connection.create", $req);
 
-  return $self->ok;
+  return $app->ok;
 }
 
 sub send {
-  my ($self, $req, $captures) = @_;
+  my ($app, $req) = @_;
 
-  my $id  = $captures->{id};
-  my $res = $self->request(POST => "$id/raw", $req->content);
+  my $id  = $req->captures->{id};
+  my $res = $app->request(POST => "$id/raw", $req->content);
 
   if ($res->code == 200) {
-    return $self->ok;
+    return $app->ok;
   }
 
   die $res->decoded_content;

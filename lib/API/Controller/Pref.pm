@@ -7,39 +7,39 @@ API->register( "pref.list",   [__PACKAGE__, "list"]);
 API->register( "pref.upsert", [__PACKAGE__, "upsert"]);
 
 sub list {
-  my ($self, $req, $captures, $session) = @_;
-  my $user = $session->{user};
-  my $pref = $captures->{pref};
+  my ($app, $req) = @_;
+  my $user = $req->session->{user};
+  my $pref = $req->captures->{pref};
 
-  my $rows = $self->dbh->selectall_arrayref(q{
+  my $rows = $app->dbh->selectall_arrayref(q{
     SELECT name, value FROM pref
     WHERE "user"=?
   }, {Slice => {}}, $user);
 
-  return $self->not_found unless $rows;
-  return $self->json($rows);
+  return $app->not_found unless $rows;
+  return $app->json($rows);
 }
 
 sub show {
-  my ($self, $req, $captures, $session) = @_;
-  my $user = $session->{user};
-  my $pref = $captures->{pref};
+  my ($app, $req) = @_;
+  my $user = $req->session->{user};
+  my $pref = $req->captures->{pref};
 
-  my $row = $self->dbh->selectrow_hashref(q{
+  my $row = $app->dbh->selectrow_hashref(q{
     SELECT name, value FROM pref
     WHERE "user"=? AND name=?
   }, {}, $user, $pref);
 
-  return $self->not_found unless $row;
-  return $self->json($row);
+  return $app->not_found unless $row;
+  return $app->json($row);
 }
 
 sub upsert {
-  my ($self, $req, $captures, $session) = @_;
-  my $user = $session->{user};
-  my $pref = $captures->{pref};
+  my ($app, $req) = @_;
+  my $user = $req->session->{user};
+  my $pref = $req->captures->{pref};
 
-  $self->dbh->do(q{
+  $app->dbh->do(q{
     INSERT INTO pref ("user",name,value) VALUES(?,?,?)
     ON CONFLICT ("user", name)
     DO UPDATE SET value=? WHERE pref.user=? AND pref.name=?
@@ -48,7 +48,7 @@ sub upsert {
     $req->content, $user, $pref
   );
 
-  $self->ok;
+  $app->ok;
 }
 
 1;

@@ -1,6 +1,7 @@
 package API::Dispatch;
 
 use Role::Tiny;
+use API::Request;
 
 our %actions;
 
@@ -16,12 +17,12 @@ sub register {
 sub handle {
   my ($self, $name, $env, $captured, $session) = @_;
   if (my $handler = $name && $actions{$name}) {
-    my $req = Plack::Request->new($env);
+    my $req = API::Request->new($env, $captured, $session);
 
     my ($res, $err);
     {
       local $@;
-      $res = eval { $handler->($self, $req, $captured, $session) };
+      $res = eval { $handler->($self, $req) };
       $err = $@;
     }
 

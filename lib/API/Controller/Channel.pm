@@ -10,11 +10,11 @@ API->register( "channel.logs_id",  [__PACKAGE__, "logs_id"]);
 API->register( "channel.set_seen", [__PACKAGE__, "set_seen"]);
 
 sub logs {
-  my ($self, $req, $captures, $session) = @_;
-  my $id   = $captures->{id};
-  my $chan = decode utf8 => $captures->{channel};
+  my ($app, $req) = @_;
+  my $id   = $req->captures->{id};
+  my $chan = decode utf8 => $req->captures->{channel};
   my $limit = min($req->parameters->{limit} || 50, 150);
-  my $logs = $self->find_logs($chan, $id, $limit);
+  my $logs = $app->find_logs($chan, $id, $limit);
 
   my $json = JSON::XS->new;
   my $data = [
@@ -26,17 +26,17 @@ sub logs {
       }
     } @$logs
   ];
-  return $self->json($data);
+  return $app->json($data);
 }
 
 sub logs_id {
-  my ($self, $req, $captures, $session) = @_;
-  my $id   = $captures->{id};
-  my $chan = decode utf8 => $captures->{channel};
+  my ($app, $req) = @_;
+  my $id   = $req->captures->{id};
+  my $chan = decode utf8 => $req->captures->{channel};
   my $limit = min($req->parameters->{limit} || 50, 150);
-  my $event = $captures->{event};
+  my $event = $req->captures->{event};
 
-  my $rows = $self->dbh->selectall_arrayref(q{
+  my $rows = $app->dbh->selectall_arrayref(q{
     SELECT id, message, connection FROM log
       WHERE channel=? AND connection=? AND id < ?
       ORDER BY id DESC LIMIT ?
@@ -53,19 +53,19 @@ sub logs_id {
       }
     } @$rows
   ];
-  return $self->json($data);
+  return $app->json($data);
 }
 
 
 sub set_seen {
-  my ($self, $req, $captures, $session) = @_;
+  my ($app, $req) = @_;
 
-  my $user = $session->{user};
-  my $channel = $captures->{channel};
-  my $connection = $captures->{id};
+  my $user = $req->session->{user};
+  my $channel = $req->captures->{channel};
+  my $connection = $req->captures->{id};
   my $position = $req->content;
 
-  my ($value) = $self->dbh->do(q{
+  my ($value) = $app->dbh->do(q{
     INSERT into seen ("user", connection, channel, message_id)
     VALUES(?,?,?,?)
     ON CONFLICT ("user", connection, channel)
@@ -76,7 +76,7 @@ sub set_seen {
     $position, $user, $connection, $channel
   );
 
-  $self->ok;
+  $app->ok;
 }
 
 1;
