@@ -43,7 +43,7 @@ sub error {
   $self->json($data, $code || 400);
 }
 
-sub pass {
+sub passthrough {
   my ($self, $res) = @_;
   return [
     $res->code,

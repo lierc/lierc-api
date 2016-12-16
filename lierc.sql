@@ -26,6 +26,7 @@ create table log (
   highlight   bool not null default false,
   time        timestamp not null,
   message     jsonb not null,
+  self        bool not null default false,
   primary key (id)
 );
 
