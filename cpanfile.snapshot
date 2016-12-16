@@ -1,16 +1,16 @@
 # carton snapshot format: version 1.0
 DISTRIBUTIONS
-  AnyEvent-7.12
-    pathname: M/ML/MLEHMANN/AnyEvent-7.12.tar.gz
+  AnyEvent-7.13
+    pathname: M/ML/MLEHMANN/AnyEvent-7.13.tar.gz
     provides:
       AE undef
       AE::Log::COLLECT undef
       AE::Log::FILTER undef
       AE::Log::LOG undef
-      AnyEvent 7.12
-      AnyEvent::Base 7.12
-      AnyEvent::CondVar 7.12
-      AnyEvent::CondVar::Base 7.12
+      AnyEvent 7.13
+      AnyEvent::Base 7.13
+      AnyEvent::CondVar 7.13
+      AnyEvent::CondVar::Base 7.13
       AnyEvent::DNS undef
       AnyEvent::Debug undef
       AnyEvent::Debug::Backtrace undef
@@ -66,10 +66,10 @@ DISTRIBUTIONS
       DBI 1
       ExtUtils::MakeMaker 0
       common::sense 3.3
-  AnyEvent-HTTP-2.22
-    pathname: M/ML/MLEHMANN/AnyEvent-HTTP-2.22.tar.gz
+  AnyEvent-HTTP-2.23
+    pathname: M/ML/MLEHMANN/AnyEvent-HTTP-2.23.tar.gz
     provides:
-      AnyEvent::HTTP 2.22
+      AnyEvent::HTTP 2.23
     requirements:
       AnyEvent 5.33
       ExtUtils::MakeMaker 0
@@ -694,10 +694,10 @@ DISTRIBUTIONS
       IPC::Signal 1.00
     requirements:
       ExtUtils::MakeMaker 0
-  JSON-XS-3.02
-    pathname: M/ML/MLEHMANN/JSON-XS-3.02.tar.gz
+  JSON-XS-3.03
+    pathname: M/ML/MLEHMANN/JSON-XS-3.03.tar.gz
     provides:
-      JSON::XS 3.02
+      JSON::XS 3.03
     requirements:
       Canary::Stability 0
       ExtUtils::MakeMaker 6.52
@@ -1053,11 +1053,11 @@ DISTRIBUTIONS
       Proc::Wait3 0.05
     requirements:
       ExtUtils::MakeMaker 0
-  Role-Tiny-2.000003
-    pathname: H/HA/HAARG/Role-Tiny-2.000003.tar.gz
+  Role-Tiny-2.000005
+    pathname: H/HA/HAARG/Role-Tiny-2.000005.tar.gz
     provides:
-      Role::Tiny 2.000003
-      Role::Tiny::With 2.000003
+      Role::Tiny 2.000005
+      Role::Tiny::With 2.000005
     requirements:
       Exporter 5.57
       perl 5.006
