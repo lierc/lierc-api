@@ -24,7 +24,7 @@ sub show {
   my $id = $req->captures->{id};
   my $res = $app->request(GET => "$id/status");
 
-  return $app->pass($res) if $res->code == 200;
+  return $app->passthrough($res) if $res->code == 200;
   die $res->decoded_content;
 }
 

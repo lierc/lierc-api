@@ -23,6 +23,7 @@ sub logs {
         MessageId    => $_->[0],
         Message      => $json->decode($_->[1]),
         ConnectionId => $_->[2],
+        Self         => $_->[3] ? \1 : \0,
       }
     } @$logs
   ];
@@ -37,7 +38,7 @@ sub logs_id {
   my $event = $req->captures->{event};
 
   my $rows = $app->dbh->selectall_arrayref(q{
-    SELECT id, message, connection FROM log
+    SELECT id, message, connection, self FROM log
       WHERE channel=? AND connection=? AND id < ?
       ORDER BY id DESC LIMIT ?
     }, {}, $chan, $id, $event, $limit
@@ -50,6 +51,7 @@ sub logs_id {
         MessageId    => $_->[0],
         Message      => $json->decode($_->[1]),
         ConnectionId => $_->[2],
+        Self         => $_->[3] ? \1 : \0,
       }
     } @$rows
   ];

@@ -115,7 +115,7 @@ sub find_logs {
   my ($self, $channel, $id, $limit) = @_;
 
   $self->dbh->selectall_arrayref(q{
-    SELECT id, message, connection FROM log
+    SELECT id, message, connection, self FROM log
       WHERE channel=? AND connection=?
       ORDER BY id DESC LIMIT ?
     }, {}, $channel, $id, $limit
