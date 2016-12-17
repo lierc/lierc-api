@@ -21,20 +21,26 @@ sub dbh {
 sub verify_owner {
   my ($self, $id, $user) = @_;
 
-  my $rows = $self->dbh->selectall_arrayref(
-    q{SELECT id FROM connection WHERE "user"=? AND id=?},
-    {}, $user, $id
+  my $sth = $self->dbh->prepare_cached(
+    q{SELECT COUNT(id) FROM connection WHERE "user"=? AND id=?},
   );
+  $sth->execute($user, $id);
+  my ($count) = $sth->fetchrow_array;
+  $sth->finish;
 
-  return @$rows > 0;
+  return $count > 0;
 }
 
 sub connections {
   my ($self, $user) = @_;
-  my $rows = $self->dbh->selectall_arrayref(
+
+  my $sth = $self->dbh->prepare_cached(
     q{SELECT id, config FROM connection WHERE "user"=?},
-    {}, $user
   );
+  $sth->execute($user);
+  my $rows = $sth->fetchall_arrayref;
+  $sth->finish;
+
   return [ map {
     { id => $_->[0], Config => decode_json($_->[1]) }
   } @$rows ];
@@ -44,10 +50,12 @@ sub lookup_config {
   my ($self, $id) = @_;
   return () unless defined $id;
 
-  my ($config) = $self->dbh->selectrow_array(
-    q{SELECT config FROM connection WHERE id=?},
-    {}, $id
+  my $sth = $self->dbh->prepare_cached(
+    q{SELECT config FROM connection WHERE id=?}
   );
+  $sth->execute($id);
+  my ($config) = $sth->fetchrow_array;
+  $sth->finish;
 
   return $config;
 }
@@ -56,10 +64,12 @@ sub lookup_owner {
   my ($self, $id) = @_;
   return () unless defined $id;
 
-  my ($user) = $self->dbh->selectrow_array(
+  my $sth = $self->dbh->prepare_cached(
     q{SELECT "user" FROM connection WHERE id=?},
-    {}, $id
   );
+  $sth->execute($id);
+  my ($user) = $sth->fetchrow_array;
+  $sth->finish;
 
   return $user;
 }
@@ -68,10 +78,10 @@ sub lookup_user {
   my ($self, $id) = @_;
   return () unless defined $id;
 
-  my $user = $self->dbh->selectrow_hashref(
-    q{SELECT * FROM "user" WHERE id=?},
-    {}, $id
-  );
+  my $sth = $self->dbh->prepare_cached(q{SELECT * FROM "user" WHERE id=?});
+  $sth->execute($id);
+  my $user = $sth->fetchrow_hashref;
+  $sth->finish;
 
   return $user;
 }
@@ -81,10 +91,11 @@ sub add_user {
   my $hashed = Util->hash_password($pass, $self->secret);
   my $id = Util->uuid;
 
-  $self->dbh->do(
+  my $sth = $self->dbh->prepare_cached(
     q{INSERT INTO "user" (id, email, password) VALUES(?,?,?)},
-    {}, $id, $email, $hashed
   );
+  $sth->execute($id, $email, $hashed);
+  $sth->finish;
 
   return $id;
 }
@@ -100,34 +111,44 @@ sub logged_in {
 sub save_connection {
   my ($self, $id, $user, $config) = @_;
 
-  $self->dbh->do(
+  my $sth = $self->dbh->prepare_cached(
     q{INSERT INTO connection (id, "user", config) VALUES(?,?,?)},
-    {}, $id, $user, $config
   );
+  $sth->execute($id, $user, $config);
+  $sth->finish;
 }
 
 sub delete_connection {
   my ($self, $id) = @_;
-  $self->dbh->do(q{DELETE FROM connection WHERE id=?}, {}, $id);
+  my $sth = $self->dbh->prepare_cached(q{DELETE FROM connection WHERE id=?});
+  $sth->execute($id);
+  $sth->finish;
 }
 
 sub find_logs {
   my ($self, $channel, $id, $limit) = @_;
 
-  $self->dbh->selectall_arrayref(q{
+  my $sth = $self->dbh->prepare_cached(q{
     SELECT id, message, connection, self FROM log
       WHERE channel=? AND connection=?
       ORDER BY id DESC LIMIT ?
-    }, {}, $channel, $id, $limit
-  );
+  });
+  $sth->execute($channel, $id, $limit);
+  my $logs = $sth->fetchall_arrayref;
+  $sth->finish;
+
+  return $logs;
 }
 
 sub last_id {
   my ($self, $user) = @_;
 
-  my ($last_id) = $self->dbh->selectrow_array(q{
+  my $sth = $self->dbh->prepare_cached(q{
     SELECT last_id FROM "user" WHERE id=?
-  }, {}, $user);
+  });
+  $sth->execute($user);
+  my ($last_id) = $sth->fetchrow_array;
+  $sth->finish;
 
   return $last_id;
 }

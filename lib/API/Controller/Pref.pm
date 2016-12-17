@@ -11,10 +11,13 @@ sub list {
   my $user = $req->session->{user};
   my $pref = $req->captures->{pref};
 
-  my $rows = $app->dbh->selectall_arrayref(q{
+  my $sth = $app->dbh->prepare_cached(q{
     SELECT name, value FROM pref
     WHERE "user"=?
-  }, {Slice => {}}, $user);
+  });
+  $sth->execute($user);
+  my $rows = $sth->fetchall_arrayref({});
+  $sth->finish;
 
   return $app->not_found unless $rows;
   return $app->json($rows);
@@ -25,10 +28,13 @@ sub show {
   my $user = $req->session->{user};
   my $pref = $req->captures->{pref};
 
-  my $row = $app->dbh->selectrow_hashref(q{
+  my $sth = $app->dbh->prepare_cached(q{
     SELECT name, value FROM pref
     WHERE "user"=? AND name=?
-  }, {}, $user, $pref);
+  });
+  $sth->execute($user, $pref);
+  my $row = $sth->fetchrow_hashref;
+  $sth->finish;
 
   return $app->not_found unless $row;
   return $app->json($row);
@@ -39,14 +45,17 @@ sub upsert {
   my $user = $req->session->{user};
   my $pref = $req->captures->{pref};
 
-  $app->dbh->do(q{
+  my $sth = $app->dbh->pepare_cached(q{
     INSERT INTO pref ("user",name,value) VALUES(?,?,?)
     ON CONFLICT ("user", name)
     DO UPDATE SET value=? WHERE pref.user=? AND pref.name=?
-    }, {},
+    }
+  );
+  $sth->execute(
     $user, $pref, $req->content,
     $req->content, $user, $pref
   );
+  $sth->finish;
 
   $app->ok;
 }

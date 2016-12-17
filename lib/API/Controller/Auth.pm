@@ -25,10 +25,12 @@ sub login {
   my $email = $req->parameters->{email};
   my $hashed = Util->hash_password($pass, $app->secret);
 
-  my ($row) = $app->dbh->selectall_array(
-    q{SELECT id FROM "user" WHERE email=? AND password=?},
-    {}, $email, $hashed
+  my $sth = $app->dbh->prepare_cached(
+    q{SELECT id FROM "user" WHERE email=? AND password=?}
   );
+  $sth->execute($email, $hashed);
+  my $row = $sth->fetchrow_arrayref;
+  $sth->finish;
 
   if ($row) {
     $req->env->{'psgix.session'}->{user} = $row->[0];

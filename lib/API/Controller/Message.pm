@@ -48,7 +48,7 @@ sub privates {
   my ($app, $req) = @_;
   my $user = $req->session->{user};
 
-  my $rows = $app->dbh->selectall_arrayref(q{
+  my $sth = $app->dbh->prepare_cached(q{
     SELECT DISTINCT(log.channel) as nick, log.connection
     FROM log
     JOIN connection
@@ -61,7 +61,11 @@ sub privates {
       log.time > NOW() - INTERVAL '2 days'
       OR log.id > "user".last_id
     )
-  }, {Slice => {}}, $user);
+  });
+
+  $sth->execute($user);
+  my $rows = $sth->fetchall_arrayref({});
+  $sth->finish;
 
   $app->json([ grep { $_->{nick} =~ /^[^#&+!]/ } @$rows ]);
 }
@@ -70,9 +74,12 @@ sub seen {
   my ($app, $req) = @_;
   my $user = $req->session->{user};
 
-  my $rows = $app->dbh->selectall_arrayref(q{
+  my $sth = $app->dbh->prepare_cached(q{
     SELECT connection,channel,message_id FROM seen WHERE "user"=?
-  }, {Slice => {}}, $user);
+  });
+  $sth->execute($user);
+  my $rows = $sth->fetchall_arrayref({});
+  $sth->finish;
 
   return $app->json($rows);
 }
