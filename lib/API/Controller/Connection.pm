@@ -4,12 +4,12 @@ use parent 'API::Controller';
 
 use JSON::XS;
 
-API->register("connection.list",   [__PACKAGE__, "list"]);
-API->register("connection.create", [__PACKAGE__, "create"]);
-API->register("connection.show",   [__PACKAGE__, "show"]);
-API->register("connection.delete", [__PACKAGE__, "delete"]);
-API->register("connection.send",   [__PACKAGE__, "send"]);
-API->register("connection.edit",   [__PACKAGE__, "edit"]);
+API->register("connection.list",   __PACKAGE__);
+API->register("connection.create", __PACKAGE__);
+API->register("connection.show",   __PACKAGE__);
+API->register("connection.delete", __PACKAGE__);
+API->register("connection.send",   __PACKAGE__);
+API->register("connection.edit",   __PACKAGE__);
 
 sub list {
   my ($app, $req) = @_;

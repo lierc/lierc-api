@@ -2,9 +2,9 @@ package API::Controller::Pref;
 
 use parent 'API::Controller';
 
-API->register( "pref.show",   [__PACKAGE__, "show"]);
-API->register( "pref.list",   [__PACKAGE__, "list"]);
-API->register( "pref.upsert", [__PACKAGE__, "upsert"]);
+API->register("pref.show",   __PACKAGE__);
+API->register("pref.list",   __PACKAGE__);
+API->register("pref.upsert", __PACKAGE__);
 
 sub list {
   my ($app, $req) = @_;

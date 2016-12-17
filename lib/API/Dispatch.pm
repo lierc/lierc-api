@@ -6,8 +6,8 @@ use API::Request;
 our %actions;
 
 sub register {
-  my ($class, $action, $handler) = @_;
-  my ($package, $method) = @$handler;
+  my ($class, $action, $package) = @_;
+  my ($controller, $method) = split /\./, $action, 2;
   $actions{$action} = sub {
     no strict "refs";
     &{"$package\::$method"}(@_);

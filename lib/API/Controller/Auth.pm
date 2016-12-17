@@ -4,10 +4,10 @@ use parent 'API::Controller';
 
 use Data::Validate::Email;
 
-API->register("auth.show",     [__PACKAGE__, "show"]);
-API->register("auth.login",    [__PACKAGE__, "login"]);
-API->register("auth.register", [__PACKAGE__, "register"]);
-API->register("auth.logout",   [__PACKAGE__, "logout"]);
+API->register("auth.show",     __PACKAGE__);
+API->register("auth.login",    __PACKAGE__);
+API->register("auth.register", __PACKAGE__);
+API->register("auth.logout",   __PACKAGE__);
 
 sub show {
   my ($app, $req) = @_;

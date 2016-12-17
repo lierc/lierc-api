@@ -2,9 +2,9 @@ package API::Controller::Message;
 
 use parent 'API::Controller';
 
-API->register( "message.missed",   [__PACKAGE__, "missed"]);
-API->register( "message.privates", [__PACKAGE__, "privates"]);
-API->register( "message.seen",     [__PACKAGE__, "seen"]);
+API->register("message.missed",   __PACKAGE__);
+API->register("message.privates", __PACKAGE__);
+API->register("message.seen",     __PACKAGE__);
 
 sub missed {
   my ($app, $req) = @_;
