@@ -9,7 +9,7 @@ use Role::Tiny;
 
 sub dbh {
   my $self = shift;
-  ($self->{dbh} ||= DBIx::Connector->new(
+  ($self->{connector} ||= DBIx::Connector->new(
     $self->dsn, $self->dbuser, $self->dbpass,
     {
       RaiseError => 1,
