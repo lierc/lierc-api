@@ -21,6 +21,7 @@ requires "IPC::Open3";
 requires "Role::Tiny";
 requires "Time::HiRes";
 requires "Data::Validate::Email";
+requires "Class::Tiny";
 
 # Async stuff bin/events.psgi
 requires "AnyEvent::Pg::Pool";
