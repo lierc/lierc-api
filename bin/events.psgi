@@ -7,24 +7,24 @@ use Plack::Builder;
 use Router::Boom::Method;
 use JSON::XS;
 
+use API::Config;
 use API::Async;
 use NSQ;
 
-my $config = decode_json do {
-  open my $fh, '<', "config.json" or die $!;
-  join "", <$fh>;
-};
-
-my $api = API::Async->new(%$config);
+my $config = API::Config->new;
+my $api = API::Async->new($config->as_hash);
 
 my $nsq = NSQ->tail(
-  %{ $config->{nsq} },
+  path       => $config->nsq_path,
+  address    => $config->nsq_address,
+  topic      => "chats",
   on_message => sub { $api->irc_event(@_) },
   on_error   => sub { warn @_ },
 );
 
 my $connect = NSQ->tail(
-  %{ $config->{nsq} },
+  path       => $config->nsq_path,
+  address    => $config->nsq_address,
   topic      => "connect",
   on_message => sub { $api->connect_event(@_) },
   on_error   => sub { warn @_ },

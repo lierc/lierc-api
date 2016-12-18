@@ -12,13 +12,10 @@ use API::Controller::Pref;
 use API::Controller::Message;
 use API::Controller::Connection;
 use API::Controller::Channel;
+use API::Config;
 
-my $config = decode_json do {
-  open my $fh, '<', "config.json" or die $!;
-  join "", <$fh>;
-};
-
-my $api    = API->new(%$config);
+my $config = API::Config->new;
+my $api    = API->new($config->as_hash);
 my $router = Router::Boom::Method->new;
 
 $router->add( GET    => "/auth",                "auth.show" );
