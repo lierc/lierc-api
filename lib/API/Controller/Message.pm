@@ -11,6 +11,8 @@ sub missed {
   my $user = $req->session->{user};
   my (@where, @bind);
 
+  push @where, "FALSE";
+
   for my $key (keys %{ $req->parameters }) {
     my ($connection, $channel) = split "-", $key, 2;
     push @where, sprintf "(log.connection=? AND log.channel=? AND log.id > ?)";

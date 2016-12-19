@@ -14,8 +14,9 @@ sub pg {
     AnyEvent::Pg::Pool->new(
       {
         dbname => "lierc",
-        $self->dbuser ? (user => $self->dbuser) : (),
-        $self->dbpass ? (user => $self->dbpass) : (),
+        $self->dbhost ? (host     => $self->dbhost) : (),
+        $self->dbuser ? (user     => $self->dbuser) : (),
+        $self->dbpass ? (password => $self->dbpass) : (),
       },
       on_transient_error => sub { warn "transient connect error",  },
       on_connect_error   => sub { warn $_[1]->dbc->errorMessage },
@@ -30,7 +31,13 @@ sub query {
     query => [$query, @$bind],
     on_error => sub { $cv->croak },
     on_result => sub {
-      $cv->send($cb->($_[2]));
+      my $value = eval { $cb->($_[2]) };
+      if (my $err = $@) {
+        $cv->croak($err);
+      }
+      else {
+        $cv->send($value);
+      }
     }
   );
   return $cv;
@@ -71,7 +78,11 @@ sub lookup_owner {
   return $self->query(
     q{SELECT "user" FROM connection WHERE id=$1},
     [$id],
-    sub { ($_[0]->row(0))[0] }
+    sub {
+      die "connection $id has no owner."
+        unless $_[0]->nRows > 0;
+      ($_[0]->row(0))[0]
+    }
   );
 }
 

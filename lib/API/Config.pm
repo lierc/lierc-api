@@ -8,16 +8,17 @@ sub new {
 }
 
 sub base    { $ENV{API_BASE}          || "" }
-sub host    { $ENV{LIERC_HOST}        || "127.0.0.1:5005" }
+sub host    { $ENV{LIERCD_HOST}       || "127.0.0.1:5005" }
 sub dbhost  { $ENV{POSTGRES_HOST}     || "127.0.0.1" }
 sub dbuser  { $ENV{POSTGRES_USER}     || undef }
 sub dbpass  { $ENV{POSTGRES_PASSWORD} || undef }
+sub dbname  { $ENV{POSTGRES_DB}       || "lierc" }
 sub secret  { $ENV{API_SECRET}        || "asdffdas" }
 sub nsqhost { $ENV{NSQD_HOST}         || "" }
 
 sub dsn     {
   my $self = shift;
-  sprintf "%s:Pg:dbname=lierc", $self->dbhost;
+  sprintf "dbi:Pg:dbname=%s;host=%s", $self->dbname, $self->dbhost;
 }
 
 sub nsq_address {

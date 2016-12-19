@@ -189,7 +189,8 @@ sub events {
         my $w = shift;
         delete $self->streams->{$user}->{$w->id};
         $self->save_channels($user);
-        $self->save_last_id($user, $w->last_id);
+        $self->save_last_id($user, $w->last_id)
+          if defined $w->last_id;
       }
     );
 

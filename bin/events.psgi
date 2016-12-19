@@ -17,7 +17,7 @@ my $api = API::Async->new($config->as_hash);
 my $nsq = NSQ->tail(
   path       => $config->nsq_path,
   address    => $config->nsq_address,
-  topic      => "chats",
+  topic      => "logged",
   on_message => sub { $api->irc_event(@_) },
   on_error   => sub { warn @_ },
 );
