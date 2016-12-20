@@ -15,10 +15,8 @@ sub register {
 }
 
 sub handle {
-  my ($self, $name, $env, $captured, $session) = @_;
+  my ($self, $name, $req) = @_;
   if (my $handler = $name && $actions{$name}) {
-    my $req = API::Request->new($env, $captured, $session);
-
     my ($res, $err);
     {
       local $@;

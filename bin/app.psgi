@@ -69,6 +69,7 @@ builder {
         unless $api->verify_owner($captured->{id}, $session->{user});
     }
 
-    return $api->handle($name, $env, $captured, $session);
+    my $req = API::Request->new($env, $captured, $session);
+    return $api->handle($name, $req);
   };
 };
