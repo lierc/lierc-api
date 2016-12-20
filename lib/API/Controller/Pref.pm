@@ -45,7 +45,7 @@ sub upsert {
   my $user = $req->session->{user};
   my $pref = $req->captures->{pref};
 
-  my $sth = $app->dbh->pepare_cached(q{
+  my $sth = $app->dbh->prepare_cached(q{
     INSERT INTO pref ("user",name,value) VALUES(?,?,?)
     ON CONFLICT ("user", name)
     DO UPDATE SET value=? WHERE pref.user=? AND pref.name=?
