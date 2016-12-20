@@ -79,9 +79,8 @@ sub lookup_owner {
     q{SELECT "user" FROM connection WHERE id=$1},
     [$id],
     sub {
-      die "connection $id has no owner."
-        unless $_[0]->nRows > 0;
-      ($_[0]->row(0))[0]
+      my $res = shift;
+      $res->nRows > 0 ? ($res->row(0))[0] : ();
     }
   );
 }

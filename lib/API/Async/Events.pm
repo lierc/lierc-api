@@ -130,6 +130,8 @@ sub connect_event {
 
   $cv->cb(sub {
     my $user = $_[0]->recv;
+    return unless $user;
+
     if (my $streams = $self->streams->{$user}) {
       my $event = Util->event(connection => $msg);
       $_->write($event) for values %$streams;
@@ -145,6 +147,8 @@ sub irc_event {
 
   $cv->cb(sub {
     my $user = $_[0]->recv;
+    return unless defined $user;
+
     if (my $streams = $self->streams->{$user}) {
       my $msg_id = $data->{MessageId};
       my $event = Util->event(irc => encode_json($data), $msg_id);
