@@ -15,7 +15,7 @@ my $config = API::Config->new;
 my $api = API::Async->new($config->as_hash);
 
 my $nsq = NSQ->tail(
-  path       => $config->nsq_path,
+  path       => $config->nsq_tail,
   address    => $config->nsq_address,
   topic      => "logged",
   on_message => sub { $api->irc_event(@_) },
@@ -23,7 +23,7 @@ my $nsq = NSQ->tail(
 );
 
 my $connect = NSQ->tail(
-  path       => $config->nsq_path,
+  path       => $config->nsq_tail,
   address    => $config->nsq_address,
   topic      => "connect",
   on_message => sub { $api->connect_event(@_) },
