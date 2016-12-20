@@ -87,14 +87,14 @@ sub lookup_user {
 }
 
 sub add_user {
-  my ($self, $email, $pass) = @_;
+  my ($self, $user, $email, $pass) = @_;
   my $hashed = Util->hash_password($pass, $self->secret);
   my $id = Util->uuid;
 
   my $sth = $self->dbh->prepare_cached(
-    q{INSERT INTO "user" (id, email, password) VALUES(?,?,?)},
+    q{INSERT INTO "user" (id, username, email, password) VALUES(?,?,?,?)},
   );
-  $sth->execute($id, $email, $hashed);
+  $sth->execute($id, $user, $email, $hashed);
   $sth->finish;
 
   return $id;

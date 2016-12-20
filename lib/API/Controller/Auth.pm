@@ -14,7 +14,8 @@ sub show {
   my $user = $app->lookup_user($req->session->{user});
   return $app->json({
     email => $user->{email},
-    user => $user->{id},
+    user => $user->{username},
+    id => $user->{id},
   });
 }
 
@@ -26,9 +27,9 @@ sub login {
   my $hashed = Util->hash_password($pass, $app->secret);
 
   my $sth = $app->dbh->prepare_cached(
-    q{SELECT id FROM "user" WHERE email=? AND password=?}
+    q{SELECT id FROM "user" WHERE (email=? OR username=?) AND password=?}
   );
-  $sth->execute($email, $hashed);
+  $sth->execute($email, $email, $hashed);
   my $row = $sth->fetchrow_arrayref;
   $sth->finish;
 
@@ -49,7 +50,7 @@ sub logout {
 sub register {
   my ($app, $req) = @_;
 
-  for (qw(email pass)) {
+  for (qw(username email pass)) {
     die "$_ is required"
       unless defined $req->parameters->{$_}
         && $req->parameters->{$_} =~ /\S/;
@@ -57,11 +58,12 @@ sub register {
 
   my $email = $req->parameters->{email};
   my $pass = $req->parameters->{pass};
+  my $user = $req->parameters->{username};
 
   die "Invalid email address"
     unless Data::Validate::Email::is_email($email);
 
-  my $id = $app->add_user($email, $pass);
+  my $id = $app->add_user($user, $email, $pass);
   $req->session->{user} = $id;
   return $app->ok;
 }

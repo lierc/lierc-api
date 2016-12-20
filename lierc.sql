@@ -2,8 +2,11 @@ create table "user" (
   id       varchar(24) not null,
   email    varchar(256) not null,
   password varchar(256) not null,
+  username varchar(256) not null,
   last_id  int not null default 0,
-  last_login timestamp not null,
+  last_login timestamp not null default NOW(),
+  unique (email),
+  unique (username),
   primary  key (id)
 );
 
@@ -39,7 +42,7 @@ create table pref (
   name    varchar(128) not null,
   value   bytea not null,
   primary key ("user", name)
-)
+);
 
 create table seen (
   "user" varchar(24) not null,
@@ -47,4 +50,4 @@ create table seen (
   channel    varchar(32) not null,
   message_id int not null,
   primary key ("user", connection, channel)
-)
+);
