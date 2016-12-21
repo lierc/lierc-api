@@ -41,6 +41,8 @@ builder {
     httponly => 1,
     session_key => "chats";
 
+  enable "AccessLog";
+
   sub {
     my $env = shift;
 

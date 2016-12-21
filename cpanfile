@@ -22,6 +22,9 @@ requires "Time::HiRes";
 requires "Data::Validate::Email";
 requires "Class::Tiny";
 
+# Plack recommends
+requires "Cookie::Baker::XS";
+
 # Async stuff bin/events.psgi
 requires "AnyEvent::Pg::Pool";
 requires "AnyEvent::HTTP";
