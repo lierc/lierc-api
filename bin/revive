@@ -4,7 +4,13 @@ use DBI;
 use LWP::UserAgent;
 
 my $dbh = DBI->connect("dbi:Pg:dbname=lierc");
-my $sth = $dbh->prepare(q{SELECT id, config FROM connection});
+my $sth = $dbh->prepare(q{
+  SELECT c.id, c.config
+  FROM connection AS c
+    LEFT JOIN "user" AS u
+     ON c.user = u.id
+  WHERE u.last_login > NOW() - INTERVAL '1 hours'
+});
 $sth->execute;
 
 my $ua = LWP::UserAgent->new;

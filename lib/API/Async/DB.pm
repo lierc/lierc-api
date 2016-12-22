@@ -105,6 +105,16 @@ sub save_last_id {
   );
 }
 
+sub save_last_login {
+  my ($self, $user) = @_;
+
+  return $self->query(
+    q{UPDATE "user" SET last_login=NOW() WHERE id=$1},
+    [$user],
+    sub {}
+  );
+}
+
 sub lookup_config {
   my ($self, $id) = @_;
 

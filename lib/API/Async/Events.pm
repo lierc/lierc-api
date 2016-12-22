@@ -201,6 +201,7 @@ sub events {
     $writer->ping;
     $self->streams->{$user}->{$writer->id} = $writer;
     $self->push_fake_events($writer, $conns, $options);
+    $self->save_last_login($user);
   });
 }
 
