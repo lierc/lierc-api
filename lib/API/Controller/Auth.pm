@@ -34,8 +34,8 @@ sub login {
   $sth->finish;
 
   if ($row) {
-    $req->env->{'psgix.session'}->{user} = $row->[0];
-    return $app->ok;
+    $req->session->{user} = $row->[0];
+    return $app->handle("auth.show", $req);
   }
 
   return $app->unauthorized("Invalid email or password");
@@ -65,7 +65,8 @@ sub register {
 
   my $id = $app->add_user($user, $email, $pass);
   $req->session->{user} = $id;
-  return $app->ok;
+
+  return $app->handle("auth.show", $req);
 }
 
 1;
