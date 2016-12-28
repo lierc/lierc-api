@@ -36,6 +36,7 @@ create table log (
 create index on log (connection, channel, highlight DESC);
 create index on log (connection, channel, id DESC);
 create index on log (connection, channel, privmsg, id DESC);
+create index on log (time);
 
 create table pref (
   "user"  varchar(24) not null,

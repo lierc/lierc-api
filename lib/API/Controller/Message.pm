@@ -59,9 +59,8 @@ sub privates {
       ON connection.user="user".id
     WHERE log.privmsg = TRUE
     AND connection.user=?
-    AND (
-      log.time > NOW() - INTERVAL '2 days'
-      OR log.id > "user".last_id
+    AND log.time > LEAST(
+      "user".last_login, NOW() - INTERVAL '2 DAY'
     )
   });
 
