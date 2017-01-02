@@ -39,6 +39,7 @@ builder {
     secret => $api->secret,
     expires => 3600 * 24 * 7,
     httponly => 1,
+    secure => $api->secure,
     session_key => "chats";
 
   enable "AccessLog";
