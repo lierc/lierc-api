@@ -15,7 +15,7 @@ sub last {
   my $id   = $req->captures->{id};
   my $chan = decode utf8 => $req->captures->{channel};
   my $limit = min($req->parameters->{limit} || 5, 20);
-  my $query = $req->parameters->{query};
+  my $query = decode utf8 => $req->parameters->{query};
 
   my $sth = $app->dbh->prepare_cached(q{
     SELECT id, message, connection, self FROM log
