@@ -8,6 +8,41 @@ use Encode;
 API->register("channel.logs",     __PACKAGE__);
 API->register("channel.logs_id",  __PACKAGE__);
 API->register("channel.set_seen", __PACKAGE__);
+API->register("channel.last",     __PACKAGE__);
+
+sub last {
+  my ($app, $req) = @_;
+  my $id   = $req->captures->{id};
+  my $chan = decode utf8 => $req->captures->{channel};
+  my $limit = min($req->parameters->{limit} || 5, 20);
+  my $query = $req->parameters->{query};
+
+  my $sth = $app->dbh->prepare_cached(q{
+    SELECT id, message, connection, self FROM log
+      WHERE channel=? AND connection=?
+        AND privmsg=True
+        AND message->'Params'->>1 ~ ?
+      ORDER BY id DESC LIMIT ?
+    });
+  $sth->execute($chan, $id, $query, $limit);
+
+  my $json = JSON::XS->new;
+  my @data;
+
+  while (my $row = $sth->fetchrow_arrayref) {
+    push @data, {
+      MessageId    => $row->[0],
+      Message      => $json->decode($row->[1]),
+      ConnectionId => $row->[2],
+      Self         => $row->[3] ? \1 : \0,
+    };
+  }
+
+  $sth->finish;
+
+  return $app->json(\@data);
+
+}
 
 sub logs {
   my ($app, $req) = @_;

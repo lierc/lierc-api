@@ -41,6 +41,7 @@ $router->add( POST   => "/connection/:id",      "connection.send" );
 $router->add( GET    => "/connection/:id/channel/:channel/events",        "channel.logs" );
 $router->add( GET    => "/connection/:id/channel/:channel/events/:event", "channel.logs_id" );
 $router->add( POST   => "/connection/:id/channel/:channel/seen",          "channel.set_seen" );
+$router->add( GET    => "/connection/:id/channel/:channel/last",          "channel.last" );
 
 builder {
   enable_if { $_[0]->{REMOTE_ADDR} eq '127.0.0.1' }
