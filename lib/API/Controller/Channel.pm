@@ -23,7 +23,7 @@ sub last {
         AND privmsg=True
         AND message->'Params'->>1 ~ ?
       ORDER BY id DESC LIMIT ?
-    });
+  });
   $sth->execute($chan, $id, $query, $limit);
 
   my $json = JSON::XS->new;
@@ -39,9 +39,7 @@ sub last {
   }
 
   $sth->finish;
-
   return $app->json(\@data);
-
 }
 
 sub logs {
@@ -76,7 +74,7 @@ sub logs_id {
     SELECT id, message, connection, self FROM log
       WHERE channel=? AND connection=? AND id < ?
       ORDER BY id DESC LIMIT ?
-    });
+  });
   $sth->execute($chan, $id, $event, $limit);
 
   my $json = JSON::XS->new;
@@ -92,7 +90,6 @@ sub logs_id {
   }
 
   $sth->finish;
-
   return $app->json(\@data);
 }
 
@@ -101,7 +98,7 @@ sub set_seen {
   my ($app, $req) = @_;
 
   my $user = $req->session->{user};
-  my $channel = $req->captures->{channel};
+  my $channel = decode utf8 => $req->captures->{channel};
   my $connection = $req->captures->{id};
   my $position = $req->content;
 
