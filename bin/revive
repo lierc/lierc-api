@@ -9,7 +9,7 @@ my $sth = $dbh->prepare(q{
   FROM connection AS c
     LEFT JOIN "user" AS u
      ON c.user = u.id
-  WHERE u.last_login > NOW() - INTERVAL '24 hours'
+  WHERE u.last_login > NOW() - INTERVAL '48 hours'
 });
 $sth->execute;
 
