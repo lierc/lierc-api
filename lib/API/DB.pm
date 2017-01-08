@@ -42,7 +42,7 @@ sub connections {
   $sth->finish;
 
   return [ map {
-    { id => $_->[0], Config => decode_json($_->[1]) }
+    { Id => $_->[0], Config => decode_json($_->[1]) }
   } @$rows ];
 }
 
