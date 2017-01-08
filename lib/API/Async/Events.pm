@@ -46,7 +46,7 @@ sub push_fake_events {
 sub push_connect {
   my ($self, $status, $writer) = @_;
   $writer->write( Util->event(
-    connection => encode_json $status->{ConnectMessage}
+    connection => encode_json $status
   ) );
 }
 
