@@ -56,7 +56,7 @@ sub push_welcome {
   $writer->irc_event($status->{Id}, liercd => "001", $status->{Nick}, $welcome);
 
   if ( my @isupport = @{ $status->{Isupport} } ) {
-    $writer->irc_event($status->{Id}, liercd => "005", join " ", @isupport);
+    $writer->irc_event($status->{Id}, liercd => "005", $status->{Nick}, join " ", @isupport);
   }
 }
 
