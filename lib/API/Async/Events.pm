@@ -216,9 +216,9 @@ sub save_channels {
       $cv->cb(sub {
         my $status = decode_json $_[0]->recv->content;
         if ( my @channels = @{ $status->{Channels} } ) {
-          $status->{Config}->{Channels} = [ map {$_->{Name}} @channels ];
-          $status->{Config}->{Nick} = $status->{Nick};
-          $self->update_config($status->{Id}, encode_json $status->{Config});
+          $conn->{Config}->{Channels} = [ map {$_->{Name}} @channels ];
+          $conn->{Config}->{Nick} = $status->{Nick};
+          $self->update_config($status->{Id}, encode_json $conn->{Config});
         }
       });
     }
