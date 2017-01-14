@@ -230,7 +230,9 @@ sub stats {
   my %data;
 
   for my $user (keys %{ $self->streams }) {
-    $data{$user} = scalar keys %{ $self->streams->{$user} };
+    my $count = scalar keys %{ $self->streams->{$user} };
+    $data{$user} = $count
+      if $count > 0;
   }
 
   return \%data;
