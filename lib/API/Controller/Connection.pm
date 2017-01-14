@@ -22,10 +22,10 @@ sub show {
   my ($app, $req) = @_;
 
   my $id = $req->captures->{id};
-  my $res = $app->request(GET => "$id/status");
+  my $data = $app->lookup_config($id);
+  my $config = decode_json $data;
 
-  return $app->passthrough($res) if $res->code == 200;
-  die $res->decoded_content;
+  return $app->json({ Id => $id, Config => $config });
 }
 
 sub create {
@@ -44,6 +44,7 @@ sub create {
   if ($res->code == 200) {
     my $user = $req->session->{user};
     $app->save_connection($id, $user, $req->content);
+    $app->dbh->do("NOTIFY highlights");
     return $app->json({success => "ok", "id" => $id});
   }
 
