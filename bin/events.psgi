@@ -47,6 +47,13 @@ builder {
   sub {
     my $env = shift;
 
+    if ($env->{PATH_INFO} eq '/stats') {
+      if ($env->{HTTP_LIERC_KEY} eq $config->key) {
+        return $api->json($api->stats);
+      }
+      return $api->error("Invalid key");
+    }
+
     sub {
       my $respond = shift;
       my $session = $env->{'psgix.session'};

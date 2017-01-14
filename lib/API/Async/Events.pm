@@ -225,6 +225,17 @@ sub save_channels {
   });
 }
 
+sub stats {
+  my $self = shift;
+  my %data;
+
+  for my $user (keys %{ $self->streams }) {
+    $data{$user} = scalar keys %{ $self->streams->{$user} };
+  }
+
+  return \%data;
+}
+
 around new => sub {
   my $orig = shift;
   my $self = $orig->(@_);

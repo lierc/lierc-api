@@ -10,6 +10,7 @@ our %DEFAULT = (
   dbpass   => undef,
   dbname   => "lierc",
   secret   => "changeme",
+  key      => "changeme",
   secure   => 0,
   nsqd     => "127.0.0.1",
   nsq_tail => "/usr/local/bin/nsq_tail"
@@ -30,6 +31,7 @@ sub secret   { $ENV{API_SECRET}        || $DEFAULT{secret}   }
 sub nsqhost  { $ENV{NSQD_HOST}         || $DEFAULT{nsqd}     }
 sub nsq_tail { $ENV{NSQ_TAIL}          || $DEFAULT{nsq_tail} }
 sub secure   { $ENV{API_SECURE}        || $DEFAULT{secure}   }
+sub key      { $ENV{API_KEY}           || $DEFAULT{key}      }
 
 sub dsn     {
   my $self = shift;
