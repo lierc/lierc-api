@@ -18,7 +18,7 @@ sub last {
   my $query = decode utf8 => $req->parameters->{query};
 
   my $sth = $app->dbh->prepare_cached(q{
-    SELECT id, message, connection, self FROM log
+    SELECT id, message, connection, self, highlight FROM log
       WHERE channel=? AND connection=?
         AND privmsg=True
         AND message->'Params'->>1 ~ ?
@@ -35,6 +35,7 @@ sub last {
       Message      => $json->decode($row->[1]),
       ConnectionId => $row->[2],
       Self         => $row->[3] ? \1 : \0,
+      Highlight    => $row->[4] ? \1 : \0,
     };
   }
 
@@ -47,20 +48,29 @@ sub logs {
   my $id   = $req->captures->{id};
   my $chan = decode utf8 => $req->captures->{channel};
   my $limit = min($req->parameters->{limit} || 50, 150);
-  my $logs = $app->find_logs($chan, $id, $limit);
+
+  my $sth = $app->dbh->prepare_cached(q{
+    SELECT id, message, connection, self, highlight FROM log
+      WHERE channel=? AND connection=?
+      ORDER BY id DESC LIMIT ?
+  });
+  $sth->execute($chan, $id, $limit);
 
   my $json = JSON::XS->new;
-  my $data = [
-    map {
-      {
-        MessageId    => $_->[0],
-        Message      => $json->decode($_->[1]),
-        ConnectionId => $_->[2],
-        Self         => $_->[3] ? \1 : \0,
-      }
-    } @$logs
-  ];
-  return $app->json($data);
+  my @data;
+
+  while (my $row = $sth->fetchrow_arrayref) {
+    push @data, {
+      MessageId    => $row->[0],
+      Message      => $json->decode($row->[1]),
+      ConnectionId => $row->[2],
+      Self         => $row->[3] ? \1 : \0,
+      Highlight    => $row->[4] ? \1 : \0,
+    };
+  }
+
+  $sth->finish;
+  return $app->json(\@data);
 }
 
 sub logs_id {
@@ -71,7 +81,7 @@ sub logs_id {
   my $event = $req->captures->{event};
 
   my $sth = $app->dbh->prepare_cached(q{
-    SELECT id, message, connection, self FROM log
+    SELECT id, message, connection, self, highlight FROM log
       WHERE channel=? AND connection=? AND id < ?
       ORDER BY id DESC LIMIT ?
   });
@@ -86,6 +96,7 @@ sub logs_id {
       Message      => $json->decode($row->[1]),
       ConnectionId => $row->[2],
       Self         => $row->[3] ? \1 : \0,
+      Highlight    => $row->[4] ? \1 : \0,
     };
   }
 

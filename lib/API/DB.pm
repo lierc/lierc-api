@@ -125,21 +125,6 @@ sub delete_connection {
   $sth->finish;
 }
 
-sub find_logs {
-  my ($self, $channel, $id, $limit) = @_;
-
-  my $sth = $self->dbh->prepare_cached(q{
-    SELECT id, message, connection, self FROM log
-      WHERE channel=? AND connection=?
-      ORDER BY id DESC LIMIT ?
-  });
-  $sth->execute($channel, $id, $limit);
-  my $logs = $sth->fetchall_arrayref;
-  $sth->finish;
-
-  return $logs;
-}
-
 sub last_id {
   my ($self, $user) = @_;
 
