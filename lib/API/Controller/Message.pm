@@ -2,6 +2,7 @@ package API::Controller::Message;
 
 use parent 'API::Controller';
 
+API->register("message.log",      __PACKAGE__);
 API->register("message.missed",   __PACKAGE__);
 API->register("message.privates", __PACKAGE__);
 API->register("message.seen",     __PACKAGE__);
@@ -44,6 +45,45 @@ sub missed {
   }
 
   $app->json(\%channels);
+}
+
+sub log {
+  my ($app, $req) = @_;
+  my $user = $req->session->{user};
+  my $start = $req->captures->{event};
+
+  my $sth = $app->dbh->prepare(q{
+    SELECT l.id, l.message, l.connection, l.self, l.highlight
+    FROM log AS l
+    JOIN connection AS c
+      ON c.id=l.connection
+    WHERE
+      c."user"=?
+      AND l.id > ?
+    ORDER BY l.id DESC
+  });
+
+  $sth->execute($user, $start);
+
+  if ($sth->rows > 2000) {
+    return $app->error("Too many messages!")
+  }
+
+  my $json = JSON::XS->new;
+  my @data;
+
+  while (my $row = $sth->fetchrow_arrayref) {
+    unshift @data, {
+      MessageId    => $row->[0],
+      Message      => $json->decode($row->[1]),
+      ConnectionId => $row->[2],
+      Self         => $row->[3] ? \1 : \0,
+      Highlight    => $row->[4] ? \1 : \0,
+    };
+  }
+
+  $sth->finish;
+  return $app->json(\@data);
 }
 
 sub privates {
