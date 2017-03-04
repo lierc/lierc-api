@@ -65,7 +65,7 @@ sub log {
 
   $sth->execute($user, $start);
 
-  if ($sth->rows > 2000) {
+  if ($sth->rows > 250) {
     return $app->error("Too many messages!")
   }
 
