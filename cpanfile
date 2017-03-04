@@ -9,7 +9,6 @@ requires "Math::BaseConvert";
 requires "DBIx::Connector";
 requires "Digest";
 requires "Digest::Bcrypt";
-requires "Twiggy";
 requires "Plack";
 requires "Router::Boom";
 requires "Plack::Middleware::Session";
@@ -25,13 +24,14 @@ requires "Class::Tiny";
 # Plack recommends
 requires "Cookie::Baker::XS";
 
+# preforking server bin/app.psgi
+requires "Gazelle";
+
 # Async stuff bin/events.psgi
 requires "AnyEvent::Pg::Pool";
 requires "AnyEvent::HTTP";
 requires "AnyEvent";
-
-# preforking server bin/app.psgi
-requires "Gazelle";
+requires "Twiggy";
 
 # AE recommended
 requires "EV";
