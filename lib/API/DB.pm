@@ -125,6 +125,19 @@ sub delete_connection {
   $sth->finish;
 }
 
+sub last_login {
+  my ($self, $user) = @_;
+
+  my $sth = $self->dbh->prepare_cached(q{
+    SELECT last_login FROM "user" WHERE id=?
+  });
+  $sth->execute($user);
+  my ($last_id) = $sth->fetchrow_array;
+  $sth->finish;
+
+  return $last_id;
+}
+
 sub last_id {
   my ($self, $user) = @_;
 

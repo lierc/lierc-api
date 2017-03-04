@@ -95,16 +95,12 @@ sub privates {
     FROM log
     JOIN connection
       ON log.connection=connection.id
-    JOIN "user"
-      ON connection.user="user".id
     WHERE log.privmsg = TRUE
     AND connection.user=?
-    AND log.time > LEAST(
-      "user".last_login, NOW() - INTERVAL '2 DAY'
-    )
+    AND log.time > LEAST(?, NOW() - INTERVAL '2 DAY')
   });
 
-  $sth->execute($user);
+  $sth->execute($user, $app->last_login);
   my $rows = $sth->fetchall_arrayref({});
   $sth->finish;
 
