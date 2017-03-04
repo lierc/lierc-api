@@ -10,6 +10,12 @@ use Class::Tiny qw(handle on_close last_id), {
 sub BUILD {
   my $self = shift;
 
+  $self->handle->{handle}->wtimeout( 60 * 3 );
+  $self->handle->{handle}->on_wtimeout(sub {
+    $_[0]->destroy;
+    $self->on_close->($self);
+  });
+
   $self->handle->{handle}->on_error(sub {
     $self->on_close->($self);
   });
