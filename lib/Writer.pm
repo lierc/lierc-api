@@ -12,6 +12,7 @@ sub BUILD {
 
   $self->handle->{handle}->wtimeout( 60 * 3 );
   $self->handle->{handle}->on_wtimeout(sub {
+    warn "write timeout, closing";
     $_[0]->destroy;
     $self->on_close->($self);
   });
