@@ -2,13 +2,14 @@ package Writer;
 
 use Util;
 use Time::HiRes ();
-use Class::Tiny qw(handle on_close last_id remote agent), {
+use Class::Tiny qw(handle on_close last_id remote agent created), {
   id      => sub { Util->uuid },
-  created => sub { time },
 };
 
 sub BUILD {
   my $self = shift;
+
+  $self->created(time);
 
   $self->handle->{handle}->wtimeout( 60 * 3 );
   $self->handle->{handle}->on_wtimeout(sub {
