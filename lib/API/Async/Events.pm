@@ -178,7 +178,7 @@ sub streams {
 }
 
 sub events {
-  my ($self, $session, $respond, $options) = @_;
+  my ($self, $session, $respond, $options, $remote, $agent) = @_;
 
   my $user = $session->{user};
   my $cv = $self->connections($user);
@@ -189,6 +189,8 @@ sub events {
 
     my $writer = Writer->new(
       handle => $handle,
+      remote => $remote,
+      agent  => $agent,
       on_close => sub {
         my $w = shift;
         delete $self->streams->{$user}->{$w->id};

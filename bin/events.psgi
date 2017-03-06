@@ -57,14 +57,16 @@ builder {
     sub {
       my $respond = shift;
       my $session = $env->{'psgix.session'};
-      my $params = URI->new($env->{'REQUEST_URI'})->query_form_hash;
+      my $params  = URI->new($env->{'REQUEST_URI'})->query_form_hash;
+      my $remote  = $env->{REMOTE_ADDR};
+      my $agent   = $env->{HTTP_USER_AGENT};
 
       my $cv = $api->logged_in($session);
 
       $cv->cb(sub {
         my $logged_in = $_[0]->recv;
         return $respond->($api->unauthorized) unless $logged_in;
-        $api->events($session, $respond, $params);
+        $api->events($session, $respond, $params, $remote, $agent);
       });
     };
   }
