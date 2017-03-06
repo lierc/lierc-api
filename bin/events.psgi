@@ -46,10 +46,11 @@ builder {
 
   sub {
     my $env = shift;
+    my $params  = URI->new($env->{'REQUEST_URI'})->query_form_hash;
 
     if ($env->{PATH_INFO} eq '/stats') {
       if ($env->{HTTP_LIERC_KEY} eq $config->key) {
-        return $api->json($api->stats);
+        return $api->json($api->stats($params->{user}));
       }
       return $api->error("Invalid key");
     }
@@ -57,7 +58,6 @@ builder {
     sub {
       my $respond = shift;
       my $session = $env->{'psgix.session'};
-      my $params  = URI->new($env->{'REQUEST_URI'})->query_form_hash;
       my $remote  = $env->{REMOTE_ADDR};
       my $agent   = $env->{HTTP_USER_AGENT};
 

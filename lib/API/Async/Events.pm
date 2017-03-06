@@ -228,16 +228,29 @@ sub save_channels {
 }
 
 sub stats {
-  my $self = shift;
-  my %data;
+  my ($self, $user) = @_;
 
-  for my $user (keys %{ $self->streams }) {
-    my $count = scalar keys %{ $self->streams->{$user} };
-    $data{$user} = $count
-      if $count > 0;
+  if ($user) {
+    my @data;
+    for my $writer ( values %{ $self->streams->{$user} } ) {
+      push @data, {
+        remote  => $writer->remote,
+        agent   => $writer->agent,
+        created => $writer->created,
+      };
+    }
+    return \@data;
   }
+  else {
+    my %data;
+    for my $user (keys %{ $self->streams }) {
+      my $count = scalar keys %{ $self->streams->{$user} };
+      $data{$user} = $count
+      if $count > 0;
+    }
 
-  return \%data;
+    return \%data;
+  }
 }
 
 around new => sub {
