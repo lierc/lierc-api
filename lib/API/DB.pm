@@ -151,4 +151,30 @@ sub last_id {
   return $last_id;
 }
 
+sub get_token {
+  my ($self, $user) = @_;
+  my $id = Util->uuid;
+
+  my $sth = $self->dbh->prepare_cached(q{
+    INSERT INTO token (id, "user", created)
+    VALUES (?, ?, NOW())
+  });
+  $sth->execute($id, $user);
+  $sth->finish;
+
+  return $id;
+}
+
+sub check_token {
+  my ($self, $user, $token) = @_;
+
+  my $sth = $self->dbh->prepare_cached(q{
+    DELETE FROM token
+    WHERE user=?
+      AND id=?
+  });
+  $sth->execute($user, $token);
+  return $sth->rows > 0;
+}
+
 1;

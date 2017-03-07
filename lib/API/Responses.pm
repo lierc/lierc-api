@@ -23,8 +23,8 @@ sub nocontent {
 }
 
 sub ok {
-  my $self = shift;
-  return $self->json({status => "ok"});
+  my ($self, @args) = @_;
+  return $self->json({status => "ok", @args});
 }
 
 sub not_found {

@@ -22,6 +22,7 @@ $router->add( GET    => "/auth",                "auth.show" );
 $router->add( POST   => "/auth",                "auth.login" );
 $router->add( POST   => "/register",            "auth.register" );
 $router->add( undef  ,  "/logout",              "auth.logout" );
+$router->add( GET    => "/token",               "auth.token" );
 
 $router->add( GET    => "/log/:event",          "message.log");
 $router->add( GET    => "/missed",              "message.missed");

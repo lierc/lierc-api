@@ -78,10 +78,16 @@ sub send {
   my ($app, $req) = @_;
 
   my $id  = $req->captures->{id};
+  my $token = $req->headers->header('lierc-token');
+
+  if (defined $token && !$app->check_token($token)) {
+    die "Invalid token";
+  }
+
   my $res = $app->request(POST => "$id/raw", $req->content);
 
   if ($res->code == 200) {
-    return $app->ok;
+    return $app->ok(token => $app->get_token);
   }
 
   die $res->decoded_content;

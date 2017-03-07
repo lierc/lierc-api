@@ -2,12 +2,14 @@ package API::Controller::Auth;
 
 use parent 'API::Controller';
 
+use Util;
 use Data::Validate::Email;
 
 API->register("auth.show",     __PACKAGE__);
 API->register("auth.login",    __PACKAGE__);
 API->register("auth.register", __PACKAGE__);
 API->register("auth.logout",   __PACKAGE__);
+API->register("auth.token",    __PACKAGE__);
 
 sub show {
   my ($app, $req) = @_;
@@ -67,6 +69,13 @@ sub register {
   $req->session->{user} = $id;
 
   return $app->handle("auth.show", $req);
+}
+
+sub token {
+  my ($app, $req) = @_;
+  my $user = $req->session->{user};
+  my $token = $app->get_token($user);
+  $app->json({token => $token});
 }
 
 1;
