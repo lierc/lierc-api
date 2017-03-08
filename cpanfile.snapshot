@@ -1556,36 +1556,36 @@ DISTRIBUTIONS
       URI::Escape 0
       WWW::RobotRules 6
       perl 5.008001
-  libwww-perl-6.21
-    pathname: O/OA/OALDERS/libwww-perl-6.21.tar.gz
+  libwww-perl-6.23
+    pathname: O/OA/OALDERS/libwww-perl-6.23.tar.gz
     provides:
-      LWP 6.21
-      LWP::Authen::Basic 6.21
-      LWP::Authen::Digest 6.21
-      LWP::Authen::Ntlm 6.21
-      LWP::ConnCache 6.21
-      LWP::Debug 6.21
-      LWP::Debug::TraceHTTP 6.21
-      LWP::Debug::TraceHTTP::Socket 6.21
-      LWP::DebugFile 6.21
-      LWP::MemberMixin 6.21
-      LWP::Protocol 6.21
-      LWP::Protocol::MyFTP 6.21
-      LWP::Protocol::cpan 6.21
-      LWP::Protocol::data 6.21
-      LWP::Protocol::file 6.21
-      LWP::Protocol::ftp 6.21
-      LWP::Protocol::gopher 6.21
-      LWP::Protocol::http 6.21
-      LWP::Protocol::http::Socket 6.21
-      LWP::Protocol::http::SocketMethods 6.21
-      LWP::Protocol::loopback 6.21
-      LWP::Protocol::mailto 6.21
-      LWP::Protocol::nntp 6.21
-      LWP::Protocol::nogo 6.21
-      LWP::RobotUA 6.21
-      LWP::Simple 6.21
-      LWP::UserAgent 6.21
+      LWP 6.23
+      LWP::Authen::Basic 6.23
+      LWP::Authen::Digest 6.23
+      LWP::Authen::Ntlm 6.23
+      LWP::ConnCache 6.23
+      LWP::Debug 6.23
+      LWP::Debug::TraceHTTP 6.23
+      LWP::Debug::TraceHTTP::Socket 6.23
+      LWP::DebugFile 6.23
+      LWP::MemberMixin 6.23
+      LWP::Protocol 6.23
+      LWP::Protocol::MyFTP 6.23
+      LWP::Protocol::cpan 6.23
+      LWP::Protocol::data 6.23
+      LWP::Protocol::file 6.23
+      LWP::Protocol::ftp 6.23
+      LWP::Protocol::gopher 6.23
+      LWP::Protocol::http 6.23
+      LWP::Protocol::http::Socket 6.23
+      LWP::Protocol::http::SocketMethods 6.23
+      LWP::Protocol::loopback 6.23
+      LWP::Protocol::mailto 6.23
+      LWP::Protocol::nntp 6.23
+      LWP::Protocol::nogo 6.23
+      LWP::RobotUA 6.23
+      LWP::Simple 6.23
+      LWP::UserAgent 6.23
       libwww::perl undef
     requirements:
       Digest::MD5 0
