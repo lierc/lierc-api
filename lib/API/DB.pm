@@ -170,7 +170,7 @@ sub check_token {
 
   my $sth = $self->dbh->prepare_cached(q{
     DELETE FROM token
-    WHERE user=?
+    WHERE "user"=?
       AND id=?
   });
   $sth->execute($user, $token);
