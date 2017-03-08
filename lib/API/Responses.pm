@@ -12,10 +12,14 @@ sub unauthorized {
 
 sub json {
   my ($self, $data, $code) = @_;
+  my $json = encode_json $data;
   return [
     $code || 200,
-    ["Content-Type", "application/javascript;charset=utf-8"],
-    [encode_json $data]];
+    [
+      "Content-Type", "application/javascript;charset=utf-8",
+      "Content-Length", length($json),
+    ],
+    [$json]];
 }
 
 sub nocontent {
