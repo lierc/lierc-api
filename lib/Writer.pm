@@ -2,7 +2,7 @@ package Writer;
 
 use Util;
 use Time::HiRes ();
-use Class::Tiny qw(handle on_close last_id remote agent created), {
+use Class::Tiny qw(handle on_close remote agent created), {
   id      => sub { Util->uuid },
 };
 

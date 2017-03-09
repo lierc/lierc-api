@@ -94,17 +94,6 @@ sub update_config {
     sub {}
   );
 }
-
-sub save_last_id {
-  my ($self, $user, $last_id) = @_;
-
-  return $self->query(
-    q{UPDATE "user" SET last_id=$1, last_login=NOW() WHERE id=$2},
-    [$last_id, $user],
-    sub {}
-  );
-}
-
 sub save_last_login {
   my ($self, $user) = @_;
 

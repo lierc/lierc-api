@@ -3,7 +3,6 @@ create table "user" (
   email    varchar(256) not null,
   password varchar(256) not null,
   username varchar(256) not null,
-  last_id  int not null default 0,
   last_login timestamp not null default NOW(),
   unique (email),
   unique (username),

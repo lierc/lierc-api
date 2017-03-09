@@ -154,7 +154,6 @@ sub irc_event {
       my $event = Util->event(irc => encode_json($data), $msg_id);
       for (values %$streams) {
         $_->write($event);
-        $_->last_id($msg_id) if $msg_id;
       }
     }
   });
@@ -195,8 +194,7 @@ sub events {
         my $w = shift;
         delete $self->streams->{$user}->{$w->id};
         $self->save_channels($user);
-        $self->save_last_id($user, $w->last_id)
-          if defined $w->last_id;
+        $self->save_last_login($user);
       }
     );
 

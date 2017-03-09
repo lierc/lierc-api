@@ -132,23 +132,10 @@ sub last_login {
     SELECT last_login FROM "user" WHERE id=?
   });
   $sth->execute($user);
-  my ($last_id) = $sth->fetchrow_array;
+  my ($last_login) = $sth->fetchrow_array;
   $sth->finish;
 
-  return $last_id;
-}
-
-sub last_id {
-  my ($self, $user) = @_;
-
-  my $sth = $self->dbh->prepare_cached(q{
-    SELECT last_id FROM "user" WHERE id=?
-  });
-  $sth->execute($user);
-  my ($last_id) = $sth->fetchrow_array;
-  $sth->finish;
-
-  return $last_id;
+  return $last_login;
 }
 
 sub get_token {
