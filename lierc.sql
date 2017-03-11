@@ -40,7 +40,7 @@ create index on log (time);
 create table pref (
   "user"  varchar(24) not null,
   name    varchar(128) not null,
-  value   bytea not null,
+  value   varchar(512) not null,
   primary key ("user", name)
 );
 
