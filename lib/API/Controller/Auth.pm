@@ -75,7 +75,10 @@ sub token {
   my ($app, $req) = @_;
   my $user = $req->session->{user};
   my $token = $app->get_token($user);
-  $app->json({token => $token});
+  $app->json({
+    token => $token,
+    extra => [ map $app->get_token($user), (0 .. 5) ],
+  });
 }
 
 1;
