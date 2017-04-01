@@ -45,9 +45,10 @@ sub push_fake_events {
 
 sub push_connect {
   my ($self, $status, $writer) = @_;
-  $writer->write( Util->event(
-    connection => encode_json $status
-  ) );
+  $writer->irc_event($status->{Id}, liercd => "CREATE", $status->{Nick}, $status->{Config}->{Host});
+  if ($status->{Status}->{Connected}) {
+    $writer->irc_event($status->{Id}, liercd => "CONNECT");
+  }
 }
 
 sub push_welcome {
@@ -120,23 +121,6 @@ sub push_nicks {
       );
     }
   }
-}
-
-sub connect_event {
-  my ($self, $msg) =@_;
-
-  my $data = decode_json($msg);
-  my $cv = $self->lookup_owner($data->{Id});
-
-  $cv->cb(sub {
-    my $user = $_[0]->recv;
-    return unless $user;
-
-    if (my $streams = $self->streams->{$user}) {
-      my $event = Util->event(connection => $msg);
-      $_->write($event) for values %$streams;
-    }
-  });
 }
 
 sub irc_event {
