@@ -56,7 +56,7 @@ sub upsert {
 
   $sth->execute($user, $pref, $value, $value, $user, $pref);
   $sth->finish;
-  $app->ok;
+  $app->nocontent;
 }
 
 1;

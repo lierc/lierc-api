@@ -388,16 +388,15 @@ DISTRIBUTIONS
       ExtUtils::MakeMaker 0
       Test::More 0
       perl 5.004
-  Digest-Bcrypt-1.207
-    pathname: C/CA/CAPOEIRAB/Digest-Bcrypt-1.207.tar.gz
+  Digest-Bcrypt-1.209
+    pathname: C/CA/CAPOEIRAB/Digest-Bcrypt-1.209.tar.gz
     provides:
-      Digest::Bcrypt 1.207
+      Digest::Bcrypt 1.209
     requirements:
       Carp 0
       Crypt::Eksblowfish::Bcrypt 0
       Digest 0
       ExtUtils::MakeMaker 0
-      Try::Tiny 0.24
       bytes 0
       parent 0
       perl 5.008001

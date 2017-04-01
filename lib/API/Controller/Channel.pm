@@ -127,7 +127,7 @@ sub set_seen {
   );
   $sth->finish;
 
-  $app->ok;
+  $app->nocontent;
 }
 
 1;

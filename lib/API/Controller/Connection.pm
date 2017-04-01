@@ -81,7 +81,7 @@ sub send {
   my $token = $req->headers->header('lierc-token');
   my $user  = $req->session->{user};
 
-  if (defined $token && !$app->check_token($user, $token)) {
+  unless ($app->check_token($user, $token)) {
     die "Invalid token";
   }
 
