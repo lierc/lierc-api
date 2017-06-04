@@ -193,11 +193,11 @@ DISTRIBUTIONS
       perl 5.006
       strict 0
       warnings 0
-  DBD-Pg-3.5.3
-    pathname: T/TU/TURNSTEP/DBD-Pg-3.5.3.tar.gz
+  DBD-Pg-3.6.2
+    pathname: T/TU/TURNSTEP/DBD-Pg-3.6.2.tar.gz
     provides:
-      Bundle::DBD::Pg v3.5.3
-      DBD::Pg v3.5.3
+      Bundle::DBD::Pg v3.6.2
+      DBD::Pg v3.6.2
     requirements:
       DBI 1.614
       ExtUtils::MakeMaker 6.11
@@ -973,12 +973,12 @@ DISTRIBUTIONS
       Pg::PQ::Result 0.14
     requirements:
       ExtUtils::MakeMaker 0
-  Plack-1.0043
-    pathname: M/MI/MIYAGAWA/Plack-1.0043.tar.gz
+  Plack-1.0044
+    pathname: M/MI/MIYAGAWA/Plack-1.0044.tar.gz
     provides:
       HTTP::Message::PSGI undef
       HTTP::Server::PSGI undef
-      Plack 1.0043
+      Plack 1.0044
       Plack::App::CGIBin undef
       Plack::App::Cascade undef
       Plack::App::Directory undef
@@ -1037,9 +1037,9 @@ DISTRIBUTIONS
       Plack::Middleware::XFramework undef
       Plack::Middleware::XSendfile undef
       Plack::Recursive::ForwardRequest undef
-      Plack::Request 1.0043
+      Plack::Request 1.0044
       Plack::Request::Upload undef
-      Plack::Response 1.0043
+      Plack::Response 1.0044
       Plack::Runner undef
       Plack::TempBuffer undef
       Plack::Test undef
@@ -1066,7 +1066,7 @@ DISTRIBUTIONS
       Hash::MultiValue 0.05
       Pod::Usage 1.36
       Stream::Buffered 0.02
-      Test::TCP 2.00
+      Test::TCP 2.15
       Try::Tiny 0
       URI 1.59
       WWW::Form::UrlEncoded 0.23
