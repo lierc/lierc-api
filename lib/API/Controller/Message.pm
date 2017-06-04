@@ -91,13 +91,14 @@ sub privates {
   my $user = $req->session->{user};
 
   my $sth = $app->dbh->prepare_cached(q{
-    SELECT DISTINCT(log.channel) as nick, log.connection
+    SELECT log.message->'Params'->>0 AS nick, log.connection
     FROM log
     JOIN connection
       ON log.connection=connection.id
     WHERE log.privmsg = TRUE
     AND connection.user=?
     AND log.time > LEAST(?, NOW() - INTERVAL '2 DAY')
+    GROUP BY log.message->'Params'->>0, log.connection
   });
 
   $sth->execute($user, $app->last_login);
