@@ -10,24 +10,33 @@ API->register("message.seen",     __PACKAGE__);
 sub missed {
   my ($app, $req) = @_;
   my $user = $req->session->{user};
-  my (@where, @bind);
+  my (@where, @bind, @connections);
 
   push @where, "FALSE";
 
   for my $key (keys %{ $req->parameters }) {
     my ($connection, $channel) = split "-", $key, 2;
-    push @where, sprintf "(log.connection=? AND log.channel=? AND log.id > ?)";
+    push @where, "(log.connection=? AND log.channel=? AND log.id > ?)";
     push @bind, $connection, $channel, $req->parameters->{$key};
+    push @connections, $connection;
   }
+
+  my $err = $app->dbh->selectcol_arrayref(q{
+    SELECT id
+    FROM connection
+    WHERE "user" <> ?
+      AND id IN (
+  } . join(", ", map "?", 1 .. @connections) . q{
+  )}, {}, $user, @connections);
+
+  die "Invalid connection (" . join(", ", @$err) . ")"
+    if @$err;
 
   my $sth = $app->dbh->prepare(q{
     SELECT COUNT(*), channel, privmsg, connection
     FROM log
-    JOIN connection
-      ON connection.id=log.connection
     WHERE
-      connection."user"=?
-    AND (
+    (
   } . join(" OR ", @where) . q{
     )
     GROUP BY channel, connection, privmsg
@@ -35,7 +44,7 @@ sub missed {
 
   my %channels;
 
-  $sth->execute($user, @bind);
+  $sth->execute(@bind);
 
   while (my $row = $sth->fetchrow_hashref) {
     my $key = $row->{privmsg} ? "messages" : "events";
