@@ -63,7 +63,7 @@ sub logs {
       MessageId    => $row->[0],
       Message      => $json->decode($row->[1]),
       ConnectionId => $row->[2],
-      Highlight    => $row->[4] ? \1 : \0,
+      Highlight    => $row->[3] ? \1 : \0,
     };
   }
 
@@ -93,7 +93,7 @@ sub logs_id {
       MessageId    => $row->[0],
       Message      => $json->decode($row->[1]),
       ConnectionId => $row->[2],
-      Highlight    => $row->[4] ? \1 : \0,
+      Highlight    => $row->[3] ? \1 : \0,
     };
   }
 
