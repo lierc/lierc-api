@@ -45,7 +45,8 @@ sub push_fake_events {
 
 sub push_connect {
   my ($self, $status, $writer) = @_;
-  $writer->irc_event($status->{Id}, liercd => "CREATE", $status->{Nick}, $status->{Config}->{Host});
+  my $alias = $status->{Config}->{Alias} || $status->{Config}->{Host};
+  $writer->irc_event($status->{Id}, liercd => "CREATE", $status->{Nick}, $alias);
   if ($status->{Status}->{Connected}) {
     $writer->irc_event($status->{Id}, liercd => "CONNECT");
   }
