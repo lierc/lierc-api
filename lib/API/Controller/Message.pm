@@ -106,7 +106,7 @@ sub privates {
       ON log.connection=connection.id
     WHERE log.privmsg = TRUE
     AND connection.user=?
-    AND log.time > LEAST(?, NOW() - INTERVAL '2 DAY')
+    AND log.time > LEAST(?, NOW() - INTERVAL '2 WEEK')
     GROUP BY channel, log.connection
   });
 
