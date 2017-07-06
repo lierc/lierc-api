@@ -12,6 +12,7 @@ use API::Controller::Pref;
 use API::Controller::Message;
 use API::Controller::Connection;
 use API::Controller::Channel;
+use API::Controller::Private;
 use API::Config;
 
 my $config = API::Config->new;
@@ -27,7 +28,6 @@ $router->add( GET    => "/token",               "auth.token" );
 $router->add( GET    => "/log/:event",          "message.log");
 $router->add( GET    => "/missed",              "message.missed");
 $router->add( GET    => "/seen",                "message.seen");
-$router->add( GET    => "/privates",            "message.privates");
 
 $router->add( GET    => "/preference",          "pref.list" );
 $router->add( GET    => "/preference/:pref",    "pref.show" );
@@ -39,6 +39,9 @@ $router->add( GET    => "/connection/:id",      "connection.show" );
 $router->add( PUT    => "/connection/:id",      "connection.edit" );
 $router->add( DELETE => "/connection/:id",      "connection.delete" );
 $router->add( POST   => "/connection/:id",      "connection.send" );
+
+$router->add( DELETE => "/connection/:id/nick/:nick", "private.delete" );
+$router->add( GET    => "/privates",                  "private.list" );
 
 $router->add( GET    => "/connection/:id/channel/:channel/events",        "channel.logs" );
 $router->add( GET    => "/connection/:id/channel/:channel/events/:event", "channel.logs_id" );

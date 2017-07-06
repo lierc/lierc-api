@@ -51,3 +51,9 @@ create table seen (
   message_id int not null,
   primary key ("user", connection, channel)
 );
+
+create table private (
+  connection varchar(24) not null,
+  nick varchar(32) not null,
+  primary key (connection, nick)
+);
