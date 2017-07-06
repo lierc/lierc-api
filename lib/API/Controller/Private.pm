@@ -1,5 +1,7 @@
 package API::Controller::Message;
 
+use Encode;
+
 use parent 'API::Controller';
 
 API->register("private.list", __PACKAGE__);
@@ -16,6 +18,8 @@ sub list {
     JOIN connection AS c
       ON c.id=p.connection
     WHERE c.user=?
+    ORDER BY p.time DESC
+    LIMIT 10
   });
 
   $sth->execute($user);
@@ -29,7 +33,7 @@ sub delete {
   my ($app, $req) = @_;
   my $user = $req->session->{user};
   my $conn = $req->captures->{id};
-  my $nick = $req->captures->{nick};
+  my $nick = decode utf8 => $req->captures->{nick};
 
   my $sth = $app->dbh->prepare_cached(q{
     DELETE FROM private AS p
