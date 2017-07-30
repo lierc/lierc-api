@@ -99,7 +99,11 @@ sub seen {
   my $user = $req->session->{user};
 
   my $sth = $app->dbh->prepare_cached(q{
-    SELECT connection,channel,message_id FROM seen WHERE "user"=?
+    SELECT s.connection, s.channel, s.message_id
+    FROM seen AS s
+    JOIN connection AS c
+      ON c.id=s.connection
+    WHERE s."user"=?
   });
   $sth->execute($user);
   my $rows = $sth->fetchall_arrayref({});
