@@ -120,8 +120,19 @@ sub save_connection {
 
 sub delete_connection {
   my ($self, $id) = @_;
+
   my $sth = $self->dbh->prepare_cached(q{DELETE FROM connection WHERE id=?});
   $sth->execute($id);
+
+  $sth = $self->dbh->prepare_cached(q{DELETE FROM log WHERE connection=?});
+  $sth->execute($id);
+
+  $sth = $self->dbh->prepare_cached(q{DELETE FROM seen WHERE connection=?});
+  $sth->execute($id);
+
+  $sth = $self->dbh->prepare_cached(q{DELETE FROM private WHERE connection=?});
+  $sth->execute($id);
+
   $sth->finish;
 }
 
