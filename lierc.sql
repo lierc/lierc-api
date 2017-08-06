@@ -72,7 +72,6 @@ create table web_push (
   endpoint varchar(255) not null,
   key varchar(255) not null,
   auth varchar(255) not null,
-  "user" varchar(24) not null
+  "user" varchar(24) not null,
+  primary key ("user", endpoint)
 );
-
-create index on web_push ("user");
