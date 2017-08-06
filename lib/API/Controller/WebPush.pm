@@ -3,7 +3,23 @@ package API::Controller::WebPush;
 use parent 'API::Controller';
 
 API->register("webpush.upsert", __PACKAGE__);
+API->register("webpush.delete", __PACKAGE__);
 API->register("webpush.list",   __PACKAGE__);
+
+sub delete {
+  my ($app, $req) = @_;
+  my $user     = $req->session->{user};
+  my $endpoint = $req->captures->{endpoint};
+
+  my $sth = $app->dbh->prepare_cached(q{
+    DELETE FROM web_push
+    WHERE "user"=? AND endpoint=?
+  });
+
+  $sth->execute($user, $endpoint);
+  $sth->finish;
+  $app->nocontent;
+}
 
 sub list {
   my ($app, $req) = @_;

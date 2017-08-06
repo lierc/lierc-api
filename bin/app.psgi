@@ -49,8 +49,9 @@ $router->add( GET    => "/connection/:id/channel/:channel/events/:event", "chann
 $router->add( POST   => "/connection/:id/channel/:channel/seen",          "channel.set_seen" );
 $router->add( GET    => "/connection/:id/channel/:channel/last",          "channel.last" );
 
-$router->add( GET    => "/notification/web_push",  "webpush.list" );
-$router->add( POST   => "/notification/web_push",  "webpush.upsert" );
+$router->add( GET    => "/notification/web_push",               "webpush.list" );
+$router->add( POST   => "/notification/web_push",               "webpush.upsert" );
+$router->add( DELETE => "/notification/web_push/{endpoint:.+}", "webpush.delete" );
 
 builder {
   enable_if { $_[0]->{REMOTE_ADDR} eq '127.0.0.1' }
