@@ -2,7 +2,7 @@ package API::Controller::WebPush;
 
 use parent 'API::Controller';
 
-API->register("webpush.create", __PACKAGE__);
+API->register("webpush.upsert", __PACKAGE__);
 API->register("webpush.list",   __PACKAGE__);
 
 sub list {
@@ -20,7 +20,7 @@ sub list {
   return $app->json($rows);
 }
 
-sub create {
+sub upsert {
   my ($app, $req) = @_;
   my $user = $req->session->{user};
 
@@ -29,11 +29,19 @@ sub create {
   my $key       = $req->parameters->{key};
 
   my $sth = $app->dbh->prepare_cached(q{
-    INSERT INTO web_push (endpoint, auth, key, user)
-    VALUES (?,?,?,?)
+    INSERT INTO web_push (endpoint, auth, key, "user")
+      VALUES (?,?,?,?)
+    ON CONFLICT ("user", endpoint)
+      DO UPDATE SET auth=?, key=?
+      WHERE web_push."user"=?
+        AND web_push.endpoint=?
   });
 
-  $sth->execute($endpoint, $auth, $key, $user);
+  $sth->execute(
+    $endpoint, $auth, $key, $user,
+    $auth, $key, $user, $endpoint
+  );
+
   $sth->finish;
   $app->nocontent;
 }

@@ -50,7 +50,7 @@ $router->add( POST   => "/connection/:id/channel/:channel/seen",          "chann
 $router->add( GET    => "/connection/:id/channel/:channel/last",          "channel.last" );
 
 $router->add( GET    => "/notification/web_push",  "webpush.list" );
-$router->add( POST   => "/notification/web_push",  "webpush.create" );
+$router->add( POST   => "/notification/web_push",  "webpush.upsert" );
 
 builder {
   enable_if { $_[0]->{REMOTE_ADDR} eq '127.0.0.1' }

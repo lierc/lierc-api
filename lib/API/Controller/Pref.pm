@@ -51,7 +51,7 @@ sub upsert {
   my $sth = $app->dbh->prepare_cached(q{
     INSERT INTO pref ("user",name,value) VALUES(?,?,?)
     ON CONFLICT ("user", name)
-    DO UPDATE SET value=? WHERE pref.user=? AND pref.name=?
+    DO UPDATE SET value=? WHERE pref."user"=? AND pref.name=?
   });
 
   $sth->execute($user, $pref, $value, $value, $user, $pref);
