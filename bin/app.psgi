@@ -13,6 +13,7 @@ use API::Controller::Message;
 use API::Controller::Connection;
 use API::Controller::Channel;
 use API::Controller::Private;
+use API::Controller::WebPush;
 use API::Config;
 
 my $config = API::Config->new;
@@ -47,6 +48,9 @@ $router->add( GET    => "/connection/:id/channel/:channel/events",        "chann
 $router->add( GET    => "/connection/:id/channel/:channel/events/:event", "channel.logs_id" );
 $router->add( POST   => "/connection/:id/channel/:channel/seen",          "channel.set_seen" );
 $router->add( GET    => "/connection/:id/channel/:channel/last",          "channel.last" );
+
+$router->add( GET    => "/notification/web_push",  "webpush.list" );
+$router->add( POST   => "/notification/web_push",  "webpush.create" );
 
 builder {
   enable_if { $_[0]->{REMOTE_ADDR} eq '127.0.0.1' }

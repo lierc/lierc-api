@@ -52,8 +52,27 @@ create table seen (
   primary key ("user", connection, channel)
 );
 
+create table token (
+  id varchar(24) not null,
+  "user" varchar(24) not null,
+  created timestamp not null,
+  primary key (id)
+);
+
+create index on token ("user", id);
+
 create table private (
   connection varchar(24) not null,
   nick varchar(32) not null,
+  time timestamp not null,
   primary key (connection, nick)
 );
+
+create table web_push (
+  endpoint varchar(255) not null,
+  key varchar(255) not null,
+  auth varchar(255) not null,
+  "user" varchar(24) not null
+);
+
+create index on web_push ("user");
