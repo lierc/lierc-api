@@ -20,6 +20,8 @@ sub missed {
     push @connections, $connection;
   }
 
+  return $app->json({}) unless @connections;
+
   my $err = $app->dbh->selectcol_arrayref(q{
     SELECT id
     FROM connection
