@@ -49,6 +49,7 @@ $router->add( GET    => "/connection/:id/channel/:channel/events/:event", "chann
 $router->add( POST   => "/connection/:id/channel/:channel/seen",          "channel.set_seen" );
 $router->add( GET    => "/connection/:id/channel/:channel/last",          "channel.last" );
 
+$router->add( GET    => "/notification/web_push_keys",          "webpush.keys" );
 $router->add( GET    => "/notification/web_push",               "webpush.list" );
 $router->add( POST   => "/notification/web_push",               "webpush.upsert" );
 $router->add( DELETE => "/notification/web_push/{endpoint:.+}", "webpush.delete" );

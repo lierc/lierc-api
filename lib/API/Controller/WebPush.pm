@@ -5,6 +5,14 @@ use parent 'API::Controller';
 API->register("webpush.upsert", __PACKAGE__);
 API->register("webpush.delete", __PACKAGE__);
 API->register("webpush.list",   __PACKAGE__);
+API->register("webpush.keys",   __PACKAGE__);
+
+sub keys {
+  my ($app, $req) = @_;
+  $app->json({
+    vapid_public_key => $ENV{VAPID_PUBLIC},
+  });
+}
 
 sub delete {
   my ($app, $req) = @_;
