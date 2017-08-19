@@ -94,11 +94,11 @@ DISTRIBUTIONS
       Class::Accessor::Lite 0.08
     requirements:
       ExtUtils::MakeMaker 6.36
-  Class-Inspector-1.31
-    pathname: P/PL/PLICEASE/Class-Inspector-1.31.tar.gz
+  Class-Inspector-1.32
+    pathname: P/PL/PLICEASE/Class-Inspector-1.32.tar.gz
     provides:
-      Class::Inspector 1.31
-      Class::Inspector::Functions 1.31
+      Class::Inspector 1.32
+      Class::Inspector::Functions 1.32
     requirements:
       ExtUtils::MakeMaker 0
       File::Spec 0.80
@@ -116,10 +116,10 @@ DISTRIBUTIONS
       perl 5.006
       strict 0
       warnings 0
-  Class-Mix-0.005
-    pathname: Z/ZE/ZEFRAM/Class-Mix-0.005.tar.gz
+  Class-Mix-0.006
+    pathname: Z/ZE/ZEFRAM/Class-Mix-0.006.tar.gz
     provides:
-      Class::Mix 0.005
+      Class::Mix 0.006
     requirements:
       Carp 0
       Exporter 0
@@ -160,10 +160,10 @@ DISTRIBUTIONS
       Exporter 0
       ExtUtils::MakeMaker 6.64
       perl 5.008001
-  Cpanel-JSON-XS-3.0233
-    pathname: R/RU/RURBAN/Cpanel-JSON-XS-3.0233.tar.gz
+  Cpanel-JSON-XS-3.0237
+    pathname: R/RU/RURBAN/Cpanel-JSON-XS-3.0237.tar.gz
     provides:
-      Cpanel::JSON::XS 3.0233
+      Cpanel::JSON::XS 3.0237
     requirements:
       ExtUtils::MakeMaker 0
       Pod::Text 2.08
@@ -200,8 +200,8 @@ DISTRIBUTIONS
       Test::More 0.88
       Time::HiRes 0
       version 0
-  DBI-1.636
-    pathname: T/TI/TIMB/DBI-1.636.tar.gz
+  DBI-1.637
+    pathname: T/TI/TIMB/DBI-1.637.tar.gz
     provides:
       Bundle::DBI 12.008696
       DBD::DBM 0.08
@@ -250,7 +250,7 @@ DISTRIBUTIONS
       DBD::Sponge::dr 12.010003
       DBD::Sponge::st 12.010003
       DBDI 12.015129
-      DBI 1.636
+      DBI 1.637
       DBI::Const::GetInfo::ANSI 2.008697
       DBI::Const::GetInfo::ODBC 2.011374
       DBI::Const::GetInfoReturn 2.008697
@@ -290,7 +290,7 @@ DISTRIBUTIONS
       DBI::SQL::Nano::Table_ 1.015544
       DBI::Util::CacheMemory 0.010315
       DBI::Util::_accessor 0.009479
-      DBI::common 1.636
+      DBI::common 1.637
     requirements:
       ExtUtils::MakeMaker 6.48
       Test::Simple 0.90
@@ -512,12 +512,12 @@ DISTRIBUTIONS
       HTML::Tagset 3.20
     requirements:
       ExtUtils::MakeMaker 0
-  HTTP-Cookies-6.03
-    pathname: O/OA/OALDERS/HTTP-Cookies-6.03.tar.gz
+  HTTP-Cookies-6.04
+    pathname: O/OA/OALDERS/HTTP-Cookies-6.04.tar.gz
     provides:
-      HTTP::Cookies 6.03
-      HTTP::Cookies::Microsoft 6.03
-      HTTP::Cookies::Netscape 6.03
+      HTTP::Cookies 6.04
+      HTTP::Cookies::Microsoft 6.04
+      HTTP::Cookies::Netscape 6.04
     requirements:
       Carp 0
       ExtUtils::MakeMaker 0
@@ -672,10 +672,10 @@ DISTRIBUTIONS
       JSON::PP 2.27300
       Scalar::Util 0
       perl 5.006
-  JSON-XS-3.03
-    pathname: M/ML/MLEHMANN/JSON-XS-3.03.tar.gz
+  JSON-XS-3.04
+    pathname: M/ML/MLEHMANN/JSON-XS-3.04.tar.gz
     provides:
-      JSON::XS 3.03
+      JSON::XS 3.04
     requirements:
       Canary::Stability 0
       ExtUtils::MakeMaker 6.52
@@ -766,13 +766,12 @@ DISTRIBUTIONS
       Test::Requires 0
       Test::SharedFork 0
       perl 5.008001
-  Params-Classify-0.014
-    pathname: Z/ZE/ZEFRAM/Params-Classify-0.014.tar.gz
+  Params-Classify-0.015
+    pathname: Z/ZE/ZEFRAM/Params-Classify-0.015.tar.gz
     provides:
-      Params::Classify 0.014
+      Params::Classify 0.015
     requirements:
       Exporter 0
-      ExtUtils::ParseXS 2.2006
       Module::Build 0
       Scalar::Util 1.01
       Test::More 0
@@ -1097,70 +1096,70 @@ DISTRIBUTIONS
     requirements:
       ExtUtils::MakeMaker 0
       common::sense 0
-  URI-1.71
-    pathname: E/ET/ETHER/URI-1.71.tar.gz
+  URI-1.72
+    pathname: E/ET/ETHER/URI-1.72.tar.gz
     provides:
-      URI 1.71
+      URI 1.72
       URI::Escape 3.31
       URI::Heuristic 4.20
-      URI::IRI 1.71
-      URI::QueryParam 1.71
-      URI::Split 1.71
+      URI::IRI 1.72
+      URI::QueryParam 1.72
+      URI::Split 1.72
       URI::URL 5.04
       URI::WithBase 2.20
-      URI::_foreign 1.71
-      URI::_generic 1.71
-      URI::_idna 1.71
-      URI::_ldap 1.71
-      URI::_login 1.71
-      URI::_punycode 1.71
-      URI::_query 1.71
-      URI::_segment 1.71
-      URI::_server 1.71
-      URI::_userpass 1.71
-      URI::data 1.71
+      URI::data 1.72
       URI::file 4.21
-      URI::file::Base 1.71
-      URI::file::FAT 1.71
-      URI::file::Mac 1.71
-      URI::file::OS2 1.71
-      URI::file::QNX 1.71
-      URI::file::Unix 1.71
-      URI::file::Win32 1.71
-      URI::ftp 1.71
-      URI::gopher 1.71
-      URI::http 1.71
-      URI::https 1.71
-      URI::ldap 1.71
-      URI::ldapi 1.71
-      URI::ldaps 1.71
-      URI::mailto 1.71
-      URI::mms 1.71
-      URI::news 1.71
-      URI::nntp 1.71
-      URI::pop 1.71
-      URI::rlogin 1.71
-      URI::rsync 1.71
-      URI::rtsp 1.71
-      URI::rtspu 1.71
-      URI::sftp 1.71
-      URI::sip 1.71
-      URI::sips 1.71
-      URI::snews 1.71
-      URI::ssh 1.71
-      URI::telnet 1.71
-      URI::tn3270 1.71
-      URI::urn 1.71
-      URI::urn::isbn undef
-      URI::urn::oid 1.71
+      URI::file::Base 1.72
+      URI::file::FAT 1.72
+      URI::file::Mac 1.72
+      URI::file::OS2 1.72
+      URI::file::QNX 1.72
+      URI::file::Unix 1.72
+      URI::file::Win32 1.72
+      URI::ftp 1.72
+      URI::gopher 1.72
+      URI::http 1.72
+      URI::https 1.72
+      URI::ldap 1.72
+      URI::ldapi 1.72
+      URI::ldaps 1.72
+      URI::mailto 1.72
+      URI::mms 1.72
+      URI::news 1.72
+      URI::nntp 1.72
+      URI::pop 1.72
+      URI::rlogin 1.72
+      URI::rsync 1.72
+      URI::rtsp 1.72
+      URI::rtspu 1.72
+      URI::sftp 1.72
+      URI::sip 1.72
+      URI::sips 1.72
+      URI::snews 1.72
+      URI::ssh 1.72
+      URI::telnet 1.72
+      URI::tn3270 1.72
+      URI::urn 1.72
+      URI::urn::isbn 1.72
+      URI::urn::oid 1.72
     requirements:
+      Carp 0
+      Cwd 0
+      Data::Dumper 0
+      Encode 0
       Exporter 5.57
       ExtUtils::MakeMaker 0
       MIME::Base64 2
+      Net::Domain 0
       Scalar::Util 0
+      constant 0
+      integer 0
+      overload 0
       parent 0
       perl 5.008001
+      strict 0
       utf8 0
+      warnings 0
   URL-Encode-0.03
     pathname: C/CH/CHANSEN/URL-Encode-0.03.tar.gz
     provides:
