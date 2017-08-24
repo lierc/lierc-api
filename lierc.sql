@@ -75,3 +75,10 @@ create table web_push (
   "user" varchar(24) not null,
   primary key ("user", endpoint)
 );
+
+create table ignore (
+  connection varchar(24) not null,
+  channel varchar(32) not null,
+  "from" varchar(128) not null,
+  primary key (connection, channel, "from")
+);

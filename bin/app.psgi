@@ -14,6 +14,7 @@ use API::Controller::Connection;
 use API::Controller::Channel;
 use API::Controller::Private;
 use API::Controller::WebPush;
+use API::Controller::Ignore;
 use API::Config;
 
 my $config = API::Config->new;
@@ -48,6 +49,10 @@ $router->add( GET    => "/connection/:id/channel/:channel/events",        "chann
 $router->add( GET    => "/connection/:id/channel/:channel/events/:event", "channel.logs_id" );
 $router->add( POST   => "/connection/:id/channel/:channel/seen",          "channel.set_seen" );
 $router->add( GET    => "/connection/:id/channel/:channel/last",          "channel.last" );
+
+$router->add( POST   => "/connection/:id/channel/:channel/ignore",        "ignore.create" );
+$router->add( DELETE => "/connection/:id/channel/:channel/ignore/:from",  "ignore.delete" );
+$router->add( GET    => "/ignore",                                        "ignore.list" );
 
 $router->add( GET    => "/notification/web_push_keys",          "webpush.keys" );
 $router->add( GET    => "/notification/web_push",               "webpush.list" );
