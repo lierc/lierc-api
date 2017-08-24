@@ -10,8 +10,8 @@ API->register("ignore.list",   __PACKAGE__);
 sub delete {
   my ($app, $req) = @_;
   my $connection = $req->captures->{id};
-  my $channel    = $req->captures->{channel};
-  my $from       = $req->captures->{from};
+  my $channel     = lc decode utf8 => $req->captures->{channel};
+  my $from        = decode utf8 => $req->parameters->{from};
 
   my $sth = $app->dbh->prepare_cached(q{
     DELETE FROM ignore
