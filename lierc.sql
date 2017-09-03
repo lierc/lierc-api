@@ -49,6 +49,7 @@ create table seen (
   connection varchar(24) not null,
   channel    varchar(32) not null,
   message_id int not null,
+  updated timestamp not null default now(),
   primary key ("user", connection, channel)
 );
 

@@ -114,7 +114,7 @@ sub set_seen {
     INSERT into seen ("user", connection, channel, message_id)
     VALUES(?,?,?,?)
     ON CONFLICT ("user", connection, channel)
-    DO UPDATE SET message_id=?
+    DO UPDATE SET message_id=?, updated=NOW()
     WHERE seen.user=? AND seen.connection=? AND seen.channel=?
     }
   );
