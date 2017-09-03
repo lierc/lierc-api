@@ -160,10 +160,10 @@ DISTRIBUTIONS
       Exporter 0
       ExtUtils::MakeMaker 6.64
       perl 5.008001
-  Cpanel-JSON-XS-3.0237
-    pathname: R/RU/RURBAN/Cpanel-JSON-XS-3.0237.tar.gz
+  Cpanel-JSON-XS-3.0239
+    pathname: R/RU/RURBAN/Cpanel-JSON-XS-3.0239.tar.gz
     provides:
-      Cpanel::JSON::XS 3.0237
+      Cpanel::JSON::XS 3.0239
     requirements:
       ExtUtils::MakeMaker 0
       Pod::Text 2.08
@@ -688,11 +688,11 @@ DISTRIBUTIONS
     requirements:
       ExtUtils::MakeMaker 0
       perl 5.006002
-  List-MoreUtils-0.419
-    pathname: R/RE/REHSACK/List-MoreUtils-0.419.tar.gz
+  List-MoreUtils-0.423
+    pathname: R/RE/REHSACK/List-MoreUtils-0.423.tar.gz
     provides:
-      List::MoreUtils 0.419
-      List::MoreUtils::PP 0.419
+      List::MoreUtils 0.423
+      List::MoreUtils::PP 0.423
     requirements:
       Exporter::Tiny 0.038
       ExtUtils::MakeMaker 0
@@ -720,13 +720,13 @@ DISTRIBUTIONS
       Carp 0
       ExtUtils::MakeMaker 0
       Storable 0
-  Net-HTTP-6.16
-    pathname: O/OA/OALDERS/Net-HTTP-6.16.tar.gz
+  Net-HTTP-6.17
+    pathname: O/OA/OALDERS/Net-HTTP-6.17.tar.gz
     provides:
-      Net::HTTP 6.16
-      Net::HTTP::Methods 6.16
-      Net::HTTP::NB 6.16
-      Net::HTTPS 6.16
+      Net::HTTP 6.17
+      Net::HTTP::Methods 6.17
+      Net::HTTP::NB 6.17
+      Net::HTTPS 6.17
     requirements:
       Carp 0
       Compress::Raw::Zlib 0
