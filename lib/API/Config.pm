@@ -13,14 +13,15 @@ our %DEFAULT = (
   key      => "changeme",
   secure   => 0,
   nsqd     => "127.0.0.1",
-  nsq_tail => "/usr/local/bin/nsq_tail"
+  nsq_tail => "/usr/local/bin/nsq_tail",
   apn => {
     website_name => "Relaychat Party",
-    website_pushid => "",
-    allowed_domains => ["https://relaychat.party"],
-    format_string => "https://relaychat.party/app/#!/%@/%@"
-    auth_token => "",
-    push_url => "https://relaychat.party/api/push"
+    website_pushid => "web.party.relaychat",
+    allowed_domains => "https://relaychat.party",
+    format_string => "https://relaychat.party/app/#!/%@/%@",
+    push_url => "https://relaychat.party/api/notification/apn/push",
+    cert_file => ".apn/apn.pem",
+    key_file  => ".apn/apn.key",
   }
 );
 
@@ -30,14 +31,15 @@ sub new {
 }
 
 sub apn {
-  my $def = %{ $DEFAULT{apn} };
+  my %def = %{ $DEFAULT{apn}};
   return +{
     website_name    => $ENV{APN_NAME} || $def{website_name},
     website_pushid  => $ENV{APN_PUSHID} || $def{website_pushid},
-    allowed_domains => [$ENV{APN_ALLOWED_DOMAINS} || $def{allowed_domains}],
+    allowed_domains => [split " ", ($ENV{APN_ALLOWED_DOMAINS} || $def{allowed_domains})],
     format_string   => $ENV{APN_FORMAT_STRING} || $def{format_string},
-    auth_token      => $ENV{APN_AUTH_TOKEN} || $def{auth_token},
     push_url        => $ENV{APN_PUSH_URL} || $def{push_url},
+    cert_file       => $ENV{APN_CERT_FILE} || $def{cert_file},
+    key_file        => $ENV{APN_KEY_FILE} || $def{key_file},
   }
 }
 
@@ -67,7 +69,7 @@ sub as_hash {
   my $self = shift;
   return map {
     $_ => $self->$_
-  } qw(base host dsn dbuser dbpass dbhost secret secure);
+  } qw(base host dsn dbuser dbpass dbhost secret secure apn);
 }
 
 1;

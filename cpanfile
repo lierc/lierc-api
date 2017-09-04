@@ -21,6 +21,7 @@ requires "Class::Method::Modifiers";
 requires "Time::HiRes";
 requires "Data::Validate::Email";
 requires "Class::Tiny";
+requires "Capture::Tiny";
 
 # Plack recommends
 requires "Cookie::Baker::XS";

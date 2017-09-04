@@ -14,6 +14,7 @@ use API::Controller::Connection;
 use API::Controller::Channel;
 use API::Controller::Private;
 use API::Controller::WebPush;
+use API::Controller::APN;
 use API::Controller::Ignore;
 use API::Config;
 
@@ -58,6 +59,8 @@ $router->add( GET    => "/notification/web_push_keys",          "webpush.keys" )
 $router->add( GET    => "/notification/web_push",               "webpush.list" );
 $router->add( POST   => "/notification/web_push",               "webpush.upsert" );
 $router->add( DELETE => "/notification/web_push/{endpoint:.+}", "webpush.delete" );
+$router->add( GET    => "/notification/apn/package",            "apn.package" );
+$router->add( POST   => "/notification/apn/push",               "apn.create" );
 
 builder {
   enable_if { $_[0]->{REMOTE_ADDR} eq '127.0.0.1' }

@@ -3,15 +3,17 @@ package API::Controller::APN;
 use parent 'API::Controller';
 
 use File::Temp qw(tempdir);
-use Capture::Tiny;
+use Capture::Tiny qw(capture);
+use Digest::SHA qw(sha1_hex);
 use File::Copy;
 use JSON::XS;
 
-API->register("apn.pushpackage", __PACKAGE__);
+API->register("apn.package", __PACKAGE__);
 
-sub pushpackage {
+sub package {
   my ($app, $req) = @_;
   my $config = $app->apn;
+  my $user = $req->session->{user};
 
   my $dir = tempdir( CLEANUP => 1 );
   my %manifest;
@@ -21,7 +23,7 @@ sub pushpackage {
     websitePushID       => $config->{website_pushid},
     allowedDomains      => $config->{allowed_domains},
     urlFormatString     => $config->{format_string},
-    authenticationToken => $config->{auth_token},
+    authenticationToken => $user,
     webServiceURL       => $config->{push_url},
   };
 
@@ -41,20 +43,32 @@ sub pushpackage {
     my $file = "icon.iconset/icon_$_.png";
     copy($file, "$dir/$file")
       or die "Unable to copy icon: $!";
-    $manifest{$file} = Digest::SHA->new->addfile("$dir/$file")->hex_digest;
+    $manifest{$file} = Digest::SHA->new->addfile("$dir/$file")->hexdigest;
   }
 
   {
     open my $fh, ">", "$dir/manifest.json"
       or die "Unable to open manifest.json: $!";
-    print $fh encode_json \$manifest;
+    print $fh encode_json \%manifest;
   }
 
-  opendir my $dh, $dir
-    or die "Cannot read dir: $dir";
+  my (undef, $err, $exit) = capture {
+    system(
+      "openssl", "smime", "-sign",
+      "-in", "$dir/manifest.json",
+      "-out", "$dir/signature",
+      "-outform", "pem",
+      "-inkey", $config->{key_file},
+      "-signer", $config->{cert_file},
+    );
+  };
 
-  my ($out, $err, $exit) = capture {
-    system("zip", "-r", "-", "$dir/*");
+  if ($exit != 0) {
+    die "Failed to generate signature: $err";
+  }
+
+  ($out, $err, $exit) = capture {
+    system("cd $dir && zip -r - .");
   };
 
   if ($exit != 0) {
@@ -70,3 +84,5 @@ sub pushpackage {
     [$out]
   ];
 }
+
+1;
