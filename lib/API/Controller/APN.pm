@@ -8,7 +8,21 @@ use Digest::SHA qw(sha1_hex);
 use File::Copy;
 use JSON::XS;
 
-API->register("apn.package", __PACKAGE__);
+API->register("apn.package",  __PACKAGE__);
+API->register("apn.register", __PACKAGE__);
+API->register("apn.config", __PACKAGE__);
+
+sub config {
+  my ($app, $req) = @_;
+  my $config = $app->apn;
+  my $user = $req->session->{user};
+  my $config = {
+    push_id     => $config->{website_pushid},
+    service_url => $config->{allowed_domains}->[0],
+    user        => $user,
+  };
+  $app->json($config);
+}
 
 sub package {
   my ($app, $req) = @_;
