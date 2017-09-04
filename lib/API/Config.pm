@@ -14,11 +14,31 @@ our %DEFAULT = (
   secure   => 0,
   nsqd     => "127.0.0.1",
   nsq_tail => "/usr/local/bin/nsq_tail"
+  apn => {
+    website_name => "Relaychat Party",
+    website_pushid => "",
+    allowed_domains => ["https://relaychat.party"],
+    format_string => "https://relaychat.party/app/#!/%@/%@"
+    auth_token => "",
+    push_url => "https://relaychat.party/api/push"
+  }
 );
 
 sub new {
   my $class = shift;
   bless {}, $class;
+}
+
+sub apn {
+  my $def = %{ $DEFAULT{apn} };
+  return +{
+    website_name    => $ENV{APN_NAME} || $def{website_name},
+    website_pushid  => $ENV{APN_PUSHID} || $def{website_pushid},
+    allowed_domains => [$ENV{APN_ALLOWED_DOMAINS} || $def{allowed_domains}],
+    format_string   => $ENV{APN_FORMAT_STRING} || $def{format_string},
+    auth_token      => $ENV{APN_AUTH_TOKEN} || $def{auth_token},
+    push_url        => $ENV{APN_PUSH_URL} || $def{push_url},
+  }
 }
 
 sub base     { $ENV{API_BASE}          || $DEFAULT{base}     }

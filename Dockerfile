@@ -2,7 +2,7 @@ FROM debian:jessie
 EXPOSE 5004
 WORKDIR /opt/lierc-api
 
-RUN apt-get update && apt-get -y install curl build-essential libpq-dev
+RUN apt-get update && apt-get -y install curl build-essential libpq-dev zip
 RUN curl -s https://s3.amazonaws.com/bitly-downloads/nsq/nsq-1.0.0-compat.linux-amd64.go1.8.tar.gz | tar -xvzf - -C /tmp
 RUN mv /tmp/nsq-1.0.0-compat.linux-amd64.go1.8/bin/nsq* /usr/local/bin
 
