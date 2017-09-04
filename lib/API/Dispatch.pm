@@ -24,7 +24,11 @@ sub handle {
       $err = $@;
     }
 
-    return $self->error($err) if $err;
+    if ($err) {
+      warn "Error handing $name: '$err'\n";
+      return $self->error($err);
+    }
+
     return $res;
   }
 

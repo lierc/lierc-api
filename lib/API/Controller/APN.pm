@@ -9,8 +9,55 @@ use File::Copy;
 use JSON::XS;
 
 API->register("apn.package",  __PACKAGE__);
+API->register("apn.log",  __PACKAGE__);
 API->register("apn.register", __PACKAGE__);
+API->register("apn.unregister", __PACKAGE__);
 API->register("apn.config", __PACKAGE__);
+
+sub unregister {
+  my ($app, $req) = @_;
+  my $device_id = $req->captures->{device_id};
+  my $push_id   = $req->captures->{push_id};
+
+  my ($auth, $user) = split " ", $req->header('authorization');
+  die "Invalid authorization header"
+    unless $auth eq 'ApplePushNotifications';
+
+  my $sth = $app->dbh->prepare_cached(q{
+    DELETE FROM apn
+    WHERE "user"=? AND device_id=?
+  });
+
+  $sth->execute($user, $device_id);
+  $app->nocontent;
+}
+
+sub register {
+  my ($app, $req) = @_;
+  my $device_id = $req->captures->{device_id};
+  my $push_id   = $req->captures->{push_id};
+
+  my ($auth, $user) = split " ", $req->header('authorization');
+  die "Invalid authorization header"
+    unless $auth eq 'ApplePushNotifications';
+
+  my $sth = $app->dbh->prepare_cached(q{
+    INSERT INTO apn (device_id, "user")
+      VALUES(?,?)
+    ON CONFLICT ("user", device_id)
+      DO UPDATE SET updated=NOW()
+  });
+
+  $sth->execute($device_id, $user);
+  $sth->finish;
+  $app->ok;
+}
+
+sub log {
+  my ($app, $req) = @_;
+  warn $req->content;
+  $app->nocontent;
+}
 
 sub config {
   my ($app, $req) = @_;
@@ -18,7 +65,7 @@ sub config {
   my $user = $req->session->{user};
   my $config = {
     push_id     => $config->{website_pushid},
-    service_url => $config->{allowed_domains}->[0],
+    service_url => $config->{service_url},
     user        => $user,
   };
   $app->json($config);
@@ -27,8 +74,8 @@ sub config {
 sub package {
   my ($app, $req) = @_;
   my $config = $app->apn;
-  my $user = $req->session->{user};
 
+  my $data = decode_json $req->content;
   my $dir = tempdir( CLEANUP => 1 );
   my %manifest;
 
@@ -37,8 +84,8 @@ sub package {
     websitePushID       => $config->{website_pushid},
     allowedDomains      => $config->{allowed_domains},
     urlFormatString     => $config->{format_string},
-    authenticationToken => $user,
-    webServiceURL       => $config->{push_url},
+    authenticationToken => $data->{user},
+    webServiceURL       => $config->{service_url},
   };
 
   $manifest{"website.json"} = sha1_hex($website);
@@ -71,13 +118,14 @@ sub package {
       "openssl", "smime", "-sign",
       "-in", "$dir/manifest.json",
       "-out", "$dir/signature",
-      "-outform", "pem",
+      "-outform", "der",
       "-inkey", $config->{key_file},
       "-signer", $config->{cert_file},
     );
   };
 
   if ($exit != 0) {
+    warn $err;
     die "Failed to generate signature: $err";
   }
 

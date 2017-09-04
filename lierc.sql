@@ -83,3 +83,10 @@ create table ignore (
   "from" varchar(128) not null,
   primary key (connection, channel, "from")
 );
+
+create table apn (
+  device_id varchar(255) not null,
+  "user" varchar(24) not null,
+  updated timestamp not null default now(),
+  primary key ("user", device_id)
+);

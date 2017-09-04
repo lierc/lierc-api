@@ -59,9 +59,12 @@ $router->add( GET    => "/notification/web_push_keys",          "webpush.keys" )
 $router->add( GET    => "/notification/web_push",               "webpush.list" );
 $router->add( POST   => "/notification/web_push",               "webpush.upsert" );
 $router->add( DELETE => "/notification/web_push/{endpoint:.+}", "webpush.delete" );
-$router->add( GET    => "/notification/apn/package",            "apn.package" );
-$router->add( POST   => "/notification/apn/register",           "apn.register" );
+
 $router->add( GET    => "/notification/apn/config",             "apn.config" );
+$router->add( POST   => "/v1/pushPackages/:push_id",            "apn.package" );
+$router->add( POST   => "/v1/log",                              "apn.log" );
+$router->add( POST   => "/v1/devices/:device_id/registrations/:push_id", "apn.register" );
+$router->add( DELETE => "/v1/devices/:device_id/registrations/:push_id", "apn.unregister" );
 
 builder {
   enable_if { $_[0]->{REMOTE_ADDR} eq '127.0.0.1' }
@@ -84,6 +87,7 @@ builder {
 
     return $api->unauthorized
       unless ($name && $name =~ /^auth\.(?:login|register|logout)$/)
+        or ($name && $name =~ /^apn\.(?:package|log|(?:un)?register)$/)
         or $api->logged_in($session);
 
     if ($captured->{id}) {

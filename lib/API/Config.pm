@@ -19,7 +19,7 @@ our %DEFAULT = (
     website_pushid => "web.party.relaychat",
     allowed_domains => "https://relaychat.party",
     format_string => "https://relaychat.party/app/#!/%@/%@",
-    push_url => "https://relaychat.party/api/notification/apn/push",
+    service_url => "https://relaychat.party",
     cert_file => ".apn/apn.pem",
     key_file  => ".apn/apn.key",
   }
@@ -37,7 +37,7 @@ sub apn {
     website_pushid  => $ENV{APN_PUSHID} || $def{website_pushid},
     allowed_domains => [split " ", ($ENV{APN_ALLOWED_DOMAINS} || $def{allowed_domains})],
     format_string   => $ENV{APN_FORMAT_STRING} || $def{format_string},
-    push_url        => $ENV{APN_PUSH_URL} || $def{push_url},
+    service_url     => $ENV{APN_SERVICE_URL} || $def{service_url},
     cert_file       => $ENV{APN_CERT_FILE} || $def{cert_file},
     key_file        => $ENV{APN_KEY_FILE} || $def{key_file},
   }
