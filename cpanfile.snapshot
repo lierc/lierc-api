@@ -703,14 +703,29 @@ DISTRIBUTIONS
     requirements:
       ExtUtils::MakeMaker 0
       perl 5.006002
-  List-MoreUtils-0.423
-    pathname: R/RE/REHSACK/List-MoreUtils-0.423.tar.gz
+  List-MoreUtils-0.425
+    pathname: R/RE/REHSACK/List-MoreUtils-0.425.tar.gz
     provides:
-      List::MoreUtils 0.423
-      List::MoreUtils::PP 0.423
+      List::MoreUtils 0.425
+      List::MoreUtils::PP 0.425
     requirements:
       Exporter::Tiny 0.038
       ExtUtils::MakeMaker 0
+      List::MoreUtils::XS 0.423
+  List-MoreUtils-XS-0.423
+    pathname: R/RE/REHSACK/List-MoreUtils-XS-0.423.tar.gz
+    provides:
+      List::MoreUtils::XS 0.423
+    requirements:
+      Carp 0
+      ExtUtils::MakeMaker 0
+      File::Basename 0
+      File::Copy 0
+      File::Path 0
+      File::Spec 0
+      IPC::Cmd 0
+      XSLoader 0.22
+      base 0
   Math-BaseConvert-1.8
     pathname: C/CH/CHROMATIC/Math-BaseConvert-1.8.tar.gz
     provides:
