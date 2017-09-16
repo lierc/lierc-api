@@ -68,8 +68,8 @@ sub delete {
 sub edit {
   my ($app, $req) = @_;
 
-  $app->handle("connection.delete", $req);
-  $app->handle("connection.create", $req);
+  $app->run("connection.delete", $req);
+  $app->run("connection.create", $req);
 
   return $app->ok;
 }

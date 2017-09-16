@@ -14,7 +14,30 @@ sub register {
   };
 }
 
+sub dispatch {
+  my ($self, $env, $session) = @_;
+  my ($name, $captured) = $self->route($env);
+  my $req = API::Request->new($env, $captured, $session);
+  return $self->handle($name, $req);
+}
+
 sub handle {
+  my ($self, $name, $req) = @_;
+
+  return $self->unauthorized
+    unless ($name && $name =~ /^auth\.(?:login|register|logout)$/)
+      or ($name && $name =~ /^apn\.(?:package|log|(?:un)?register)$/)
+      or $self->logged_in($req->session);
+
+  if ($req->captures->{id}) {
+    return $self->unauthorized("Invalid connection id '$req->captures->{id}'")
+    unless $self->verify_owner($req->captures->{id}, $req->session->{user});
+  }
+
+  return $self->run($name, $req);
+}
+
+sub run {
   my ($self, $name, $req) = @_;
   if (my $handler = $name && $actions{$name}) {
     my ($res, $err);
