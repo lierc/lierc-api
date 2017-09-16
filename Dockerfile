@@ -15,4 +15,4 @@ RUN carmel install
 RUN carmel rollout
 
 COPY . /opt/lierc-api
-CMD ["carmel", "exec", "plackup", "--server", "Gazelle", "-Ilib", "--max-workers", "4", "--listen", ":5004", "bin/app.psgi"]
+CMD ["carmel", "exec", "plackup", "--server", "Gazelle", "-Ilib", "--max-workers", "4", "--listen", ":5004", "bin/api.psgi"]
