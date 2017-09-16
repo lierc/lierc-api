@@ -61,6 +61,7 @@ $router->add( POST   => "/notification/web_push",               "webpush.upsert"
 $router->add( DELETE => "/notification/web_push/{endpoint:.+}", "webpush.delete" );
 
 $router->add( GET    => "/notification/apn/config",             "apn.config" );
+$router->add( POST   => "/notification/apn/device",             "apn.device" );
 $router->add( POST   => "/v1/pushPackages/:push_id",            "apn.package" );
 $router->add( POST   => "/v1/log",                              "apn.log" );
 $router->add( POST   => "/v1/devices/:device_id/registrations/:push_id", "apn.register" );

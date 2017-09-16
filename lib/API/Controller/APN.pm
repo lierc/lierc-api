@@ -8,11 +8,12 @@ use Digest::SHA qw(sha1_hex);
 use File::Copy;
 use JSON::XS;
 
-API->register("apn.package",  __PACKAGE__);
-API->register("apn.log",  __PACKAGE__);
-API->register("apn.register", __PACKAGE__);
+API->register("apn.package",    __PACKAGE__);
+API->register("apn.log",        __PACKAGE__);
+API->register("apn.register",   __PACKAGE__);
+API->register("apn.device",     __PACKAGE__);
 API->register("apn.unregister", __PACKAGE__);
-API->register("apn.config", __PACKAGE__);
+API->register("apn.config",     __PACKAGE__);
 
 sub unregister {
   my ($app, $req) = @_;
@@ -30,6 +31,23 @@ sub unregister {
 
   $sth->execute($user, $device_id);
   $app->nocontent;
+}
+
+sub device {
+  my ($app, $req) = @_;
+  my $device_id = $req->content;
+  my $user = $req->session->{user};
+
+  my $sth = $app->dbh->prepare_cached(q{
+    INSERT INTO apn (device_id, "user")
+      VALUES(?,?)
+    ON CONFLICT ("user", device_id)
+      DO UPDATE SET updated=NOW()
+  });
+
+  $sth->execute($device_id, $user);
+  $sth->finish;
+  $app->ok;
 }
 
 sub register {
@@ -125,7 +143,6 @@ sub package {
   };
 
   if ($exit != 0) {
-    warn $err;
     die "Failed to generate signature: $err";
   }
 
