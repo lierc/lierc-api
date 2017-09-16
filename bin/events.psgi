@@ -8,11 +8,11 @@ use Router::Boom::Method;
 use JSON::XS;
 
 use API::Config;
-use API::Async;
+use API::Stream;
 use NSQ;
 
 my $config = API::Config->new;
-my $api = API::Async->new($config->as_hash);
+my $api = API::Stream->new($config->as_hash);
 
 my $nsq = NSQ->tail(
   path       => $config->nsq_tail,

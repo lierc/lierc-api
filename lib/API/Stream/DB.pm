@@ -1,4 +1,4 @@
-package API::Async::DB;
+package API::Stream::DB;
 
 use strict;
 use warnings;

@@ -1,4 +1,4 @@
-package API::Async;
+package API::Stream;
 
 use strict;
 use warnings;
@@ -8,8 +8,8 @@ use Class::Tiny qw(host dsn dbhost dbuser dbpass secret base secure);
 use Role::Tiny::With;
 
 with 'API::Responses';
-with 'API::Async::DB';
-with 'API::Async::Events';
-with 'API::Async::Liercd';
+with 'API::Stream::DB';
+with 'API::Stream::Events';
+with 'API::Stream::Liercd';
 
 1;

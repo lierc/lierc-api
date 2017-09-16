@@ -1,4 +1,4 @@
-package API::Async::Liercd;
+package API::Stream::Liercd;
 
 use HTTP::Response;
 use AnyEvent::HTTP qw();

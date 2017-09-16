@@ -1,4 +1,4 @@
-package API::Async::Events;
+package API::Stream::Events;
 
 use strict;
 use warnings;
