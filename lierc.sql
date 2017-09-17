@@ -24,7 +24,6 @@ create table log (
   id          serial,
   connection  varchar(24) not null,
   channel     varchar(32) not null,
-  privmsg     bool not null default false,
   command     varchar(16),
   highlight   bool not null default false,
   time        timestamp not null,
@@ -35,7 +34,7 @@ create table log (
 
 create index on log (connection, channel, highlight DESC);
 create index on log (connection, channel, id DESC);
-create index on log (connection, channel, privmsg, id DESC);
+create index on log (connection, channel, command, id DESC);
 create index on log (time);
 
 create table pref (
