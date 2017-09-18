@@ -34,13 +34,15 @@ sub missed {
     if @$err;
 
   my $sth = $app->dbh->prepare(q{
-    SELECT COUNT(*), channel, privmsg, connection
+    SELECT channel, connection,
+      SUM( CASE WHEN command = 'PRIVMSG' THEN 1 ELSE 0 END ) AS messages,
+      SUM( CASE WHEN command <> 'PRIVMSG' THEN 1 ELSE 0 END ) AS events
     FROM log
     WHERE
     (
   } . join(" OR ", @where) . q{
     )
-    GROUP BY channel, connection, privmsg
+    GROUP BY channel, connection
   });
 
   my %channels;
@@ -48,10 +50,10 @@ sub missed {
   $sth->execute(@bind);
 
   while (my $row = $sth->fetchrow_hashref) {
-    my $key = $row->{privmsg} ? "messages" : "events";
     my $conn = $row->{connection};
     my $chan = $row->{channel};
-    $channels{ $conn }{ $chan }{ $key } += $row->{count};
+    $channels{ $conn }{ $chan }{messages} += $row->{messages};
+    $channels{ $conn }{ $chan }{events} += $row->{events};
   }
 
   $app->json(\%channels);

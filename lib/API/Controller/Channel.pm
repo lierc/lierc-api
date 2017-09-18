@@ -20,7 +20,7 @@ sub last {
   my $sth = $app->dbh->prepare_cached(q{
     SELECT id, message, connection, highlight FROM log
       WHERE channel=? AND connection=?
-        AND privmsg=True
+        AND command='PRIVMSG'
         AND message->'Params'->>1 ~ ?
       ORDER BY id DESC LIMIT ?
   });
