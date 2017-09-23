@@ -37,10 +37,10 @@ builder {
 
   sub {
     my $env = shift;
-    my $params  = URI->new($env->{'REQUEST_URI'})->query_form_hash;
 
     if ($env->{PATH_INFO} eq '/stats') {
       if ($env->{HTTP_LIERC_KEY} eq $config->key) {
+        my $params  = URI->new($env->{'REQUEST_URI'})->query_form_hash;
         return $api->json($api->stats($params->{user}));
       }
       return $api->error("Invalid key");
@@ -57,7 +57,7 @@ builder {
       $cv->cb(sub {
         my $logged_in = $_[0]->recv;
         return $respond->($api->unauthorized) unless $logged_in;
-        $api->events($session, $respond, $params, $remote, $agent);
+        $api->events($session, $respond, $remote, $agent);
       });
     };
   }

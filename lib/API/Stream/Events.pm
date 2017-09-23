@@ -10,7 +10,7 @@ use Role::Tiny;
 use AnyEvent;
 
 sub push_fake_events {
-  my ($self, $writer, $conns, $options) = @_;
+  my ($self, $writer, $conns) = @_;
   my %status;
 
   my $cv = AE::cv;
@@ -162,7 +162,7 @@ sub streams {
 }
 
 sub events {
-  my ($self, $session, $respond, $options, $remote, $agent) = @_;
+  my ($self, $session, $respond, $remote, $agent) = @_;
 
   my $user = $session->{user};
   my $cv = $self->connections($user);
@@ -185,7 +185,7 @@ sub events {
 
     $writer->ping;
     $self->streams->{$user}->{$writer->id} = $writer;
-    $self->push_fake_events($writer, $conns, $options);
+    $self->push_fake_events($writer, $conns);
     $self->save_last_login($user);
   });
 }
