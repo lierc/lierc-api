@@ -27,10 +27,10 @@ builder {
     "Plack::Middleware::ReverseProxy";
 
   enable "Session::Cookie",
-    secret => $api->secret,
-    expires => 3600 * 24 * 7,
-    httponly => 1,
-    secure => $api->secure,
+    secret      => $api->secret,
+    expires     => 3600 * 24 * 7,
+    httponly    => 1,
+    secure      => $api->secure,
     session_key => "chats";
 
   enable "AccessLog";
@@ -40,8 +40,8 @@ builder {
 
     if ($env->{PATH_INFO} eq '/stats') {
       if ($env->{HTTP_LIERC_KEY} eq $config->key) {
-        my $params  = URI->new($env->{'REQUEST_URI'})->query_form_hash;
-        return $api->json($api->stats($params->{user}));
+        my $user = URI->new($env->{'REQUEST_URI'})->query_param("user");
+        return $api->json($api->stats($user));
       }
       return $api->error("Invalid key");
     }
