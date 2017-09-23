@@ -55,8 +55,8 @@ builder {
       my $cv = $api->logged_in($session);
 
       $cv->cb(sub {
-        my $logged_in = $_[0]->recv;
-        return $respond->($api->unauthorized) unless $logged_in;
+        return $respond->($api->unauthorized)
+          unless $_[0]->recv;
         $api->events($session, $respond, $remote, $agent);
       });
     };
