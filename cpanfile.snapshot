@@ -1230,36 +1230,33 @@ DISTRIBUTIONS
       common::sense 3.74
     requirements:
       ExtUtils::MakeMaker 0
-  libwww-perl-6.26
-    pathname: O/OA/OALDERS/libwww-perl-6.26.tar.gz
+  libwww-perl-6.27
+    pathname: O/OA/OALDERS/libwww-perl-6.27.tar.gz
     provides:
-      LWP 6.26
-      LWP::Authen::Basic 6.26
-      LWP::Authen::Digest 6.26
-      LWP::Authen::Ntlm 6.26
-      LWP::ConnCache 6.26
-      LWP::Debug 6.26
-      LWP::Debug::TraceHTTP 6.26
-      LWP::Debug::TraceHTTP::Socket 6.26
-      LWP::DebugFile 6.26
-      LWP::MemberMixin 6.26
-      LWP::Protocol 6.26
-      LWP::Protocol::MyFTP 6.26
-      LWP::Protocol::cpan 6.26
-      LWP::Protocol::data 6.26
-      LWP::Protocol::file 6.26
-      LWP::Protocol::ftp 6.26
-      LWP::Protocol::gopher 6.26
-      LWP::Protocol::http 6.26
-      LWP::Protocol::http::Socket 6.26
-      LWP::Protocol::http::SocketMethods 6.26
-      LWP::Protocol::loopback 6.26
-      LWP::Protocol::mailto 6.26
-      LWP::Protocol::nntp 6.26
-      LWP::Protocol::nogo 6.26
-      LWP::RobotUA 6.26
-      LWP::Simple 6.26
-      LWP::UserAgent 6.26
+      LWP 6.27
+      LWP::Authen::Basic 6.27
+      LWP::Authen::Digest 6.27
+      LWP::Authen::Ntlm 6.27
+      LWP::ConnCache 6.27
+      LWP::Debug 6.27
+      LWP::Debug::TraceHTTP 6.27
+      LWP::DebugFile 6.27
+      LWP::MemberMixin 6.27
+      LWP::Protocol 6.27
+      LWP::Protocol::MyFTP 6.27
+      LWP::Protocol::cpan 6.27
+      LWP::Protocol::data 6.27
+      LWP::Protocol::file 6.27
+      LWP::Protocol::ftp 6.27
+      LWP::Protocol::gopher 6.27
+      LWP::Protocol::http 6.27
+      LWP::Protocol::loopback 6.27
+      LWP::Protocol::mailto 6.27
+      LWP::Protocol::nntp 6.27
+      LWP::Protocol::nogo 6.27
+      LWP::RobotUA 6.27
+      LWP::Simple 6.27
+      LWP::UserAgent 6.27
       libwww::perl undef
     requirements:
       Digest::MD5 0
