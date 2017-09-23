@@ -134,11 +134,11 @@ sub package {
   my (undef, $err, $exit) = capture {
     system(
       "openssl", "smime", "-sign",
-      "-in", "$dir/manifest.json",
-      "-out", "$dir/signature",
+      "-in",      "$dir/manifest.json",
+      "-out",     "$dir/signature",
       "-outform", "der",
-      "-inkey", $config->{key_file},
-      "-signer", $config->{cert_file},
+      "-inkey",   $config->{key_file},
+      "-signer",  $config->{cert_file},
     );
   };
 
@@ -157,7 +157,7 @@ sub package {
   return [
     200,
     [
-      "Content-Type" => "application/zip",
+      "Content-Type"   => "application/zip",
       "Content-Lenght" => length($out),
     ],
     [$out]
