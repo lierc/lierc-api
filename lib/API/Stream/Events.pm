@@ -136,7 +136,7 @@ sub irc_event {
 
     if (my $streams = $self->streams->{$user}) {
       my $msg_id = $data->{MessageId};
-      my $event = Util->event(irc => encode_json($data), $msg_id);
+      my $event = Util->event(irc => $msg, $msg_id);
       for (values %$streams) {
         $_->write($event);
       }
