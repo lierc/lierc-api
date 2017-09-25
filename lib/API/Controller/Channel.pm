@@ -23,7 +23,6 @@ sub date {
   return sub  {
     my $respond = shift;
     my $writer = $respond->($app->event_stream);
-    warn $writer;
 
     my $sth = $app->dbh->prepare_cached(q{
       SELECT id, message, connection, highlight
