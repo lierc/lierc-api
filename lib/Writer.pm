@@ -27,6 +27,11 @@ sub BUILD {
   });
 }
 
+sub close {
+  my $self = shift;
+  $self->handle->{handle}->destroy;
+}
+
 sub irc_event {
   my $self = shift;
   $self->write( Util->irc_event( @_ ) );

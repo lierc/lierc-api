@@ -135,8 +135,7 @@ sub irc_event {
     return unless defined $user;
 
     if (my $streams = $self->streams->{$user}) {
-      my $msg_id = $data->{MessageId};
-      my $event = Util->event(irc => $msg, $msg_id);
+      my $event = Util->event(irc => $msg, $data->{MessageId});
       for (values %$streams) {
         $_->write($event);
       }

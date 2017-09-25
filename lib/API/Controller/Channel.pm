@@ -2,6 +2,8 @@ package API::Controller::Channel;
 
 use parent 'API::Controller';
 
+use Util;
+use JSON::XS;
 use List::Util qw(min);
 use Encode;
 
@@ -9,6 +11,45 @@ API->register("channel.logs",     __PACKAGE__);
 API->register("channel.logs_id",  __PACKAGE__);
 API->register("channel.set_seen", __PACKAGE__);
 API->register("channel.last",     __PACKAGE__);
+API->register("channel.date",     __PACKAGE__);
+
+sub date {
+  my ($app, $req) = @_;
+  my $user = $req->session->{user};
+  my $date = $req->captures->{date};
+  my $chan = lc decode utf8 => $req->captures->{channel};
+  my $id = $req->captures->{id};
+
+  return sub  {
+    my $respond = shift;
+    my $writer = $respond->($app->event_stream);
+    warn $writer;
+
+    my $sth = $app->dbh->prepare_cached(q{
+      SELECT id, message, connection, highlight
+      FROM log
+      WHERE connection=?
+        AND channel=?
+        AND time >= date(?)
+        AND time < (date(?) + '1 day'::interval)
+    });
+    $sth->execute($id, $chan, $date, $date);
+
+    my $json = JSON::XS->new;
+
+    while (my $row = $sth->fetchrow_arrayref) {
+      my $msg = {
+        MessageId    => $row->[0],
+        Message      => $json->decode($row->[1]),
+        ConnectionId => $row->[2],
+        Highlight    => $row->[3] ? \1 : \0,
+      };
+      $writer->write(Util->event(log => $json->encode($msg)));
+    }
+
+    $writer->close;
+  };
+}
 
 sub last {
   my ($app, $req) = @_;
@@ -34,7 +75,7 @@ sub last {
       MessageId    => $row->[0],
       Message      => $json->decode($row->[1]),
       ConnectionId => $row->[2],
-      Highlight    => $row->[4] ? \1 : \0,
+      Highlight    => $row->[3] ? \1 : \0,
     };
   }
 
