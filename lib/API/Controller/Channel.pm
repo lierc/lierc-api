@@ -12,13 +12,31 @@ API->register("channel.logs_id",  __PACKAGE__);
 API->register("channel.set_seen", __PACKAGE__);
 API->register("channel.last",     __PACKAGE__);
 API->register("channel.date",     __PACKAGE__);
+API->register("channel.list",     __PACKAGE__);
+
+sub list {
+  my ($app, $req) = @_;
+  my $user = $req->session->{user};
+  my $id = $req->captures->{id};
+
+  my $channels = $app->dbh->selectcol_arrayref(q{
+    SELECT channel
+    FROM log
+    WHERE connection=?
+    GROUP BY channel
+    ORDER BY MAX(time) DESC
+  }, {}, $id);
+
+  $app->json($channels);
+}
 
 sub date {
   my ($app, $req) = @_;
   my $user = $req->session->{user};
-  my $date = $req->captures->{date};
+  my $from = $req->captures->{from};
+  my $to   = $req->captures->{to};
   my $chan = lc decode utf8 => $req->captures->{channel};
-  my $id = $req->captures->{id};
+  my $id   = $req->captures->{id};
 
   return sub  {
     my $respond = shift;
@@ -32,7 +50,7 @@ sub date {
         AND time >= date(?)
         AND time < (date(?) + '1 day'::interval)
     });
-    $sth->execute($id, $chan, $date, $date);
+    $sth->execute($id, $chan, $from, $to);
 
     my $json = JSON::XS->new;
 

@@ -29,11 +29,12 @@ $router->add( POST   => "/connection/:id",      "connection.send" );
 $router->add( DELETE => "/connection/:id/nick/:nick", "private.delete" );
 $router->add( GET    => "/privates",                  "private.list" );
 
-$router->add( GET    => "/connection/:id/channel/:channel/date/:date",    "channel.date" );
+$router->add( GET    => "/connection/:id/channel/:channel/date/:from/:to", "channel.date" );
 $router->add( GET    => "/connection/:id/channel/:channel/events",        "channel.logs" );
 $router->add( GET    => "/connection/:id/channel/:channel/events/:event", "channel.logs_id" );
 $router->add( POST   => "/connection/:id/channel/:channel/seen",          "channel.set_seen" );
 $router->add( GET    => "/connection/:id/channel/:channel/last",          "channel.last" );
+$router->add( GET    => "/connection/:id/channel",                        "channel.list" );
 
 $router->add( POST   => "/connection/:id/channel/:channel/ignore",        "ignore.create" );
 $router->add( DELETE => "/connection/:id/channel/:channel/ignore/:from",  "ignore.delete" );
