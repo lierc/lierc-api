@@ -24,7 +24,7 @@ sub list {
     FROM log
     WHERE connection=?
     GROUP BY channel
-    ORDER BY MAX(time) DESC
+    ORDER BY MAX(id) DESC
   }, {}, $id);
 
   $app->json($channels);
