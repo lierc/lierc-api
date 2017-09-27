@@ -204,11 +204,11 @@ DISTRIBUTIONS
       perl 5.006
       strict 0
       warnings 0
-  DBD-Pg-3.6.2
-    pathname: T/TU/TURNSTEP/DBD-Pg-3.6.2.tar.gz
+  DBD-Pg-3.7.0
+    pathname: T/TU/TURNSTEP/DBD-Pg-3.7.0.tar.gz
     provides:
-      Bundle::DBD::Pg v3.6.2
-      DBD::Pg v3.6.2
+      Bundle::DBD::Pg v3.7.0
+      DBD::Pg v3.7.0
     requirements:
       DBI 1.614
       ExtUtils::MakeMaker 6.11

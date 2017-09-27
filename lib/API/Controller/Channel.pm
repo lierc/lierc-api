@@ -41,16 +41,29 @@ sub date {
   return sub  {
     my $respond = shift;
     my $writer = $respond->($app->event_stream);
+    my @bind;
 
-    my $sth = $app->dbh->prepare_cached(q{
+    my $sql = q!
       SELECT id, message, connection, highlight
       FROM log
-      WHERE connection=?
-        AND channel=?
-        AND time >= date(?)
-        AND time < (date(?) + '1 day'::interval)
+      WHERE connection=$1
+        AND channel=$2
+        AND time >= date($3)
+        AND time < (date($4) + '1 day'::interval)
+    !;
+    push @bind, ($id, $chan, $from, $to);
+
+    if ($req->parameters->{nick}) {
+      $sql .= q! AND message->'Prefix'->'Name' ? $5!;
+      push @bind, decode utf8 => $req->parameters->{nick};
+    }
+
+    warn $sql;
+    my $sth = $app->dbh->prepare_cached($sql, {
+      pg_placeholder_dollaronly => 1
     });
-    $sth->execute($id, $chan, $from, $to);
+
+    $sth->execute(@bind);
 
     my $json = JSON::XS->new;
 
