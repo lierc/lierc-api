@@ -53,9 +53,9 @@ sub date {
     !;
     push @bind, ($id, $chan, $from, $to);
 
-    if ($req->parameters->{nick}) {
-      $sql .= q! AND message->'Prefix'->'Name' ? $5!;
-      push @bind, decode utf8 => $req->parameters->{nick};
+    if ($req->parameters->{text}) {
+      $sql .= q! AND to_tsvector('english', message->'Params'->1) @@ to_tsquery($5)!;
+      push @bind, decode utf8 => $req->parameters->{text};
     }
 
     warn $sql;
@@ -90,9 +90,11 @@ sub last {
 
   my $sth = $app->dbh->prepare_cached(q{
     SELECT id, message, connection, highlight FROM log
-      WHERE channel=? AND connection=?
+      WHERE channel=?
+        AND connection=?
         AND command='PRIVMSG'
-        AND message->'Params'->>1 ~ ?
+        AND time > (NOW() - '1 week'::interval)
+        AND to_tsvector(message->'Params'->>1) @@ to_tsquery(?)
       ORDER BY id DESC LIMIT ?
   });
   $sth->execute($chan, $id, $query, $limit);

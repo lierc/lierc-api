@@ -32,9 +32,12 @@ create table log (
   primary key (id)
 );
 
-create index on log (connection, channel, highlight DESC);
 create index on log (connection, channel, id DESC);
-create index on log (connection, channel, command, id DESC);
+create index log_message_text on log gin ( to_tsvector( 'english', message->'Params'->1 ));
+create index log_sender on log gin ((message->'Prefix'->'Name'));
+create index on log time;
+
+
 create index on log (time);
 
 create table pref (

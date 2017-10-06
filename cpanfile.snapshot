@@ -712,10 +712,10 @@ DISTRIBUTIONS
       Exporter::Tiny 0.038
       ExtUtils::MakeMaker 0
       List::MoreUtils::XS 0.423
-  List-MoreUtils-XS-0.423
-    pathname: R/RE/REHSACK/List-MoreUtils-XS-0.423.tar.gz
+  List-MoreUtils-XS-0.426
+    pathname: R/RE/REHSACK/List-MoreUtils-XS-0.426.tar.gz
     provides:
-      List::MoreUtils::XS 0.423
+      List::MoreUtils::XS 0.426
     requirements:
       Carp 0
       ExtUtils::MakeMaker 0
