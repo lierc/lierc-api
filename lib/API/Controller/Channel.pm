@@ -43,19 +43,35 @@ sub date {
     my $writer = $respond->($app->event_stream);
     my @bind;
 
-    my $sql = q!
-      SELECT id, message, connection, highlight
-      FROM log
-      WHERE connection=$1
-        AND channel=$2
-        AND time >= date($3)
-        AND time < (date($4) + '1 day'::interval)
-    !;
-    push @bind, ($id, $chan, $from, $to);
-
+    my $sql;
     if ($req->parameters->{text}) {
-      $sql .= q! AND to_tsvector('english', message->'Params'->1) @@ to_tsquery($5)!;
+      $sql = qq!
+        SELECT id,
+          jsonb_set(
+            message, '{Params,1}', ts_headline(
+              'english', message->'Params'->1, to_tsquery(\$5),
+              'StartSel = \x02, StopSel = \x02')),
+          message, connection, highlight
+        FROM log
+        WHERE connection=\$1
+          AND channel=\$2
+          AND time >= date(\$3)
+          AND time < (date(\$4) + '1 day'::interval)
+          AND to_tsvector('english', message->'Params'->1) @@ to_tsquery(\$5)
+      !;
+      push @bind, ($id, $chan, $from, $to);
       push @bind, decode utf8 => $req->parameters->{text};
+    }
+    else {
+      $sql = q!
+        SELECT id, message, connection, highlight
+        FROM log
+        WHERE connection=$1
+          AND channel=$2
+          AND time >= date($3)
+          AND time < (date($4) + '1 day'::interval)
+      !;
+      push @bind, ($id, $chan, $from, $to);
     }
 
     warn $sql;
@@ -88,15 +104,21 @@ sub last {
   my $limit = min($req->parameters->{limit} || 5, 20);
   my $query = decode utf8 => $req->parameters->{query};
 
-  my $sth = $app->dbh->prepare_cached(q{
-    SELECT id, message, connection, highlight FROM log
-      WHERE channel=?
-        AND connection=?
-        AND command='PRIVMSG'
-        AND time > (NOW() - '1 week'::interval)
-        AND to_tsvector(message->'Params'->>1) @@ to_tsquery(?)
-      ORDER BY id DESC LIMIT ?
-  });
+  my $sth = $app->dbh->prepare_cached(qq!
+    SELECT id,
+      jsonb_set(
+        message, '{Params,1}', ts_headline(
+          'english', message->'Params'->1, to_tsquery(\$3),
+          'StartSel = \x02, StopSel = \x02')),
+      connection, highlight
+    FROM log
+    WHERE channel=\$1
+      AND connection=\$2
+      AND command='PRIVMSG'
+      AND time > (NOW() - '1 week'::interval)
+      AND to_tsvector(message->'Params'->>1) @@ to_tsquery(\$3)
+    ORDER BY id DESC LIMIT \$4
+  !, { pg_placeholder_dollaronly => 1 });
   $sth->execute($chan, $id, $query, $limit);
 
   my $json = JSON::XS->new;
