@@ -3,6 +3,7 @@ package API::Controller::Image;
 use parent 'API::Controller';
 
 use LWP::UserAgent;
+use HTTP::Request::Common ();
 use JSON::XS;
 
 API->register("image.create", __PACKAGE__);
@@ -16,6 +17,8 @@ sub create {
   if (!%$uploads) {
     return $app->error("No upload");
   }
+
+  local $HTTP::Request::Common::DYNAMIC_FILE_UPLOAD = 1;
 
   my $ua = LWP::UserAgent->new;
   my $res = $ua->post(
