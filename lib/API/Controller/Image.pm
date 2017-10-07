@@ -2,53 +2,50 @@ package API::Controller::Image;
 
 use parent 'API::Controller';
 
-use IO::Socket::SSL;
+use LWP::UserAgent;
 use JSON::XS;
 
 API->register("image.create", __PACKAGE__);
 
 sub create {
   my ($app, $req) = @_;
+  my $user = $req->session->{user};
   my $key = $app->imgur_key;
-  my $fh = $req->input;
+  my $uploads = $req->uploads;
 
-  my $s = IO::Socket::SSL->new('api.imgur.com:443')
-    or die "Unable to connect to api.imgur.com: $!, $SSL_ERROR";
-
-  binmode $s;
-
-  print $s "POST /3/image HTTP/1.0\n";
-  print $s "Host: api.imgur.com\n";
-  print $s "Authorization: Client-ID $key\n";
-  print $s "Transfer-Encoding: chunked\n";
-  
-  for (qw{Content-Length Content-Type}) {
-    my $v = $req->header($_);
-    print $s "$_: $v\n" if defined $v;
+  if (!%$uploads) {
+    return $app->error("No upload");
   }
 
-  print $s "\n";
+  my $ua = LWP::UserAgent->new;
+  my $res = $ua->post(
+    "https://api.imgur.com/3/image",
+    "Content-Type" => "form-data",
+    Authorization  => "Client-ID 033f98700d8577c",
+    Content => [
+      map { $_ => [ $uploads->{$_}->path ] } keys %$uploads
+    ]
+  );
 
-  my $buf;
-  warn "reading from $fh";
-  while ((my $bytes = read($s, $fh, 1024)) > 0) {
-    warn "read $bytes";
-    print $s sprintf("%X", $bytes);
-    print $s "\r\n";
-    print $s $chunk;
-    print $s "\r\n";
+  if ($res->code == 200) {
+    my $data = decode_json $res->decoded_content;
+    my $sth = $app->dbh->prepare_cached(q!
+      INSERT INTO image ("user", url, delete_hash)
+      VALUES (?,?,?)
+    !);
+    $sth->execute(
+      $user,
+      $data->{data}->{link},
+      $data->{data}->{deletehash}
+    );
+    $sth->finish;
   }
 
-  print $s "0\r\n";
-  print $s "\r\n";
-
-  my @lines = $s->getlines;
-  my $res = decode_json join "", @lines;
-
-  close $fh;
-  close $s;
-
-  $app->json($res);
+  return [
+    $res->code,
+    [$res->flatten],
+    [$res->content],
+  ];
 }
 
 1;

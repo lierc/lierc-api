@@ -33,9 +33,9 @@ create table log (
 );
 
 create index on log (connection, channel, id DESC);
-create index log_message_text on log gin ( to_tsvector( 'english', message->'Params'->1 ));
-create index log_sender on log gin ((message->'Prefix'->'Name'));
-create index on log time;
+create index log_message_text on log USING gin ( to_tsvector( 'english', message->'Params'->1 ));
+create index log_sender on log USING gin ((message->'Prefix'->'Name'));
+create index on log (time);
 
 
 create index on log (time);
@@ -97,7 +97,7 @@ create table apn (
 create table image (
   "user" varchar(24) not null,
   url varchar(255) not null,
-  delete_url varchar(255) not null,
+  delete_hash varchar(32) not null,
   created timestamp not null default NOW(),
   primary key ("user", url)
 );
