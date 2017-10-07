@@ -40,5 +40,4 @@ requires "EV";
 requires "Async::Interrupt";
 requires "Guard";
 
-# streaming image uploads
 requires "LWP::Protocol::https";
