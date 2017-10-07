@@ -9,5 +9,6 @@ use API::Controller::Private;
 use API::Controller::WebPush;
 use API::Controller::APN;
 use API::Controller::Ignore;
+use API::Controller::Image;
 
 1;

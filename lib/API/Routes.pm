@@ -52,6 +52,8 @@ $router->add( POST   => "/v1/log",                              "apn.log" );
 $router->add( POST   => "/v1/devices/:device_id/registrations/:push_id", "apn.register" );
 $router->add( DELETE => "/v1/devices/:device_id/registrations/:push_id", "apn.unregister" );
 
+$router->add( POST   => "/image", "image.create" );
+
 sub route {
   my $self = shift;
   my $env = shift;

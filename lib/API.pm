@@ -3,7 +3,7 @@ package API;
 use strict;
 use warnings;
 
-use Class::Tiny qw(host dsn dbhost dbuser dbpass secret base secure apn);
+use Class::Tiny qw(host dsn dbhost dbuser dbpass secret base secure apn imgur_key);
 
 use Role::Tiny::With;
 

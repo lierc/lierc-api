@@ -14,6 +14,7 @@ our %DEFAULT = (
   secure   => 0,
   nsqd     => "127.0.0.1",
   nsq_tail => "/usr/local/bin/nsq_tail",
+  imgur_key => "",
   apn => {
     website_name => "Relaychat Party",
     website_pushid => "web.party.relaychat",
@@ -54,6 +55,7 @@ sub nsqhost  { $ENV{NSQD_HOST}         || $DEFAULT{nsqd}     }
 sub nsq_tail { $ENV{NSQ_TAIL}          || $DEFAULT{nsq_tail} }
 sub secure   { $ENV{API_SECURE}        || $DEFAULT{secure}   }
 sub key      { $ENV{API_KEY}           || $DEFAULT{key}      }
+sub imgur_key { $ENV{IMGUR_KEY}        || $DEFAULT{imgur_key} }
 
 sub dsn     {
   my $self = shift;
