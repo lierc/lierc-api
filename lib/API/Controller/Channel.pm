@@ -58,6 +58,7 @@ sub date {
           AND time >= date(\$3)
           AND time < (date(\$4) + '1 day'::interval)
           AND to_tsvector('english', message->'Params'->1) @@ to_tsquery(\$5)
+        ORDER BY id ASC
       !;
       push @bind, ($id, $chan, $from, $to);
       push @bind, decode utf8 => $req->parameters->{text};
@@ -70,6 +71,7 @@ sub date {
           AND channel=$2
           AND time >= date($3)
           AND time < (date($4) + '1 day'::interval)
+        ORDER BY id ASC
       !;
       push @bind, ($id, $chan, $from, $to);
     }
