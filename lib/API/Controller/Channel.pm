@@ -76,7 +76,6 @@ sub date {
       push @bind, ($id, $chan, $from, $to);
     }
 
-    warn $sql;
     my $sth = $app->dbh->prepare_cached($sql, {
       pg_placeholder_dollaronly => 1
     });
@@ -92,7 +91,12 @@ sub date {
         ConnectionId => $row->[2],
         Highlight    => $row->[3] ? \1 : \0,
       };
-      $writer->write(Util->event(log => $json->encode($msg)));
+      my $l = $writer->write(Util->event(log => $json->encode($msg)));
+
+      if (!$l) {
+        $writer->close;
+        return;
+      }
     }
 
     $writer->close;
