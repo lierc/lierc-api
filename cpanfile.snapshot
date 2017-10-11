@@ -855,13 +855,13 @@ DISTRIBUTIONS
       perl 5.006001
       strict 0
       warnings 0
-  Pg-PQ-0.14
-    pathname: S/SA/SALVA/Pg-PQ-0.14.tar.gz
+  Pg-PQ-0.15
+    pathname: S/SA/SALVA/Pg-PQ-0.15.tar.gz
     provides:
-      Pg::PQ 0.14
-      Pg::PQ::Cancel 0.14
-      Pg::PQ::Conn 0.14
-      Pg::PQ::Result 0.14
+      Pg::PQ 0.15
+      Pg::PQ::Cancel 0.15
+      Pg::PQ::Conn 0.15
+      Pg::PQ::Result 0.15
     requirements:
       ExtUtils::MakeMaker 0
   Plack-1.0044
