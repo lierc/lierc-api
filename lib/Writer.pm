@@ -37,6 +37,12 @@ sub irc_event {
   $self->write( Util->irc_event( @_ ) );
 }
 
+sub send_padding {
+  my $self = shift;
+  my $len  = shift;
+  $self->write( ":" . (" " x $len) . "\n");
+}
+
 sub write {
   my ($self, $line) = @_;
   $self->handle->write($line);

@@ -182,6 +182,7 @@ sub events {
       }
     );
 
+    $writer->send_padding(2 << 10);
     $writer->ping;
     $self->streams->{$user}->{$writer->id} = $writer;
     $self->push_fake_events($writer, $conns);
@@ -201,7 +202,6 @@ sub save_channels {
         my $status = decode_json $_[0]->recv->content;
         if ( my @channels = @{ $status->{Channels} } ) {
           $conn->{Config}->{Channels} = [ map {$_->{Name}} @channels ];
-          $conn->{Config}->{Nick} = $status->{Nick};
           $self->update_config($status->{Id}, encode_json $conn->{Config});
         }
       });
