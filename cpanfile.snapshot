@@ -731,15 +731,15 @@ DISTRIBUTIONS
       Mozilla::CA 20110101
       Net::HTTPS 6
       perl 5.008001
-  List-MoreUtils-0.425
-    pathname: R/RE/REHSACK/List-MoreUtils-0.425.tar.gz
+  List-MoreUtils-0.426
+    pathname: R/RE/REHSACK/List-MoreUtils-0.426.tar.gz
     provides:
-      List::MoreUtils 0.425
-      List::MoreUtils::PP 0.425
+      List::MoreUtils 0.426
+      List::MoreUtils::PP 0.426
     requirements:
       Exporter::Tiny 0.038
       ExtUtils::MakeMaker 0
-      List::MoreUtils::XS 0.423
+      List::MoreUtils::XS 0.426
   List-MoreUtils-XS-0.426
     pathname: R/RE/REHSACK/List-MoreUtils-XS-0.426.tar.gz
     provides:
