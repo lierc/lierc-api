@@ -60,12 +60,13 @@ sub list {
     SELECT url, created
     FROM image
     WHERE "user"=?
+    ORDER BY created DESC
     LIMIT ? OFFSET ?
   !);
   $sth->execute($user, $limit, $page * $limit);
 
-  my @images = $sth->fetchall_arrayref({});
-  $app->json(\@images);
+  my $images = $sth->fetchall_arrayref({});
+  $app->json($images);
 }
 
 sub create {
