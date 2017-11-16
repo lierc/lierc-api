@@ -2,9 +2,50 @@ package API::Controller::Message;
 
 use parent 'API::Controller';
 
-API->register("message.log",      __PACKAGE__);
-API->register("message.missed",   __PACKAGE__);
-API->register("message.seen",     __PACKAGE__);
+use List::Util qw(min);
+
+API->register("message.log",       __PACKAGE__);
+API->register("message.missed",    __PACKAGE__);
+API->register("message.seen",      __PACKAGE__);
+API->register("message.highlight", __PACKAGE__);
+
+sub highlight {
+  my ($app, $req) = @_;
+  my $user = $req->session->{user};
+  my $start = $req->captures->{event};
+  my $limit = min($req->parameters->{limit} || 50, 150);
+
+  my $sth = $app->dbh->prepare_cached(q!
+    SELECT l.id, l.message, l.connection, l.self, l.highlight
+    FROM log AS l
+    JOIN connection AS c
+      ON l.connection=c.id
+    JOIN "user" AS u
+      ON c."user"=u.id
+    WHERE u.id=?
+      AND l.highlight=True
+      AND l.id < ?
+    ORDER BY l.id DESC
+    LIMIT ?
+  !);
+  $sth->execute($user, $start, $limit);
+
+  my $json = JSON::XS->new;
+  my @data;
+
+  while (my $row = $sth->fetchrow_arrayref) {
+    unshift @data, {
+      MessageId    => $row->[0],
+      Message      => $json->decode($row->[1]),
+      ConnectionId => $row->[2],
+      Self         => $row->[3] ? \1 : \0,
+      Highlight    => $row->[4] ? \1 : \0,
+    };
+  }
+
+  $sth->finish;
+  $app->json(\@data);
+}
 
 sub missed {
   my ($app, $req) = @_;
