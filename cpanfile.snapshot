@@ -355,11 +355,11 @@ DISTRIBUTIONS
       Data::Validate::Domain 0.04
       Email::Address 0
       ExtUtils::MakeMaker 0
-  Devel-StackTrace-2.02
-    pathname: D/DR/DROLSKY/Devel-StackTrace-2.02.tar.gz
+  Devel-StackTrace-2.03
+    pathname: D/DR/DROLSKY/Devel-StackTrace-2.03.tar.gz
     provides:
-      Devel::StackTrace 2.02
-      Devel::StackTrace::Frame 2.02
+      Devel::StackTrace 2.03
+      Devel::StackTrace::Frame 2.03
     requirements:
       ExtUtils::MakeMaker 0
       File::Spec 0
