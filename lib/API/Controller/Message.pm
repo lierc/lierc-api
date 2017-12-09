@@ -11,11 +11,10 @@ API->register("message.highlight", __PACKAGE__);
 
 sub highlight {
   my ($app, $req) = @_;
-  my $user = $req->session->{user};
-  my $start = $req->captures->{event};
   my $limit = min($req->parameters->{limit} || 50, 150);
+  my @bind  = ($req->session->{user});
 
-  my $sth = $app->dbh->prepare_cached(q!
+  my $sql = q!
     SELECT l.id, l.message, l.connection, l.self, l.highlight
     FROM log AS l
     JOIN connection AS c
@@ -24,11 +23,18 @@ sub highlight {
       ON c."user"=u.id
     WHERE u.id=?
       AND l.highlight=True
-      AND l.id < ?
-    ORDER BY l.id DESC
-    LIMIT ?
-  !);
-  $sth->execute($user, $start, $limit);
+  !;
+
+  if ( defined $req->captures->{event} ) {
+    $sql .= ' AND l.id < ?';
+    push @bind, $req->captures->{event};
+  }
+
+  $sql .= ' ORDER BY l.id DESC LIMIT ?';
+  push @bind, $limit;
+
+  my $sth = $app->dbh->prepare_cached($sql);
+  $sth->execute(@bind);
 
   my $json = JSON::XS->new;
   my @data;

@@ -14,7 +14,8 @@ $router->add( GET    => "/token",               "auth.token" );
 $router->add( GET    => "/log/:event",          "message.log" );
 $router->add( GET    => "/missed",              "message.missed");
 $router->add( GET    => "/seen",                "message.seen" );
-$router->add( GET    => "/highlights/:event",   "message.highlight" );
+$router->add( GET    => "/highlight",           "message.highlight" );
+$router->add( GET    => "/highlight/:event",    "message.highlight" );
 
 $router->add( GET    => "/preference",          "pref.list" );
 $router->add( GET    => "/preference/:pref",    "pref.show" );
