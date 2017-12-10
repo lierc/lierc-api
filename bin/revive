@@ -10,6 +10,7 @@ my $sth = $dbh->prepare(q{
     LEFT JOIN "user" AS u
      ON c.user = u.id
   WHERE u.last_login > NOW() - INTERVAL '48 hours'
+    AND c.enabled = true
 });
 $sth->execute;
 

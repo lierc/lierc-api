@@ -43,6 +43,10 @@ $router->add( POST   => "/connection/:id/channel/:channel/ignore",        "ignor
 $router->add( DELETE => "/connection/:id/channel/:channel/ignore/:from",  "ignore.delete" );
 $router->add( GET    => "/ignore",                                        "ignore.list" );
 
+$router->add( POST   => "/connection/:id/highlight/:string", "highlight.create" );
+$router->add( DELETE => "/connection/:id/highlight/:string", "highlight.delete" );
+$router->add( GET    => "/connection/:id/highlight",         "highlight.list" );
+
 $router->add( GET    => "/notification/web_push_keys",          "webpush.keys" );
 $router->add( GET    => "/notification/web_push",               "webpush.list" );
 $router->add( POST   => "/notification/web_push",               "webpush.upsert" );

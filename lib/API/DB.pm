@@ -109,12 +109,12 @@ sub logged_in {
 }
 
 sub save_connection {
-  my ($self, $id, $user, $config) = @_;
+  my ($self, $id, $user, $config, $enabled) = @_;
 
   my $sth = $self->dbh->prepare_cached(
-    q{INSERT INTO connection (id, "user", config) VALUES(?,?,?)},
+    q{INSERT INTO connection (id, "user", config, enabled) VALUES(?,?,?,?)},
   );
-  $sth->execute($id, $user, $config);
+  $sth->execute($id, $user, $config, $enabled);
   $sth->finish;
 }
 

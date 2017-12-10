@@ -14,8 +14,7 @@ API->register("connection.edit",   __PACKAGE__);
 sub list {
   my ($app, $req) = @_;
   my $conns = $app->connections($req->session->{user});
-
-  return $app->json($conns);
+  $app->json($conns);
 }
 
 sub show {
@@ -25,7 +24,7 @@ sub show {
   my $data = $app->lookup_config($id);
   my $config = decode_json $data;
 
-  return $app->json({ Id => $id, Config => $config });
+  $app->json({ Id => $id, Config => $config });
 }
 
 sub create {
@@ -38,17 +37,39 @@ sub create {
         && $params->{$_} =~ /\S/;
   }
 
-  my $id  = $req->captures->{id} || Util->uuid;
-  my $res = $app->request(POST => "$id/create", $req->content);
+  my $id   = $req->captures->{id} || Util->uuid;
+  my $user = $req->session->{user};
 
-  if ($res->code == 200) {
-    my $user = $req->session->{user};
-    $app->save_connection($id, $user, $req->content);
-    $app->dbh->do("NOTIFY highlights");
-    return $app->json({success => "ok", "id" => $id});
-  }
+  $app->save_connection($id, $user, encode_json($params));
+  $app->json({success => "ok", "id" => $id});
+}
 
-  die $res->decoded_content;
+sub connect {
+  my ($app, $req) = @_;
+
+  my $id     = $req->captures->{id};
+  my $config = $app->lookup_config($id);
+
+  $app->db->do("UPDATE connection SET enabled=true");
+
+  my $res = $app->request(POST => "$id/create", encode_json($config));
+  die $res->decoded_content unless $res->code == 200;
+
+  $app->json({success => "ok", "id" => $id});
+}
+
+sub disconnect {
+  my ($app, $req) = @_;
+
+  my $id     = $req->captures->{id};
+  my $config = $app->lookup_config($id);
+
+  $app->db->do("UPDATE connection SET enabled=false");
+
+  my $res = $app->request(POST => "$id/destroy");
+  die $res->decoded_content unless $res->code == 200;
+
+  $app->json({success => "ok", "id" => $id});
 }
 
 sub delete {
@@ -68,10 +89,10 @@ sub delete {
 sub edit {
   my ($app, $req) = @_;
 
-  $app->run("connection.delete", $req);
-  $app->run("connection.create", $req);
+  $app->run("connection.delete",     $req);
+  $app->run("connection.create",  $req);
 
-  return $app->ok;
+  $app->ok;
 }
 
 sub send {

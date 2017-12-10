@@ -15,6 +15,7 @@ create table connection (
   id      varchar(24) not null,
   "user"  varchar(24) not null,
   config  json not null,
+  enabled bool not null default true,
   primary key (id)
 );
 
@@ -100,4 +101,10 @@ create table image (
   delete_hash varchar(32) not null,
   created timestamp not null default NOW(),
   primary key ("user", url)
+);
+
+create table highlight (
+  connection  varchar(24) not null,
+  string      varchar(64) not null,
+  primary key (connection, string)
 );
