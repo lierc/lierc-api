@@ -40,7 +40,7 @@ sub highlight {
   my @data;
 
   while (my $row = $sth->fetchrow_arrayref) {
-    unshift @data, {
+    push @data, {
       MessageId    => $row->[0],
       Message      => $json->decode($row->[1]),
       ConnectionId => $row->[2],
@@ -83,7 +83,8 @@ sub missed {
   my $sth = $app->dbh->prepare(q{
     SELECT channel, connection,
       SUM( CASE WHEN command = 'PRIVMSG' THEN 1 ELSE 0 END ) AS messages,
-      SUM( CASE WHEN command <> 'PRIVMSG' THEN 1 ELSE 0 END ) AS events
+      SUM( CASE WHEN command <> 'PRIVMSG' THEN 1 ELSE 0 END ) AS events,
+      SUM( CASE WHEN highlight THEN 1 ELSE 0 END ) AS highlights
     FROM log
     WHERE
     (
@@ -101,6 +102,7 @@ sub missed {
     my $chan = $row->{channel};
     $channels{ $conn }{ $chan }{messages} += $row->{messages};
     $channels{ $conn }{ $chan }{events} += $row->{events};
+    $channels{ $conn }{ $chan }{highlights} += $row->{highlights};
   }
 
   $app->json(\%channels);
