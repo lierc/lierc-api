@@ -17,11 +17,7 @@ sub highlight {
   my $sql = q!
     SELECT l.id, l.message, l.connection, l.self, l.highlight
     FROM log AS l
-    JOIN connection AS c
-      ON l.connection=c.id
-    JOIN "user" AS u
-      ON c."user"=u.id
-    WHERE u.id=?
+    WHERE l."user"=?
       AND l.highlight=True
   !;
 
