@@ -81,17 +81,24 @@ DISTRIBUTIONS
       POSIX::strftime::Compiler 0.30
       Time::Local 0
       perl 5.008001
-  Async-Interrupt-1.22
-    pathname: M/ML/MLEHMANN/Async-Interrupt-1.22.tar.gz
+  Async-Interrupt-1.24
+    pathname: M/ML/MLEHMANN/Async-Interrupt-1.24.tar.gz
     provides:
-      Async::Interrupt 1.22
+      Async::Interrupt 1.24
+    requirements:
+      Canary::Stability 0
+      ExtUtils::MakeMaker 6.52
+      common::sense 0
+  Canary-Stability-2012
+    pathname: M/ML/MLEHMANN/Canary-Stability-2012.tar.gz
+    provides:
+      Canary::Stability 2012
     requirements:
       ExtUtils::MakeMaker 0
-      common::sense 0
-  Capture-Tiny-0.46
-    pathname: D/DA/DAGOLDEN/Capture-Tiny-0.46.tar.gz
+  Capture-Tiny-0.48
+    pathname: D/DA/DAGOLDEN/Capture-Tiny-0.48.tar.gz
     provides:
-      Capture::Tiny 0.46
+      Capture::Tiny 0.48
     requirements:
       Carp 0
       Exporter 0
@@ -175,10 +182,10 @@ DISTRIBUTIONS
       Exporter 0
       ExtUtils::MakeMaker 6.64
       perl 5.008001
-  Cpanel-JSON-XS-4.02
-    pathname: R/RU/RURBAN/Cpanel-JSON-XS-4.02.tar.gz
+  Cpanel-JSON-XS-4.04
+    pathname: R/RU/RURBAN/Cpanel-JSON-XS-4.04.tar.gz
     provides:
-      Cpanel::JSON::XS 4.02
+      Cpanel::JSON::XS 4.04
       Cpanel::JSON::XS::Type undef
     requirements:
       ExtUtils::MakeMaker 0
@@ -454,11 +461,11 @@ DISTRIBUTIONS
       Encode::Alias 0
       ExtUtils::MakeMaker 0
       perl 5.008
-  Exporter-Tiny-1.000000
-    pathname: T/TO/TOBYINK/Exporter-Tiny-1.000000.tar.gz
+  Exporter-Tiny-1.002001
+    pathname: T/TO/TOBYINK/Exporter-Tiny-1.002001.tar.gz
     provides:
-      Exporter::Shiny 1.000000
-      Exporter::Tiny 1.000000
+      Exporter::Shiny 1.002001
+      Exporter::Tiny 1.002001
     requirements:
       ExtUtils::MakeMaker 6.17
       perl 5.006001
@@ -475,15 +482,15 @@ DISTRIBUTIONS
       ExtUtils::MakeMaker 0
       HTTP::Date 6
       perl 5.006002
-  File-ShareDir-1.104
-    pathname: R/RE/REHSACK/File-ShareDir-1.104.tar.gz
+  File-ShareDir-1.116
+    pathname: R/RE/REHSACK/File-ShareDir-1.116.tar.gz
     provides:
-      File::ShareDir 1.104
+      File::ShareDir 1.116
     requirements:
       Carp 0
       Class::Inspector 1.12
       ExtUtils::MakeMaker 0
-      File::ShareDir::Install 0.03
+      File::ShareDir::Install 0.13
       File::Spec 0.80
       perl 5.008001
       warnings 0
@@ -602,19 +609,19 @@ DISTRIBUTIONS
       HTTP::Date 0
       Module::Build::Tiny 0.035
       perl 5.008001
-  HTTP-Message-6.16
-    pathname: O/OA/OALDERS/HTTP-Message-6.16.tar.gz
+  HTTP-Message-6.18
+    pathname: O/OA/OALDERS/HTTP-Message-6.18.tar.gz
     provides:
-      HTTP::Config 6.16
-      HTTP::Headers 6.16
-      HTTP::Headers::Auth 6.16
-      HTTP::Headers::ETag 6.16
-      HTTP::Headers::Util 6.16
-      HTTP::Message 6.16
-      HTTP::Request 6.16
-      HTTP::Request::Common 6.16
-      HTTP::Response 6.16
-      HTTP::Status 6.16
+      HTTP::Config 6.18
+      HTTP::Headers 6.18
+      HTTP::Headers::Auth 6.18
+      HTTP::Headers::ETag 6.18
+      HTTP::Headers::Util 6.18
+      HTTP::Message 6.18
+      HTTP::Request 6.18
+      HTTP::Request::Common 6.18
+      HTTP::Response 6.18
+      HTTP::Status 6.18
     requirements:
       Carp 0
       Compress::Raw::Zlib 0
@@ -675,17 +682,17 @@ DISTRIBUTIONS
       Encode 2.10
       Exporter 5.57
       ExtUtils::MakeMaker 6.30
-  IO-Socket-SSL-2.056
-    pathname: S/SU/SULLR/IO-Socket-SSL-2.056.tar.gz
+  IO-Socket-SSL-2.058
+    pathname: S/SU/SULLR/IO-Socket-SSL-2.058.tar.gz
     provides:
-      IO::Socket::SSL 2.056
+      IO::Socket::SSL 2.058
       IO::Socket::SSL::Intercept 2.056
-      IO::Socket::SSL::OCSP_Cache 2.056
-      IO::Socket::SSL::OCSP_Resolver 2.056
+      IO::Socket::SSL::OCSP_Cache 2.058
+      IO::Socket::SSL::OCSP_Resolver 2.058
       IO::Socket::SSL::PublicSuffix undef
-      IO::Socket::SSL::SSL_Context 2.056
-      IO::Socket::SSL::SSL_HANDLE 2.056
-      IO::Socket::SSL::Session_Cache 2.056
+      IO::Socket::SSL::SSL_Context 2.058
+      IO::Socket::SSL::SSL_HANDLE 2.058
+      IO::Socket::SSL::Session_Cache 2.058
       IO::Socket::SSL::Utils 2.014
     requirements:
       ExtUtils::MakeMaker 0
@@ -697,10 +704,10 @@ DISTRIBUTIONS
       IPC::Signal 1.00
     requirements:
       ExtUtils::MakeMaker 0
-  JSON-MaybeXS-1.003010
-    pathname: H/HA/HAARG/JSON-MaybeXS-1.003010.tar.gz
+  JSON-MaybeXS-1.004000
+    pathname: H/HA/HAARG/JSON-MaybeXS-1.004000.tar.gz
     provides:
-      JSON::MaybeXS 1.003010
+      JSON::MaybeXS 1.004000
     requirements:
       Carp 0
       Cpanel::JSON::XS 2.3310
@@ -791,13 +798,13 @@ DISTRIBUTIONS
       Carp 0
       ExtUtils::MakeMaker 0
       Storable 0
-  Net-HTTP-6.17
-    pathname: O/OA/OALDERS/Net-HTTP-6.17.tar.gz
+  Net-HTTP-6.18
+    pathname: O/OA/OALDERS/Net-HTTP-6.18.tar.gz
     provides:
-      Net::HTTP 6.17
-      Net::HTTP::Methods 6.17
-      Net::HTTP::NB 6.17
-      Net::HTTPS 6.17
+      Net::HTTP 6.18
+      Net::HTTP::Methods 6.18
+      Net::HTTP::NB 6.18
+      Net::HTTPS 6.18
     requirements:
       Carp 0
       Compress::Raw::Zlib 0
@@ -1089,10 +1096,10 @@ DISTRIBUTIONS
     requirements:
       ExtUtils::MakeMaker 6.30
       IO::File 1.14
-  Test-Pod-1.51
-    pathname: E/ET/ETHER/Test-Pod-1.51.tar.gz
+  Test-Pod-1.52
+    pathname: E/ET/ETHER/Test-Pod-1.52.tar.gz
     provides:
-      Test::Pod 1.51
+      Test::Pod 1.52
     requirements:
       ExtUtils::MakeMaker 0
       File::Find 0
@@ -1177,52 +1184,52 @@ DISTRIBUTIONS
     requirements:
       ExtUtils::MakeMaker 0
       common::sense 0
-  URI-1.73
-    pathname: E/ET/ETHER/URI-1.73.tar.gz
+  URI-1.74
+    pathname: E/ET/ETHER/URI-1.74.tar.gz
     provides:
-      URI 1.73
+      URI 1.74
       URI::Escape 3.31
       URI::Heuristic 4.20
-      URI::IRI 1.73
-      URI::QueryParam 1.73
-      URI::Split 1.73
+      URI::IRI 1.74
+      URI::QueryParam 1.74
+      URI::Split 1.74
       URI::URL 5.04
       URI::WithBase 2.20
-      URI::data 1.73
+      URI::data 1.74
       URI::file 4.21
-      URI::file::Base 1.73
-      URI::file::FAT 1.73
-      URI::file::Mac 1.73
-      URI::file::OS2 1.73
-      URI::file::QNX 1.73
-      URI::file::Unix 1.73
-      URI::file::Win32 1.73
-      URI::ftp 1.73
-      URI::gopher 1.73
-      URI::http 1.73
-      URI::https 1.73
-      URI::ldap 1.73
-      URI::ldapi 1.73
-      URI::ldaps 1.73
-      URI::mailto 1.73
-      URI::mms 1.73
-      URI::news 1.73
-      URI::nntp 1.73
-      URI::pop 1.73
-      URI::rlogin 1.73
-      URI::rsync 1.73
-      URI::rtsp 1.73
-      URI::rtspu 1.73
-      URI::sftp 1.73
-      URI::sip 1.73
-      URI::sips 1.73
-      URI::snews 1.73
-      URI::ssh 1.73
-      URI::telnet 1.73
-      URI::tn3270 1.73
-      URI::urn 1.73
-      URI::urn::isbn 1.73
-      URI::urn::oid 1.73
+      URI::file::Base 1.74
+      URI::file::FAT 1.74
+      URI::file::Mac 1.74
+      URI::file::OS2 1.74
+      URI::file::QNX 1.74
+      URI::file::Unix 1.74
+      URI::file::Win32 1.74
+      URI::ftp 1.74
+      URI::gopher 1.74
+      URI::http 1.74
+      URI::https 1.74
+      URI::ldap 1.74
+      URI::ldapi 1.74
+      URI::ldaps 1.74
+      URI::mailto 1.74
+      URI::mms 1.74
+      URI::news 1.74
+      URI::nntp 1.74
+      URI::pop 1.74
+      URI::rlogin 1.74
+      URI::rsync 1.74
+      URI::rtsp 1.74
+      URI::rtspu 1.74
+      URI::sftp 1.74
+      URI::sip 1.74
+      URI::sips 1.74
+      URI::snews 1.74
+      URI::ssh 1.74
+      URI::telnet 1.74
+      URI::tn3270 1.74
+      URI::urn 1.74
+      URI::urn::isbn 1.74
+      URI::urn::oid 1.74
     requirements:
       Carp 0
       Cwd 0
@@ -1281,34 +1288,35 @@ DISTRIBUTIONS
       common::sense 3.74
     requirements:
       ExtUtils::MakeMaker 0
-  libwww-perl-6.33
-    pathname: O/OA/OALDERS/libwww-perl-6.33.tar.gz
+  libwww-perl-6.35
+    pathname: E/ET/ETHER/libwww-perl-6.35.tar.gz
     provides:
-      LWP 6.33
-      LWP::Authen::Basic 6.33
-      LWP::Authen::Digest 6.33
-      LWP::Authen::Ntlm 6.33
-      LWP::ConnCache 6.33
-      LWP::Debug 6.33
-      LWP::Debug::TraceHTTP 6.33
-      LWP::DebugFile 6.33
-      LWP::MemberMixin 6.33
-      LWP::Protocol 6.33
-      LWP::Protocol::cpan 6.33
-      LWP::Protocol::data 6.33
-      LWP::Protocol::file 6.33
-      LWP::Protocol::ftp 6.33
-      LWP::Protocol::gopher 6.33
-      LWP::Protocol::http 6.33
-      LWP::Protocol::loopback 6.33
-      LWP::Protocol::mailto 6.33
-      LWP::Protocol::nntp 6.33
-      LWP::Protocol::nogo 6.33
-      LWP::RobotUA 6.33
-      LWP::Simple 6.33
-      LWP::UserAgent 6.33
+      LWP 6.35
+      LWP::Authen::Basic 6.35
+      LWP::Authen::Digest 6.35
+      LWP::Authen::Ntlm 6.35
+      LWP::ConnCache 6.35
+      LWP::Debug 6.35
+      LWP::Debug::TraceHTTP 6.35
+      LWP::DebugFile 6.35
+      LWP::MemberMixin 6.35
+      LWP::Protocol 6.35
+      LWP::Protocol::cpan 6.35
+      LWP::Protocol::data 6.35
+      LWP::Protocol::file 6.35
+      LWP::Protocol::ftp 6.35
+      LWP::Protocol::gopher 6.35
+      LWP::Protocol::http 6.35
+      LWP::Protocol::loopback 6.35
+      LWP::Protocol::mailto 6.35
+      LWP::Protocol::nntp 6.35
+      LWP::Protocol::nogo 6.35
+      LWP::RobotUA 6.35
+      LWP::Simple 6.35
+      LWP::UserAgent 6.35
       libwww::perl undef
     requirements:
+      CPAN::Meta::Requirements 2.120620
       Digest::MD5 0
       Encode 2.12
       Encode::Locale 0
@@ -1325,11 +1333,12 @@ DISTRIBUTIONS
       HTTP::Request 6
       HTTP::Request::Common 6
       HTTP::Response 6
-      HTTP::Status 6
+      HTTP::Status 6.18
       IO::Select 0
       IO::Socket 0
       LWP::MediaTypes 6
       MIME::Base64 2.1
+      Module::Metadata 0
       Net::FTP 2.58
       Net::HTTP 6.07
       Scalar::Util 0
