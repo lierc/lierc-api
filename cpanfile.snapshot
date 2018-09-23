@@ -49,10 +49,10 @@ DISTRIBUTIONS
     requirements:
       Canary::Stability 0
       ExtUtils::MakeMaker 6.52
-  AnyEvent-HTTP-2.23
-    pathname: M/ML/MLEHMANN/AnyEvent-HTTP-2.23.tar.gz
+  AnyEvent-HTTP-2.24
+    pathname: M/ML/MLEHMANN/AnyEvent-HTTP-2.24.tar.gz
     provides:
-      AnyEvent::HTTP 2.23
+      AnyEvent::HTTP 2.24
     requirements:
       AnyEvent 5.33
       ExtUtils::MakeMaker 0
@@ -165,27 +165,27 @@ DISTRIBUTIONS
       perl 5.006
       strict 0
       warnings 0
-  Cookie-Baker-0.09
-    pathname: K/KA/KAZEBURO/Cookie-Baker-0.09.tar.gz
+  Cookie-Baker-0.10
+    pathname: K/KA/KAZEBURO/Cookie-Baker-0.10.tar.gz
     provides:
-      Cookie::Baker 0.09
+      Cookie::Baker 0.10
     requirements:
       Exporter 0
       Module::Build::Tiny 0.035
       URI::Escape 0
       perl 5.008001
-  Cookie-Baker-XS-0.09
-    pathname: K/KA/KAZEBURO/Cookie-Baker-XS-0.09.tar.gz
+  Cookie-Baker-XS-0.10
+    pathname: K/KA/KAZEBURO/Cookie-Baker-XS-0.10.tar.gz
     provides:
-      Cookie::Baker::XS 0.09
+      Cookie::Baker::XS 0.10
     requirements:
       Exporter 0
       ExtUtils::MakeMaker 6.64
       perl 5.008001
-  Cpanel-JSON-XS-4.04
-    pathname: R/RU/RURBAN/Cpanel-JSON-XS-4.04.tar.gz
+  Cpanel-JSON-XS-4.06
+    pathname: R/RU/RURBAN/Cpanel-JSON-XS-4.06.tar.gz
     provides:
-      Cpanel::JSON::XS 4.04
+      Cpanel::JSON::XS 4.06
       Cpanel::JSON::XS::Type undef
     requirements:
       ExtUtils::MakeMaker 0
@@ -345,6 +345,21 @@ DISTRIBUTIONS
       Test::MockModule 0.05
       Test::More 0.88
       perl 5.006002
+  Data-MessagePack-1.00
+    pathname: S/SY/SYOHEX/Data-MessagePack-1.00.tar.gz
+    provides:
+      Data::MessagePack 1.00
+      Data::MessagePack::Boolean undef
+      Data::MessagePack::PP undef
+    requirements:
+      Devel::PPPort 3.19
+      ExtUtils::MakeMaker 6.59
+      ExtUtils::ParseXS 3.18
+      File::Copy::Recursive 0
+      Test::More 0.94
+      Test::Requires 0
+      XSLoader 0.02
+      perl 5.008001
   Data-UUID-1.221
     pathname: R/RJ/RJBS/Data-UUID-1.221.tar.gz
     provides:
@@ -450,6 +465,16 @@ DISTRIBUTIONS
     requirements:
       ExtUtils::MakeMaker 0
       overload 0
+      strict 0
+      warnings 0
+  Email-Date-Format-1.005
+    pathname: R/RJ/RJBS/Email-Date-Format-1.005.tar.gz
+    provides:
+      Email::Date::Format 1.005
+    requirements:
+      Exporter 5.57
+      ExtUtils::MakeMaker 0
+      Time::Local 0
       strict 0
       warnings 0
   Encode-Locale-1.05
@@ -682,17 +707,17 @@ DISTRIBUTIONS
       Encode 2.10
       Exporter 5.57
       ExtUtils::MakeMaker 6.30
-  IO-Socket-SSL-2.058
-    pathname: S/SU/SULLR/IO-Socket-SSL-2.058.tar.gz
+  IO-Socket-SSL-2.060
+    pathname: S/SU/SULLR/IO-Socket-SSL-2.060.tar.gz
     provides:
-      IO::Socket::SSL 2.058
+      IO::Socket::SSL 2.060
       IO::Socket::SSL::Intercept 2.056
-      IO::Socket::SSL::OCSP_Cache 2.058
-      IO::Socket::SSL::OCSP_Resolver 2.058
+      IO::Socket::SSL::OCSP_Cache 2.060
+      IO::Socket::SSL::OCSP_Resolver 2.060
       IO::Socket::SSL::PublicSuffix undef
-      IO::Socket::SSL::SSL_Context 2.058
-      IO::Socket::SSL::SSL_HANDLE 2.058
-      IO::Socket::SSL::Session_Cache 2.058
+      IO::Socket::SSL::SSL_Context 2.060
+      IO::Socket::SSL::SSL_HANDLE 2.060
+      IO::Socket::SSL::Session_Cache 2.060
       IO::Socket::SSL::Utils 2.014
     requirements:
       ExtUtils::MakeMaker 0
@@ -766,6 +791,67 @@ DISTRIBUTIONS
       IPC::Cmd 0
       XSLoader 0.22
       base 0
+  MIME-Lite-3.030
+    pathname: R/RJ/RJBS/MIME-Lite-3.030.tar.gz
+    provides:
+      MIME::Lite 3.030
+      MIME::Lite::IO_Handle 3.030
+      MIME::Lite::IO_Scalar 3.030
+      MIME::Lite::IO_ScalarArray 3.030
+      MIME::Lite::SMTP 3.030
+      MailTool undef
+    requirements:
+      Email::Date::Format 1.000
+      ExtUtils::MakeMaker 0
+      File::Basename 0
+      File::Spec 0
+      MIME::Types 1.28
+      Mail::Address 1.62
+  MIME-Types-2.17
+    pathname: M/MA/MARKOV/MIME-Types-2.17.tar.gz
+    provides:
+      MIME::Type 2.17
+      MIME::Types 2.17
+      MojoX::MIME::Types 2.17
+    requirements:
+      ExtUtils::MakeMaker 0
+      File::Basename 0
+      File::Spec 0
+      List::Util 0
+      Test::More 0.47
+  MailTools-2.20
+    pathname: M/MA/MARKOV/MailTools-2.20.tar.gz
+    provides:
+      Mail::Address 2.20
+      Mail::Cap 2.20
+      Mail::Field 2.20
+      Mail::Field::AddrList 2.20
+      Mail::Field::Date 2.20
+      Mail::Field::Generic 2.20
+      Mail::Filter 2.20
+      Mail::Header 2.20
+      Mail::Internet 2.20
+      Mail::Mailer 2.20
+      Mail::Mailer::qmail 2.20
+      Mail::Mailer::rfc822 2.20
+      Mail::Mailer::sendmail 2.20
+      Mail::Mailer::smtp 2.20
+      Mail::Mailer::smtp::pipe 2.20
+      Mail::Mailer::smtps 2.20
+      Mail::Mailer::smtps::pipe 2.20
+      Mail::Mailer::testfile 2.20
+      Mail::Mailer::testfile::pipe 2.20
+      Mail::Send 2.20
+      Mail::Util 2.20
+      MailTools 2.20
+    requirements:
+      Date::Format 0
+      Date::Parse 0
+      ExtUtils::MakeMaker 0
+      IO::Handle 0
+      Net::Domain 1.05
+      Net::SMTP 1.03
+      Test::More 0
   Math-BaseConvert-1.8
     pathname: C/CH/CHROMATIC/Math-BaseConvert-1.8.tar.gz
     provides:
@@ -782,6 +868,44 @@ DISTRIBUTIONS
       Method::WeakCallback 0.04
     requirements:
       ExtUtils::MakeMaker 0
+  Mouse-v2.5.6
+    pathname: S/SK/SKAJI/Mouse-v2.5.6.tar.gz
+    provides:
+      Mouse v2.5.6
+      Mouse::Exporter undef
+      Mouse::Meta::Attribute undef
+      Mouse::Meta::Class undef
+      Mouse::Meta::Method undef
+      Mouse::Meta::Method::Accessor undef
+      Mouse::Meta::Method::Constructor undef
+      Mouse::Meta::Method::Delegation undef
+      Mouse::Meta::Method::Destructor undef
+      Mouse::Meta::Module undef
+      Mouse::Meta::Role undef
+      Mouse::Meta::Role::Application undef
+      Mouse::Meta::Role::Application::RoleSummation undef
+      Mouse::Meta::Role::Composite undef
+      Mouse::Meta::Role::Method undef
+      Mouse::Meta::TypeConstraint undef
+      Mouse::Object undef
+      Mouse::PurePerl undef
+      Mouse::Role v2.5.6
+      Mouse::Spec v2.5.6
+      Mouse::TypeRegistry undef
+      Mouse::Util v2.5.6
+      Mouse::Util::MetaRole undef
+      Mouse::Util::TypeConstraints undef
+      Squirrel undef
+      Squirrel::Role undef
+      Test::Mouse undef
+      ouse undef
+    requirements:
+      ExtUtils::CBuilder 0
+      Module::Build 0.4005
+      Module::Build::XSUtil 0.19
+      Scalar::Util 1.14
+      XSLoader 0.02
+      perl 5.008005
   Mozilla-CA-20180117
     pathname: A/AB/ABH/Mozilla-CA-20180117.tar.gz
     provides:
@@ -1146,6 +1270,84 @@ DISTRIBUTIONS
       Test::SharedFork 0.29
       Time::HiRes 0
       perl 5.008001
+  Text-Xslate-v3.5.6
+    pathname: S/SK/SKAJI/Text-Xslate-v3.5.6.tar.gz
+    provides:
+      Text::Xslate v3.5.6
+      Text::Xslate::Bridge undef
+      Text::Xslate::Bridge::Star undef
+      Text::Xslate::Compiler undef
+      Text::Xslate::Engine v3.5.6
+      Text::Xslate::HashWithDefault undef
+      Text::Xslate::PP v3.5.6
+      Text::Xslate::PP::Method undef
+      Text::Xslate::PP::Opcode v3.5.6
+      Text::Xslate::PP::State undef
+      Text::Xslate::PP::Type::Macro undef
+      Text::Xslate::PP::Type::Pair undef
+      Text::Xslate::PP::Type::Raw undef
+      Text::Xslate::Parser undef
+      Text::Xslate::Runner undef
+      Text::Xslate::Symbol undef
+      Text::Xslate::Syntax::Kolon undef
+      Text::Xslate::Syntax::Metakolon undef
+      Text::Xslate::Syntax::TTerse undef
+      Text::Xslate::Type::Raw undef
+      Text::Xslate::Util undef
+    requirements:
+      Data::MessagePack 0.38
+      Encode 2.26
+      ExtUtils::CBuilder 0
+      Module::Build 0.4005
+      Module::Build::XSUtil 0.19
+      Mouse v2.5.0
+      Scalar::Util 1.14
+      Storable 2.15
+      parent 0.221
+      perl 5.008001
+  TimeDate-2.30
+    pathname: G/GB/GBARR/TimeDate-2.30.tar.gz
+    provides:
+      Date::Format 2.24
+      Date::Format::Generic 2.24
+      Date::Language 1.10
+      Date::Language::Afar 0.99
+      Date::Language::Amharic 1.00
+      Date::Language::Austrian 1.01
+      Date::Language::Brazilian 1.01
+      Date::Language::Bulgarian 1.01
+      Date::Language::Chinese 1.00
+      Date::Language::Chinese_GB 1.01
+      Date::Language::Czech 1.01
+      Date::Language::Danish 1.01
+      Date::Language::Dutch 1.02
+      Date::Language::English 1.01
+      Date::Language::Finnish 1.01
+      Date::Language::French 1.04
+      Date::Language::Gedeo 0.99
+      Date::Language::German 1.02
+      Date::Language::Greek 1.00
+      Date::Language::Hungarian 1.01
+      Date::Language::Icelandic 1.01
+      Date::Language::Italian 1.01
+      Date::Language::Norwegian 1.01
+      Date::Language::Oromo 0.99
+      Date::Language::Romanian 1.01
+      Date::Language::Russian 1.01
+      Date::Language::Russian_cp1251 1.01
+      Date::Language::Russian_koi8r 1.01
+      Date::Language::Sidama 0.99
+      Date::Language::Somali 0.99
+      Date::Language::Spanish 1.00
+      Date::Language::Swedish 1.01
+      Date::Language::Tigrinya 1.00
+      Date::Language::TigrinyaEritrean 1.00
+      Date::Language::TigrinyaEthiopian 1.00
+      Date::Language::Turkish 1.0
+      Date::Parse 2.30
+      Time::Zone 2.24
+    requirements:
+      ExtUtils::MakeMaker 0
   Try-Tiny-0.30
     pathname: E/ET/ETHER/Try-Tiny-0.30.tar.gz
     provides:
@@ -1260,14 +1462,13 @@ DISTRIBUTIONS
       Test::More 0.88
       XSLoader 0
       perl 5.008001
-  WWW-Form-UrlEncoded-0.24
-    pathname: K/KA/KAZEBURO/WWW-Form-UrlEncoded-0.24.tar.gz
+  WWW-Form-UrlEncoded-0.25
+    pathname: K/KA/KAZEBURO/WWW-Form-UrlEncoded-0.25.tar.gz
     provides:
-      WWW::Form::UrlEncoded 0.24
+      WWW::Form::UrlEncoded 0.25
       WWW::Form::UrlEncoded::PP undef
     requirements:
       Exporter 0
-      ExtUtils::CBuilder 0
       Module::Build 0.4005
       perl 5.008001
   WWW-RobotRules-6.02
