@@ -22,6 +22,8 @@ requires "Time::HiRes";
 requires "Data::Validate::Email";
 requires "Class::Tiny";
 requires "Capture::Tiny";
+requires "MIME::Lite";
+requires "Text::Xslate";
 
 # Plack recommends
 requires "Cookie::Baker::XS";

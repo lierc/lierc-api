@@ -4,12 +4,30 @@ use parent 'API::Controller';
 
 use Util;
 use Data::Validate::Email;
+use MIME::Lite;
+use Text::Xslate;
 
 API->register("auth.show",     __PACKAGE__);
 API->register("auth.login",    __PACKAGE__);
 API->register("auth.register", __PACKAGE__);
 API->register("auth.logout",   __PACKAGE__);
 API->register("auth.token",    __PACKAGE__);
+API->register("auth.verify",   __PACKAGE__);
+
+my $tx = Text::Xslate->new;
+my $auth_template = q{
+Hello <: $name :>,
+
+Thank you for signing up with relaychat.party!
+
+Please click the following link to validate your email address:
+<: $link :>
+
+You must visit this link in the next day, or your account will
+be deleted from the system.
+
+Happy chatting!
+};
 
 sub show {
   my ($app, $req) = @_;
@@ -65,10 +83,39 @@ sub register {
   die "Invalid email address"
     unless Data::Validate::Email::is_email($email);
 
-  my $id = $app->add_user($user, $email, $pass);
+  my ($id, $token) = $app->add_user($user, $email, $pass);
   $req->session->{user} = $id;
 
+  my $data = $tx->render_string(
+    $auth_template,
+    {
+      name => $user,
+      link => "https://relaychat.party/api/verify?$token",
+    }
+  );
+
+  my $msg = MIME::Lite->new(
+    From    => 'no-reply@relaychat.party',
+    To      => $email,
+    Subject => 'Please verify your relaychat.party account',
+    Type    => 'text/plain',
+    Data    => $data,
+  );
+  $msg->send('smtp');
+
   return $app->handle("auth.show", $req);
+}
+
+sub verify {
+  my ( $app, $req ) = @_;
+  my $query = $req->query_string;
+
+  my $row = $app->dbh->selectcol_arrayref('SELECT id FROM "user" WHERE verify_token=?');
+
+  return $app->unauthorized unless $row;
+
+  $app->dbh->do('UPDATE "user" SET verified=true WHERE id=?', {}, $row->[0]);
+  $app->ok;
 }
 
 sub token {
