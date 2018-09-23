@@ -110,7 +110,7 @@ sub verify {
   my ( $app, $req ) = @_;
   my $query = $req->query_string;
 
-  my $row = $app->dbh->selectcol_arrayref('SELECT id FROM "user" WHERE verify_token=?');
+  my $row = $app->dbh->selectcol_arrayref('SELECT id FROM "user" WHERE verify_token=?', {}, $query);
 
   return $app->unauthorized unless $row;
 
