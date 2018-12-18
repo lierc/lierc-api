@@ -13,6 +13,7 @@ RUN cpanm -nq Carmel
 COPY cpanfile cpanfile.snapshot /opt/lierc-api/
 RUN carmel install
 RUN carmel rollout
+RUN apt-get -y install sendmail
 
 COPY . /opt/lierc-api
 CMD ["carmel", "exec", "plackup", "--server", "Gazelle", "-Ilib", "--max-workers", "4", "--listen", ":5004", "bin/api.psgi"]
