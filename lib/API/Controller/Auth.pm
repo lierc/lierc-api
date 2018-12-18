@@ -94,14 +94,16 @@ sub register {
     }
   );
 
-  my $msg = MIME::Lite->new(
-    From    => 'no-reply@relaychat.party',
-    To      => $email,
-    Subject => 'Please verify your relaychat.party account',
-    Type    => 'text/plain',
-    Data    => $data,
-  );
-  $msg->send('smtp');
+  if (!$ENV{LIERC_NO_SMTP}) {
+      my $msg = MIME::Lite->new(
+          From    => 'no-reply@relaychat.party',
+          To      => $email,
+          Subject => 'Please verify your relaychat.party account',
+          Type    => 'text/plain',
+          Data    => $data,
+      );
+      $msg->send('smtp');
+  }
 
   return $app->handle("auth.show", $req);
 }
