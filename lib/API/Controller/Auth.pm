@@ -96,7 +96,7 @@ sub register {
 
   if (!$ENV{LIERC_NO_SMTP}) {
       my $msg = MIME::Lite->new(
-          From    => 'no-reply@relaychat.party',
+          From    => 'Relaychat Party <registration@relaychat.party>',
           To      => $email,
           Subject => 'Please verify your relaychat.party account',
           Type    => 'text/plain',
