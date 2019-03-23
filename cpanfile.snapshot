@@ -1,16 +1,16 @@
 # carton snapshot format: version 1.0
 DISTRIBUTIONS
-  AnyEvent-7.14
-    pathname: M/ML/MLEHMANN/AnyEvent-7.14.tar.gz
+  AnyEvent-7.15
+    pathname: M/ML/MLEHMANN/AnyEvent-7.15.tar.gz
     provides:
       AE undef
       AE::Log::COLLECT undef
       AE::Log::FILTER undef
       AE::Log::LOG undef
-      AnyEvent 7.14
-      AnyEvent::Base 7.14
-      AnyEvent::CondVar 7.14
-      AnyEvent::CondVar::Base 7.14
+      AnyEvent 7.15
+      AnyEvent::Base 7.15
+      AnyEvent::CondVar 7.15
+      AnyEvent::CondVar::Base 7.15
       AnyEvent::DNS undef
       AnyEvent::Debug undef
       AnyEvent::Debug::Backtrace undef
@@ -182,10 +182,10 @@ DISTRIBUTIONS
       Exporter 0
       ExtUtils::MakeMaker 6.64
       perl 5.008001
-  Cpanel-JSON-XS-4.06
-    pathname: R/RU/RURBAN/Cpanel-JSON-XS-4.06.tar.gz
+  Cpanel-JSON-XS-4.10
+    pathname: R/RU/RURBAN/Cpanel-JSON-XS-4.10.tar.gz
     provides:
-      Cpanel::JSON::XS 4.06
+      Cpanel::JSON::XS 4.10
       Cpanel::JSON::XS::Type undef
     requirements:
       ExtUtils::MakeMaker 0
@@ -223,8 +223,8 @@ DISTRIBUTIONS
       Test::More 0.88
       Time::HiRes 0
       version 0
-  DBI-1.641
-    pathname: T/TI/TIMB/DBI-1.641.tar.gz
+  DBI-1.642
+    pathname: T/TI/TIMB/DBI-1.642.tar.gz
     provides:
       Bundle::DBI 12.008696
       DBD::DBM 0.08
@@ -280,7 +280,7 @@ DISTRIBUTIONS
       DBD::Sponge::dr 12.010003
       DBD::Sponge::st 12.010003
       DBDI 12.015129
-      DBI 1.641
+      DBI 1.642
       DBI::Const::GetInfo::ANSI 2.008697
       DBI::Const::GetInfo::ODBC 2.011374
       DBI::Const::GetInfoReturn 2.008697
@@ -320,7 +320,7 @@ DISTRIBUTIONS
       DBI::SQL::Nano::Table_ 1.015544
       DBI::Util::CacheMemory 0.010315
       DBI::Util::_accessor 0.009479
-      DBI::common 1.641
+      DBI::common 1.642
     requirements:
       ExtUtils::MakeMaker 6.48
       Test::Simple 0.90
@@ -360,10 +360,10 @@ DISTRIBUTIONS
       Test::Requires 0
       XSLoader 0.02
       perl 5.008001
-  Data-UUID-1.221
-    pathname: R/RJ/RJBS/Data-UUID-1.221.tar.gz
+  Data-UUID-1.224
+    pathname: R/RJ/RJBS/Data-UUID-1.224.tar.gz
     provides:
-      Data::UUID 1.221
+      Data::UUID 1.224
     requirements:
       Digest::MD5 0
       ExtUtils::MakeMaker 0
@@ -441,27 +441,19 @@ DISTRIBUTIONS
       Digest::SHA 1
       ExtUtils::MakeMaker 0
       perl 5.004
-  Digest-SHA1-2.13
-    pathname: G/GA/GAAS/Digest-SHA1-2.13.tar.gz
+  EV-4.25
+    pathname: M/ML/MLEHMANN/EV-4.25.tar.gz
     provides:
-      Digest::SHA1 2.13
-    requirements:
-      Digest::base 1.00
-      ExtUtils::MakeMaker 0
-      perl 5.004
-  EV-4.22
-    pathname: M/ML/MLEHMANN/EV-4.22.tar.gz
-    provides:
-      EV 4.22
+      EV 4.25
       EV::MakeMaker undef
     requirements:
       Canary::Stability 0
       ExtUtils::MakeMaker 6.52
       common::sense 0
-  Email-Address-1.909
-    pathname: R/RJ/RJBS/Email-Address-1.909.tar.gz
+  Email-Address-1.912
+    pathname: R/RJ/RJBS/Email-Address-1.912.tar.gz
     provides:
-      Email::Address 1.909
+      Email::Address 1.912
     requirements:
       ExtUtils::MakeMaker 0
       overload 0
@@ -707,17 +699,17 @@ DISTRIBUTIONS
       Encode 2.10
       Exporter 5.57
       ExtUtils::MakeMaker 6.30
-  IO-Socket-SSL-2.060
-    pathname: S/SU/SULLR/IO-Socket-SSL-2.060.tar.gz
+  IO-Socket-SSL-2.066
+    pathname: S/SU/SULLR/IO-Socket-SSL-2.066.tar.gz
     provides:
-      IO::Socket::SSL 2.060
+      IO::Socket::SSL 2.066
       IO::Socket::SSL::Intercept 2.056
-      IO::Socket::SSL::OCSP_Cache 2.060
-      IO::Socket::SSL::OCSP_Resolver 2.060
+      IO::Socket::SSL::OCSP_Cache 2.066
+      IO::Socket::SSL::OCSP_Resolver 2.066
       IO::Socket::SSL::PublicSuffix undef
-      IO::Socket::SSL::SSL_Context 2.060
-      IO::Socket::SSL::SSL_HANDLE 2.060
-      IO::Socket::SSL::Session_Cache 2.060
+      IO::Socket::SSL::SSL_Context 2.066
+      IO::Socket::SSL::SSL_HANDLE 2.066
+      IO::Socket::SSL::Session_Cache 2.066
       IO::Socket::SSL::Utils 2.014
     requirements:
       ExtUtils::MakeMaker 0
@@ -740,22 +732,27 @@ DISTRIBUTIONS
       JSON::PP 2.27300
       Scalar::Util 0
       perl 5.006
-  JSON-XS-3.04
-    pathname: M/ML/MLEHMANN/JSON-XS-3.04.tar.gz
+  JSON-XS-4.02
+    pathname: M/ML/MLEHMANN/JSON-XS-4.02.tar.gz
     provides:
-      JSON::XS 3.04
+      JSON::XS 4.02
     requirements:
       Canary::Stability 0
       ExtUtils::MakeMaker 6.52
       Types::Serialiser 0
       common::sense 0
-  LWP-MediaTypes-6.02
-    pathname: G/GA/GAAS/LWP-MediaTypes-6.02.tar.gz
+  LWP-MediaTypes-6.04
+    pathname: O/OA/OALDERS/LWP-MediaTypes-6.04.tar.gz
     provides:
-      LWP::MediaTypes 6.02
+      LWP::MediaTypes 6.04
     requirements:
+      Carp 0
+      Exporter 0
       ExtUtils::MakeMaker 0
+      File::Basename 0
+      Scalar::Util 0
       perl 5.006002
+      strict 0
   LWP-Protocol-https-6.07
     pathname: O/OA/OALDERS/LWP-Protocol-https-6.07.tar.gz
     provides:
@@ -1111,10 +1108,10 @@ DISTRIBUTIONS
       Test::More 0.96
       Test::Requires 0
       perl 5.008001
-  Plack-Middleware-ReverseProxy-0.15
-    pathname: M/MI/MIYAGAWA/Plack-Middleware-ReverseProxy-0.15.tar.gz
+  Plack-Middleware-ReverseProxy-0.16
+    pathname: M/MI/MIYAGAWA/Plack-Middleware-ReverseProxy-0.16.tar.gz
     provides:
-      Plack::Middleware::ReverseProxy 0.15
+      Plack::Middleware::ReverseProxy 0.16
     requirements:
       ExtUtils::MakeMaker 6.59
       Plack 0.9988
@@ -1123,25 +1120,25 @@ DISTRIBUTIONS
       Test::More 0
       parent 0
       perl 5.008001
-  Plack-Middleware-Session-0.30
-    pathname: M/MI/MIYAGAWA/Plack-Middleware-Session-0.30.tar.gz
+  Plack-Middleware-Session-0.33
+    pathname: M/MI/MIYAGAWA/Plack-Middleware-Session-0.33.tar.gz
     provides:
-      Plack::Middleware::Session 0.30
+      Plack::Middleware::Session 0.33
       Plack::Middleware::Session::Cookie undef
-      Plack::Session 0.30
-      Plack::Session::Cleanup 0.30
-      Plack::Session::State 0.30
-      Plack::Session::State::Cookie 0.30
-      Plack::Session::Store 0.30
-      Plack::Session::Store::Cache 0.30
-      Plack::Session::Store::DBI 0.30
-      Plack::Session::Store::File 0.30
-      Plack::Session::Store::Null 0.30
+      Plack::Session 0.33
+      Plack::Session::Cleanup 0.33
+      Plack::Session::State 0.33
+      Plack::Session::State::Cookie 0.33
+      Plack::Session::Store 0.33
+      Plack::Session::Store::Cache 0.33
+      Plack::Session::Store::DBI 0.33
+      Plack::Session::Store::File 0.33
+      Plack::Session::Store::Null 0.33
     requirements:
-      Cookie::Baker 0
+      Cookie::Baker 0.10
       Digest::HMAC_SHA1 1.03
-      Digest::SHA1 0
-      Module::Build::Tiny 0.039
+      Digest::SHA 0
+      Module::Build::Tiny 0.034
       Plack 0.9910
   Pod-Coverage-0.23
     pathname: R/RC/RCLAMP/Pod-Coverage-0.23.tar.gz
@@ -1386,52 +1383,52 @@ DISTRIBUTIONS
     requirements:
       ExtUtils::MakeMaker 0
       common::sense 0
-  URI-1.74
-    pathname: E/ET/ETHER/URI-1.74.tar.gz
+  URI-1.76
+    pathname: O/OA/OALDERS/URI-1.76.tar.gz
     provides:
-      URI 1.74
+      URI 1.76
       URI::Escape 3.31
       URI::Heuristic 4.20
-      URI::IRI 1.74
-      URI::QueryParam 1.74
-      URI::Split 1.74
+      URI::IRI 1.76
+      URI::QueryParam 1.76
+      URI::Split 1.76
       URI::URL 5.04
       URI::WithBase 2.20
-      URI::data 1.74
+      URI::data 1.76
       URI::file 4.21
-      URI::file::Base 1.74
-      URI::file::FAT 1.74
-      URI::file::Mac 1.74
-      URI::file::OS2 1.74
-      URI::file::QNX 1.74
-      URI::file::Unix 1.74
-      URI::file::Win32 1.74
-      URI::ftp 1.74
-      URI::gopher 1.74
-      URI::http 1.74
-      URI::https 1.74
-      URI::ldap 1.74
-      URI::ldapi 1.74
-      URI::ldaps 1.74
-      URI::mailto 1.74
-      URI::mms 1.74
-      URI::news 1.74
-      URI::nntp 1.74
-      URI::pop 1.74
-      URI::rlogin 1.74
-      URI::rsync 1.74
-      URI::rtsp 1.74
-      URI::rtspu 1.74
-      URI::sftp 1.74
-      URI::sip 1.74
-      URI::sips 1.74
-      URI::snews 1.74
-      URI::ssh 1.74
-      URI::telnet 1.74
-      URI::tn3270 1.74
-      URI::urn 1.74
-      URI::urn::isbn 1.74
-      URI::urn::oid 1.74
+      URI::file::Base 1.76
+      URI::file::FAT 1.76
+      URI::file::Mac 1.76
+      URI::file::OS2 1.76
+      URI::file::QNX 1.76
+      URI::file::Unix 1.76
+      URI::file::Win32 1.76
+      URI::ftp 1.76
+      URI::gopher 1.76
+      URI::http 1.76
+      URI::https 1.76
+      URI::ldap 1.76
+      URI::ldapi 1.76
+      URI::ldaps 1.76
+      URI::mailto 1.76
+      URI::mms 1.76
+      URI::news 1.76
+      URI::nntp 1.76
+      URI::pop 1.76
+      URI::rlogin 1.76
+      URI::rsync 1.76
+      URI::rtsp 1.76
+      URI::rtspu 1.76
+      URI::sftp 1.76
+      URI::sip 1.76
+      URI::sips 1.76
+      URI::snews 1.76
+      URI::ssh 1.76
+      URI::telnet 1.76
+      URI::tn3270 1.76
+      URI::urn 1.76
+      URI::urn::isbn 1.76
+      URI::urn::oid 1.76
     requirements:
       Carp 0
       Cwd 0
@@ -1489,32 +1486,32 @@ DISTRIBUTIONS
       common::sense 3.74
     requirements:
       ExtUtils::MakeMaker 0
-  libwww-perl-6.35
-    pathname: E/ET/ETHER/libwww-perl-6.35.tar.gz
+  libwww-perl-6.37
+    pathname: O/OA/OALDERS/libwww-perl-6.37.tar.gz
     provides:
-      LWP 6.35
-      LWP::Authen::Basic 6.35
-      LWP::Authen::Digest 6.35
-      LWP::Authen::Ntlm 6.35
-      LWP::ConnCache 6.35
-      LWP::Debug 6.35
-      LWP::Debug::TraceHTTP 6.35
-      LWP::DebugFile 6.35
-      LWP::MemberMixin 6.35
-      LWP::Protocol 6.35
-      LWP::Protocol::cpan 6.35
-      LWP::Protocol::data 6.35
-      LWP::Protocol::file 6.35
-      LWP::Protocol::ftp 6.35
-      LWP::Protocol::gopher 6.35
-      LWP::Protocol::http 6.35
-      LWP::Protocol::loopback 6.35
-      LWP::Protocol::mailto 6.35
-      LWP::Protocol::nntp 6.35
-      LWP::Protocol::nogo 6.35
-      LWP::RobotUA 6.35
-      LWP::Simple 6.35
-      LWP::UserAgent 6.35
+      LWP 6.37
+      LWP::Authen::Basic 6.37
+      LWP::Authen::Digest 6.37
+      LWP::Authen::Ntlm 6.37
+      LWP::ConnCache 6.37
+      LWP::Debug 6.37
+      LWP::Debug::TraceHTTP 6.37
+      LWP::DebugFile 6.37
+      LWP::MemberMixin 6.37
+      LWP::Protocol 6.37
+      LWP::Protocol::cpan 6.37
+      LWP::Protocol::data 6.37
+      LWP::Protocol::file 6.37
+      LWP::Protocol::ftp 6.37
+      LWP::Protocol::gopher 6.37
+      LWP::Protocol::http 6.37
+      LWP::Protocol::loopback 6.37
+      LWP::Protocol::mailto 6.37
+      LWP::Protocol::nntp 6.37
+      LWP::Protocol::nogo 6.37
+      LWP::RobotUA 6.37
+      LWP::Simple 6.37
+      LWP::UserAgent 6.37
       libwww::perl undef
     requirements:
       CPAN::Meta::Requirements 2.120620
