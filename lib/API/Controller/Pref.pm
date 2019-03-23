@@ -7,6 +7,24 @@ use Encode;
 API->register("pref.show",   __PACKAGE__);
 API->register("pref.list",   __PACKAGE__);
 API->register("pref.upsert", __PACKAGE__);
+API->register("pref.unsubscribe", __PACKAGE__);
+
+sub unsubscribe {
+  my ($app, $req) = @_;
+  my $user = $req->session->{user};
+  my $pref  = 'email';
+  my $value = 'false';
+
+  my $sth = $app->dbh->prepare_cached(q{
+    INSERT INTO pref ("user",name,value) VALUES(?,?,?)
+    ON CONFLICT ("user", name)
+    DO UPDATE SET value=? WHERE pref."user"=? AND pref.name=?
+  });
+
+  $sth->execute($user, $pref, $value, $value, $user, $pref);
+  $sth->finish;
+  $app->nocontent;
+}
 
 sub list {
   my ($app, $req) = @_;

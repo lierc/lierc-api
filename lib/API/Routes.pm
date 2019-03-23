@@ -21,6 +21,7 @@ $router->add( GET    => "/highlight/:event",    "message.highlight" );
 $router->add( GET    => "/preference",          "pref.list" );
 $router->add( GET    => "/preference/:pref",    "pref.show" );
 $router->add( POST   => "/preference/:pref",    "pref.upsert" );
+$router->add( GET    => "/unsubscribe",         "pref.unsubscribe" );
 
 $router->add( GET    => "/connection",          "connection.list" );
 $router->add( POST   => "/connection",          "connection.create" );
