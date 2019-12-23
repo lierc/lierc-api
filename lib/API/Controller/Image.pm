@@ -83,7 +83,7 @@ sub create {
 
   my $ua = LWP::UserAgent->new;
   my $res = $ua->post(
-    "https://api.imgur.com/3/image",
+    "https://api.imgur.com/3/upload",
     "Content-Type" => "form-data",
     Authorization  => "Client-ID 033f98700d8577c",
     Content => [
