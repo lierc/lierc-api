@@ -5,6 +5,7 @@ use Router::Boom::Method;
 
 my $router = Router::Boom::Method->new;
 
+$router->add( GET    => "/health",              "auth.health" );
 $router->add( GET    => "/auth",                "auth.show" );
 $router->add( POST   => "/auth",                "auth.login" );
 $router->add( POST   => "/register",            "auth.register" );

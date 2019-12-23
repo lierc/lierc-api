@@ -13,6 +13,7 @@ API->register("auth.register", __PACKAGE__);
 API->register("auth.logout",   __PACKAGE__);
 API->register("auth.token",    __PACKAGE__);
 API->register("auth.verify",   __PACKAGE__);
+API->register("auth.health",   __PACKAGE__);
 
 my $tx = Text::Xslate->new;
 my $auth_template = q{
@@ -28,6 +29,14 @@ be deleted from the system.
 
 Happy chatting!
 };
+
+sub health {
+  my ($app, $req) = @_;
+  $app->ping;
+  return $app->json({
+    status => 'ok'
+  });
+}
 
 sub show {
   my ($app, $req) = @_;
