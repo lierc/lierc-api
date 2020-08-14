@@ -58,10 +58,17 @@ sub date {
           AND time >= date(\$3)
           AND time < (date(\$4) + '1 day'::interval)
           AND to_tsvector('english', message->'Params'->1) @@ to_tsquery(\$5)
-        ORDER BY id ASC
       !;
+
       push @bind, ($id, $chan, $from, $to);
       push @bind, decode utf8 => $req->parameters->{text};
+
+      if ( defined $req->parameters->{sender} ) {
+          $sql .= qq! AND message->'Prefix'->>'Name'=\$6!;
+          push @bind, decode utf8 => $req->parameters->{sender};
+      }
+
+      $sql .= ' ORDER BY id ASC';
     }
     else {
       $sql = q!
