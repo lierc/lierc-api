@@ -51,7 +51,7 @@ sub date {
             message, '{Params,1}', ts_headline(
               'english', message->'Params'->1, to_tsquery(\$5),
               'StartSel = \x02, StopSel = \x02')),
-          message, connection, highlight
+          connection, highlight
         FROM log
         WHERE connection=\$1
           AND channel=\$2
