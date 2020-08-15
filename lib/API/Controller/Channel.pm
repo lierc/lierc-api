@@ -44,7 +44,7 @@ sub date {
     my @bind;
 
     my $sql;
-    if ($req->parameters->{text}) {
+    if (defined $req->parameters->{text} || defined $req->parameters->{sender}) {
       $sql = qq!
         SELECT id,
           jsonb_set(
@@ -57,14 +57,17 @@ sub date {
           AND channel=\$2
           AND time >= date(\$3)
           AND time < (date(\$4) + '1 day'::interval)
-          AND to_tsvector('english', message->'Params'->1) @@ to_tsquery(\$5)
       !;
 
       push @bind, ($id, $chan, $from, $to);
-      push @bind, decode utf8 => $req->parameters->{text};
 
-      if ( defined $req->parameters->{sender} ) {
-          $sql .= qq! AND message->'Prefix'->>'Name'=\$6!;
+      if ( defined $req->parameters->{text} ) {
+          $sql .= q! AND to_tsvector('english', message->'Params'->1) @@ to_tsquery($5)!;
+          push @bind, decode utf8 => $req->parameters->{text};
+      }
+
+      if ( defined $req->paramaters->{sender} ) {
+          $sql .= q! AND message->'Prefix'->'Name'=$6!;
           push @bind, decode utf8 => $req->parameters->{sender};
       }
 
