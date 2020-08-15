@@ -66,9 +66,9 @@ sub date {
           push @bind, decode utf8 => $req->parameters->{text};
       }
 
-      if ( defined $req->paramaters->{sender} ) {
-          $sql .= q! AND message->'Prefix'->'Name'=$6!;
+      if ( defined $req->parameters->{sender} ) {
           push @bind, decode utf8 => $req->parameters->{sender};
+          $sql .= sprintf q! AND message->'Prefix'->>'Name'=$%d!, scalar(@bind);
       }
 
       $sql .= ' ORDER BY id ASC';
