@@ -39,7 +39,7 @@ requires "Twiggy";
 
 # AE recommended
 requires "EV";
-requires "Async::Interrupt";
+#requires "Async::Interrupt";
 requires "Guard";
 
 requires "LWP::Protocol::https";
