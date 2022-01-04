@@ -60,6 +60,10 @@ sub push_welcome {
   if ( my @isupport = @{ $status->{Isupport} } ) {
     $writer->irc_event($status->{Id}, liercd => "005", $status->{Nick}, join " ", @isupport);
   }
+
+  if ( my @caps = @{ $status->{CapsAcked} || [] } ) {
+    $writer->irc_event($status->{Id}, liercd => "CAP", "*", "ACK", join " ", @caps);
+  }
 }
 
 sub push_joins {
