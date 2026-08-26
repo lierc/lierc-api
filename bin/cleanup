@@ -1,0 +1,21 @@
+#!/usr/bin/env perl
+
+use DBI;
+use LWP::UserAgent;
+
+my $dbh = DBI->connect("dbi:Pg:dbname=lierc");
+my $sth = $dbh->prepare(q{
+  DELETE FROM log WHERE id IN (
+    SELECT id FROM log WHERE command='TAGMSG' limit 100
+  )
+});
+
+my $total;
+while ( my $rows = $sth->execute ) {
+  $total += $rows;
+  if ( $total % 1000 == 0 ) {
+    warn $total,"\n";
+  }
+}
+
+warn "done\n";

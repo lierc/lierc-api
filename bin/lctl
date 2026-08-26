@@ -1,0 +1,241 @@
+#!/usr/bin/env perl
+
+use strict;
+use warnings;
+
+use lib "$ENV{HOME}/src/lierc-api/lib";
+
+use DBI;
+use LWP::UserAgent;
+use DateTime;
+use API::Config;
+use JSON::XS;
+use Util;
+use List::MoreUtils qw(uniq);
+
+my $config = API::Config->new;
+my ($dsn) = $config->dsn;
+my $dbh = DBI->connect($dsn, "leedo", "leedo");
+
+my %cmds = (
+  revive => \&cmd_revive,
+  delete => \&cmd_delete,
+  reset  => \&cmd_reset,
+  stats  => \&cmd_stats,
+  users  => \&cmd_users,
+  prune_tokens => \&cmd_prune_tokens,
+  prune_seen   => \&cmd_prune_seen,
+  prune_logs   => \&cmd_prune_logs,
+  prune_old    => \&cmd_prune_old_logs,
+  reconnect => \&cmd_reconnect,
+);
+
+my ($cmd, @args) = @ARGV;
+
+if (!$cmd) {
+  warn join("\n", keys %cmds) . "\n";
+}
+
+if ($cmd && $cmds{$cmd}) {
+  $cmds{$cmd}->(@args);
+}
+
+sub cmd_prune_seen {
+  my $sth = $dbh->prepare(q{
+    DELETE FROM seen
+    WHERE (seen."user", seen.connection, seen.channel) IN (
+      SELECT s."user", s.connection, s.channel
+      FROM seen AS s
+      LEFT JOIN connection AS c
+      ON s.connection=c.id
+      WHERE id IS NULL
+    )
+    OR updated < NOW() - INTERVAL '1 month'
+  });
+  $sth->execute;
+  warn sprintf "deleted %d rows\n", $sth->rows;
+}
+
+sub cmd_prune_logs {
+  my $sth = $dbh->prepare(q{
+    DELETE FROM log
+    WHERE log.id IN (
+      SELECT l.id 
+      FROM log AS l
+      LEFT JOIN connection AS c
+      ON l.connection=c.id
+      WHERE l.id IS NULL
+    )
+  });
+  $sth->execute;
+  warn sprintf "deleted %d rows from deleted connections\n", $sth->rows;
+}
+
+sub cmd_prune_old_logs {
+  my $sth = $dbh->prepare(q{
+    DELETE FROM log
+    WHERE id IN (
+      SELECT id FROM log WHERE time < NOW() - INTERVAL '2 year'
+      LIMIT 10000
+    )
+  });
+  $sth->execute;
+  warn sprintf "deleted %d old rows\n", $sth->rows;
+}
+
+sub cmd_users {
+  my @users = @_;
+
+  if (!@users) {
+    my $sth = $dbh->prepare(q{ SELECT username FROM "user" });
+    $sth->execute;
+    while (my ($user) = $sth->fetchrow_array) {
+      push @users, $user;
+    }
+  }
+
+  for my $user (@users) {
+    my $sth = $dbh->prepare(q{ SELECT id FROM "user" WHERE username=? });
+    $sth->execute($user);
+    my ($id) = $sth->fetchrow_array;
+    die "unknown user '$user'" unless $id;
+
+    my $ua = LWP::UserAgent->new;
+    my $req = HTTP::Request->new(
+      GET => "http://127.0.0.1:5003/stats?user=$id",
+      [ "Lierc-Key" => $ENV{API_KEY} ]
+    );
+    my $res = $ua->request($req);
+    my $data = decode_json $res->content;
+
+    for my $stream (@$data) {
+      my $created = DateTime->from_epoch(epoch => $stream->{created});
+      my $duration = DateTime->now - $created;
+      my $time = $duration->hours ? $duration->hours . " hours" :
+      $duration->minutes . " minutes";
+      warn sprintf "%s - [%s] \"%s\"\n", $user, $time, $stream->{agent};
+    }
+  }
+}
+
+sub cmd_prune_tokens {
+  my $sth = $dbh->prepare(q{
+    DELETE FROM token
+    WHERE created < NOW() - INTERVAL '1 WEEK'
+  });
+  $sth->execute;
+  warn sprintf "deleted %d rows\n", $sth->rows;
+}
+
+sub cmd_stats {
+  my $ua = LWP::UserAgent->new;
+  my $req = HTTP::Request->new(
+    GET => "http://127.0.0.1:5003/stats",
+    [ "Lierc-Key" => $ENV{API_KEY} ]
+  );
+  my $res = $ua->request($req);
+  my $data = decode_json $res->content;
+
+  my $sth = $dbh->prepare(q{
+    SELECT id,username FROM "user" WHERE id=?
+  });
+
+  my @users;
+  for my $id (keys %{ $data }) {
+    $sth->execute($id);
+    my $row = $sth->fetchrow_arrayref;
+    push @users, [$data->{$id}, @$row];
+  }
+
+  warn sprintf "%s %s (%s)\n", @$_ for sort {$b->[0] <=> $a->[0]} @users;
+
+  $sth->finish;
+}
+
+sub cmd_delete {
+  my ($user) = @_;
+
+  warn "deleting $user\n";
+  $dbh->do('DELETE FROM "user" WHERE id=?', {}, $user);
+
+  my $sth = $dbh->prepare(q{
+    SELECT id
+    FROM connection
+    WHERE "user"=?
+  });
+  $sth->execute($user);
+
+  my $ua = LWP::UserAgent->new;
+
+  while (my ($id) = $sth->fetchrow_array) {
+    warn "deleting connection $id\n";
+    $dbh->do('DELETE FROM connection WHERE id=?', {}, $id);
+    my $destroy = $ua->get("http://127.0.0.1:5005/$id/destroy");
+    next if $destroy->code == 200;
+    warn $destroy->status_line;
+  }
+}
+
+sub cmd_revive {
+  my $sth = $dbh->prepare(q{
+    SELECT c.id, c.config
+    FROM connection AS c
+    LEFT JOIN "user" AS u
+      ON c.user = u.id
+    WHERE c.enabled = true
+      AND u.last_login > NOW() - INTERVAL '2 months'
+  });
+  $sth->execute;
+
+  my $ua = LWP::UserAgent->new;
+
+  while (my ($id, $config) = $sth->fetchrow_array) {
+    my $status = $ua->get("http://127.0.0.1:5005/$id/status");
+    next if $status->code == 200;
+
+    my $create = $ua->post("http://127.0.0.1:5005/$id/create", Content => $config);
+    next if $create->code == 200;
+
+    warn $create->status_line;
+  }
+}
+
+sub cmd_reset {
+  my ($email, $pass) = @_;
+
+  die "lctl reset EMAIL PASS"
+    unless defined $email && defined $pass;
+
+  my $hash = Util->hash_password($pass, $config->secret);
+  warn $hash;
+  my $rows = $dbh->do(
+    q{UPDATE "user" SET password=? WHERE email=?},
+    {}, $hash, $email
+  );
+
+  die "No user updated" unless $rows > 0;
+  print "done!\n";
+}
+
+sub cmd_reconnect {
+  my $id = shift;
+
+  die 'lctl reconnect ID'
+    unless defined $id;
+
+  my $conf = $dbh->selectcol_arrayref(q{ SELECT config FROM connection WHERE id=? }, {}, $id);
+
+  die "unknown connection $id" unless $conf->[0];
+
+  my $ua = LWP::UserAgent->new;
+  my $res = $ua->post("http://127.0.0.1:5005/$id/destroy");
+  if ( $res->code != 200 ) {
+    #die "failed to destroy $id";
+  }
+
+  $res = $ua->post("http://127.0.0.1:5005/$id/create", Content => $conf->[0]);
+  if ( $res->code != 200 ) {
+    warn $res->content;
+    die "failed to create $id";
+  }
+}

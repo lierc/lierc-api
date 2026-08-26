@@ -89,6 +89,22 @@ sub missed {
     GROUP BY channel, connection
   });
 
+warn q{
+    SELECT channel, connection,
+      SUM( CASE WHEN command = 'PRIVMSG' THEN 1 ELSE 0 END ) AS messages,
+      SUM( CASE WHEN command <> 'PRIVMSG' THEN 1 ELSE 0 END ) AS events,
+      SUM( CASE WHEN highlight THEN 1 ELSE 0 END ) AS highlights
+    FROM log
+    WHERE
+    (
+  } . join(" OR ", @where) . q{
+    )
+    GROUP BY channel, connection
+  };
+
+  use JSON::XS;
+warn encode_json(\@bind);
+
   my %channels;
 
   $sth->execute(@bind);

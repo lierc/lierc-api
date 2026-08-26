@@ -47,11 +47,7 @@ sub date {
     if (defined $req->parameters->{text} || defined $req->parameters->{sender}) {
       $sql = qq!
         SELECT id,
-          jsonb_set(
-            message, '{Params,1}', ts_headline(
-              'english', message->'Params'->1, to_tsquery(\$5),
-              'StartSel = \x02, StopSel = \x02')),
-          connection, highlight
+          message, connection, highlight
         FROM log
         WHERE connection=\$1
           AND channel=\$2

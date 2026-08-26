@@ -133,7 +133,8 @@ sub package {
 
   my (undef, $err, $exit) = capture {
     system(
-      "openssl", "smime", "-sign",
+      "openssl", "smime", "-binary", "-sign",
+      "-certfile", ".apn/AppleWWDRCA.pem",
       "-in",      "$dir/manifest.json",
       "-out",     "$dir/signature",
       "-outform", "der",
