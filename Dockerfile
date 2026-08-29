@@ -1,4 +1,4 @@
-FROM debian:stable
+FROM ubuntu:latest
 EXPOSE 5004
 WORKDIR /opt/lierc-api
 
