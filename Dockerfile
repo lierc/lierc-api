@@ -36,6 +36,7 @@ RUN apt-get update && apt-get install -y \
     libssl3t64 \
     && rm -rf /var/lib/apt/lists/*
 COPY . /opt/lierc-api
+COPY --from=base /usr/local/bin/nsql* /usr/local/bin
 COPY --from=base /opt/lierc-api/local /opt/lierc-api/local
 COPY --from=base /opt/perl-$PERL_VERSION /opt/perl-$PERL_VERSION
 ENV PATH="/opt/perl-${PERL_VERSION}/bin:${PATH}"
