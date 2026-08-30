@@ -31,6 +31,10 @@ RUN carmel rollout
 
 FROM ubuntu:latest AS api
 ARG PERL_VERSION
+RUN apt-get update && apt-get install -y \
+    libpq5 \
+    libssl3t64 \
+    && rm -rf /var/lib/apt/lists/*
 COPY . /opt/lierc-api
 COPY --from=base /opt/lierc-api/local /opt/lierc-api/local
 COPY --from=base /opt/perl-$PERL_VERSION /opt/perl-$PERL_VERSION
