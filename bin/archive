@@ -1,0 +1,153 @@
+#!/usr/bin/env perl
+
+use strict;
+use warnings;
+
+use lib "$ENV{HOME}/src/lierc-api/lib";
+
+use DBI;
+use API::Config;
+use JSON::XS;
+use Encode;
+use Util;
+
+use constant CHUNK_SIZE => 1000;
+
+my $config = API::Config->new;
+my ($dsn) = $config->dsn;
+my $dbh = DBI->connect($dsn, "leedo", "leedo");
+
+walk_connections(sub {
+  my $connection = shift;
+  my ($buf, $id) = archive_position($connection);
+
+  warn "Processing connection '$connection->{id}' from '$id'\n";
+  warn "position: " . JSON::XS->new->pretty->canonical->encode($buf);
+
+  walk_logs($connection->{id}, $id, sub {
+      my $line = shift;
+
+      my $key = join ":", $line->{connection}, $line->{channel};
+
+      if ( exists $buf->{$key} ) {
+        if ( @{ $buf->{$key}->{lines} } > CHUNK_SIZE ) {
+          warn "Hit length limit for $key\n";
+          insert_archive($buf->{$key});
+          $buf->{$key}->{lines} = [];
+        }
+      }
+
+      if (! exists $buf->{$key}) {
+        $buf->{$key} = {
+          connection => $line->{connection},
+          panel => $line->{channel},
+          lines => [],
+        };
+      }
+
+      $line->{message} = decode_json(encode utf8 => $line->{message});
+
+      push @{ $buf->{ $key }->{lines} }, $line;
+  });
+});
+
+sub insert_archive {
+  my $archive = shift;
+  my $sth = $dbh->prepare_cached(q{
+    INSERT INTO archive (connection, panel, start_time, end_time, first_id, last_id, content)
+    VALUES(?,?,?,?,?,?,?)
+  });
+  my $json = encode_json($archive->{lines});
+
+  my $first = $archive->{lines}->[0];
+  my $last = $archive->{lines}->[-1];
+
+  $sth->execute(
+    $archive->{connection},
+    $archive->{panel},
+    $first->{time},
+    $last->{time},
+    $first->{id},
+    $last->{id},
+    $json
+  );
+  $sth->finish;
+}
+
+sub archive_position {
+  my $connection = shift;
+
+  my $sth = $dbh->prepare_cached(q{
+    SELECT a.connection, a.panel, a.last_id
+    FROM archive AS a
+    LEFT OUTER JOIN archive AS b
+      ON a.connection=b.connection
+        AND a.panel=b.panel
+        AND a.last_id < b.last_id
+    WHERE b.connection IS NULL
+    AND a.connection=?
+  });
+
+  $sth->execute($connection->{id});
+
+  my $id = 0;
+  my ($row, %archive);
+
+  while ($row = $sth->fetchrow_hashref) {
+    my $key = join ":", $row->{connection}, $row->{panel};
+    $archive{$key} = {
+      connection => $row->{connection},
+      panel => $row->{panel},
+      lines => [],
+    };
+    if ($row->{last_id} > $id) {
+      $id = $row->{last_id};
+    }
+  }
+
+  $sth->finish;
+  return (\%archive, $id);
+}
+
+sub walk_logs {
+  my ($connection, $start, $sub) = @_;
+  
+  warn "Selecting logs\n";
+  my $sth = $dbh->prepare_cached(q{
+    SELECT id, connection, channel, command, highlight, time, message, self
+    FROM log
+    WHERE connection=?
+    AND id > ?
+    ORDER BY id ASC
+    LIMIT 15000
+  });
+  warn "Walking logs\n";
+
+  my $rows = 0;
+
+  do {
+    warn "Selecting from $start\n";
+    $sth->execute($connection, $start);
+    $rows = $sth->rows;
+    while (my $row = $sth->fetchrow_hashref) {
+      $sub->($row);
+      $start = $row->{id};
+    }
+    warn "Read to $start\n";
+    $sth->finish;
+  } while ($rows == 15000)
+}
+
+sub walk_connections {
+  my $sub = shift;
+
+  my $sth = $dbh->prepare_cached(q{SELECT id,user FROM connection WHERE "user"=?});
+  $sth->execute('2R3yRINe1P1KdAaoc3WGFv');
+
+  my $row;
+  while ($row = $sth->fetchrow_hashref) {
+    $sub->($row);
+  }
+
+  $sth->finish;
+}

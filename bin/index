@@ -1,0 +1,10 @@
+#!/usr/bin/env perl
+
+use Lucene;
+
+my $analyzer = new Lucene::Analysis::Standard::StandardAnalyzer();
+my $store = Lucene::Store::FSDirectory->getDirectory("./index", 1);
+
+my $tmp_writer = new Lucene::Index::IndexWriter($store, $analyzer, 1);
+$tmp_writer->close;
+undef $tmp_writer;
