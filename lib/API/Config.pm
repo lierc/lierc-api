@@ -15,6 +15,7 @@ our %DEFAULT = (
   nsqd     => "127.0.0.1",
   nsq_tail => "/usr/local/bin/nsq_tail",
   smtp_opts => ['smtp'],
+  from_address => 'do-not-reply@relaychat.party',
   imgur_key => "",
   apn => {
     website_name => "Relaychat Party",
