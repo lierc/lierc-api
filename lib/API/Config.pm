@@ -66,6 +66,8 @@ sub smtp_opts {
   $DEFAULT{smtp_opts};
 };
 
+sub from_address { $ENV{FROM_ADDRESS} || $DEFAULT{from_address} }
+
 sub dsn     {
   my $self = shift;
   sprintf "dbi:Pg:dbname=%s;host=%s", $self->dbname, $self->dbhost;
