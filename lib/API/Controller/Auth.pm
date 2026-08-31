@@ -5,6 +5,7 @@ use parent 'API::Controller';
 use Util;
 use Data::Validate::Email;
 use MIME::Lite;
+use Net::SMTP;
 use Text::Xslate;
 
 API->register("auth.show",     __PACKAGE__);
@@ -102,17 +103,53 @@ sub register {
   );
 
   if (!$ENV{LIERC_NO_SMTP}) {
-    warn "$data";
-      my $msg = MIME::Lite->new(
-          From     => $app->from_address,
-          To       => $email,
-          Subject  => 'Please verify your relaychat.party account',
-          Data     => "harmless test email text",
-      );
-      $msg->send( @{ $app->smtp_opts } );
+    my $msg = MIME::Lite->new(
+      From     => $app->from_address,
+      To       => $email,
+      Subject  => 'Please verify your relaychat.party account',
+      Type     => 'TEXT',
+      Encoding => 'quoted-printable',
+      Data     => $data,
+    );
+    send_smtp($app, $msg, $email);
   }
 
   return $app->handle("auth.show", $req);
+}
+
+# MIME::Lite's own SMTP support is broken over TLS: IO::Socket::SSL::start_SSL
+# reblesses the socket into Net::SMTP::_SSL, which drops the MIME::Lite::SMTP
+# print() override that routes the message through datasend(). The message then
+# gets written to the socket raw, with no CRLF line endings and no dot stuffing,
+# and the server never sees the end of DATA. Drive Net::SMTP ourselves instead.
+sub send_smtp {
+  my ($app, $msg, $to) = @_;
+
+  my %opts = %{ $app->smtp_opts };
+  my $host = delete $opts{Host};
+  my $user = delete $opts{AuthUser};
+  my $pass = delete $opts{AuthPass};
+
+  my $smtp = Net::SMTP->new((defined $host ? $host : ()), %opts)
+    or die "SMTP connect failed: " . ($@ || $!) . "\n";
+
+  if (defined $user) {
+    $smtp->auth($user, $pass)
+      or die "SMTP AUTH failed: " . $smtp->message;
+  }
+
+  $smtp->mail($app->from_address)
+    or die "SMTP MAIL FROM failed: " . $smtp->message;
+  $smtp->to($to)
+    or die "SMTP RCPT TO failed: " . $smtp->message;
+  $smtp->data
+    or die "SMTP DATA failed: " . $smtp->message;
+  $smtp->datasend($msg->as_string)
+    or die "SMTP data write failed: " . $smtp->message;
+  $smtp->dataend
+    or die "SMTP DATAEND failed: " . $smtp->message;
+
+  $smtp->quit;
 }
 
 sub verify {

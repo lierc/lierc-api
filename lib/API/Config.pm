@@ -14,7 +14,7 @@ our %DEFAULT = (
   secure   => 0,
   nsqd     => "127.0.0.1",
   nsq_tail => "/usr/local/bin/nsq_tail",
-  smtp_opts => ['smtp'],
+  smtp_opts => { Host => 'localhost' },
   from_address => 'do-not-reply@relaychat.party',
   imgur_key => "",
   apn => {
@@ -59,11 +59,22 @@ sub secure   { $ENV{API_SECURE}        || $DEFAULT{secure}   }
 sub key      { $ENV{API_KEY}           || $DEFAULT{key}      }
 sub imgur_key { $ENV{IMGUR_KEY}        || $DEFAULT{imgur_key} }
 
+# Key/value pairs for Net::SMTP->new, plus AuthUser/AuthPass for the optional
+# AUTH exchange, eg
+#   SMTP_OPTS=Host,smtp.example.com,Port,465,SSL,1,AuthUser,me,AuthPass,secret
 sub smtp_opts {
-  if ( defined $ENV{SMTP_OPTS} ) {
-    return [ split /,/, $ENV{SMTP_OPTS} ];
-  }
-  $DEFAULT{smtp_opts};
+  return $DEFAULT{smtp_opts} unless defined $ENV{SMTP_OPTS};
+
+  my @opts = split /,/, $ENV{SMTP_OPTS};
+
+  # this list used to be handed to MIME::Lite->send, which wanted a leading
+  # mailer name that Net::SMTP has no use for
+  shift @opts if @opts && $opts[0] eq 'smtp';
+
+  die "SMTP_OPTS must be a comma separated list of key,value pairs\n"
+    if @opts % 2;
+
+  return { @opts };
 };
 
 sub from_address { $ENV{FROM_ADDRESS} || $DEFAULT{from_address} }
