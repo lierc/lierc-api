@@ -41,6 +41,5 @@ COPY --from=base /opt/lierc-api/local /opt/lierc-api/local
 COPY --from=base /opt/perl-$PERL_VERSION /opt/perl-$PERL_VERSION
 ENV PATH="/opt/perl-${PERL_VERSION}/bin:${PATH}"
 EXPOSE 5004
-ENV LIERC_NO_SMTP=1
 WORKDIR /opt/lierc-api
 CMD ["perl", "-Ilocal/lib/perl5", "local/bin/plackup", "--server", "Gazelle", "-Ilib", "--max-workers", "4", "--listen", ":5004", "bin/api.psgi"]
