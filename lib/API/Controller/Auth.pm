@@ -104,6 +104,7 @@ sub register {
   );
 
   if (!$ENV{LIERC_NO_SMTP}) {
+    warn "$data";
       my $msg = MIME::Lite->new(
           From     => $app->from_address,
           To       => $email,
