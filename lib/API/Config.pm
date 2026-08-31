@@ -67,10 +67,6 @@ sub smtp_opts {
 
   my @opts = split /,/, $ENV{SMTP_OPTS};
 
-  # this list used to be handed to MIME::Lite->send, which wanted a leading
-  # mailer name that Net::SMTP has no use for
-  shift @opts if @opts && $opts[0] eq 'smtp';
-
   die "SMTP_OPTS must be a comma separated list of key,value pairs\n"
     if @opts % 2;
 
