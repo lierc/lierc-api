@@ -16,8 +16,7 @@ API->register("auth.verify",   __PACKAGE__);
 API->register("auth.health",   __PACKAGE__);
 
 my $tx = Text::Xslate->new;
-my $auth_template = q{
-Hello <: $name :>,
+my $auth_template = q{Hello <: $name :>,
 
 Thank you for signing up with relaychat.party!
 
@@ -27,8 +26,7 @@ Please click the following link to validate your email address:
 You must visit this link in the next day, or your account will
 be deleted from the system.
 
-Happy chatting!
-};
+Happy chatting!};
 
 sub health {
   my ($app, $req) = @_;
