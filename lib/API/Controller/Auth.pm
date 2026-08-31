@@ -105,11 +105,12 @@ sub register {
 
   if (!$ENV{LIERC_NO_SMTP}) {
       my $msg = MIME::Lite->new(
-          From    => $app->from_address,
-          To      => $email,
-          Subject => 'Please verify your relaychat.party account',
-          Type    => 'text/plain',
-          Data    => $data,
+          From     => $app->from_address,
+          To       => $email,
+          Subject  => 'Please verify your relaychat.party account',
+          Type     => 'TEXT',
+          Encoding => '7bit',
+          Data     => $data,
       );
       $msg->send( @{ $app->smtp_opts } );
   }
