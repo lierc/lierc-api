@@ -111,7 +111,7 @@ sub register {
           Type    => 'text/plain',
           Data    => $data,
       );
-      $msg->send('smtp');
+      $msg->send( @{ $app->smtp_opts } );
   }
 
   return $app->handle("auth.show", $req);

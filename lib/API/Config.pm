@@ -14,6 +14,7 @@ our %DEFAULT = (
   secure   => 0,
   nsqd     => "127.0.0.1",
   nsq_tail => "/usr/local/bin/nsq_tail",
+  smtp_opts => ['smtp'],
   imgur_key => "",
   apn => {
     website_name => "Relaychat Party",
@@ -56,6 +57,13 @@ sub nsq_tail { $ENV{NSQ_TAIL}          || $DEFAULT{nsq_tail} }
 sub secure   { $ENV{API_SECURE}        || $DEFAULT{secure}   }
 sub key      { $ENV{API_KEY}           || $DEFAULT{key}      }
 sub imgur_key { $ENV{IMGUR_KEY}        || $DEFAULT{imgur_key} }
+
+sub smtp_opts {
+  if ( defined $ENV{SMTP_OPTS} ) {
+    return [ split /,/, $ENV{SMTP_OPTS} ];
+  }
+  $DEFAULT{smtp_opts};
+};
 
 sub dsn     {
   my $self = shift;
