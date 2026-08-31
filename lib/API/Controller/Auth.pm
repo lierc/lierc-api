@@ -107,8 +107,6 @@ sub register {
           From     => $app->from_address,
           To       => $email,
           Subject  => 'Please verify your relaychat.party account',
-          Type     => 'TEXT',
-          Encoding => '7bit',
           Data     => "harmless test email text",
       );
       $msg->send( @{ $app->smtp_opts } );
