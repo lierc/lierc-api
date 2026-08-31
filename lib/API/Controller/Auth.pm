@@ -111,6 +111,7 @@ sub register {
           Type    => 'text/plain',
           Data    => $data,
       );
+      warn "sending email with @{ $app->smtp_opts } ";
       $msg->send( @{ $app->smtp_opts } );
   }
 
