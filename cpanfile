@@ -23,6 +23,7 @@ requires "Data::Validate::Email";
 requires "Class::Tiny";
 requires "Capture::Tiny";
 requires "MIME::Lite";
+requires "Authen::SASL";
 requires "Text::Xslate";
 
 # Plack recommends

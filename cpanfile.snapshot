@@ -81,6 +81,27 @@ DISTRIBUTIONS
       POSIX::strftime::Compiler 0.30
       Time::Local 0
       perl 5.008001
+  Authen-SASL-2.2000
+    pathname: E/EH/EHUELS/Authen-SASL-2.2000.tar.gz
+    provides:
+      Authen::SASL 2.2000
+      Authen::SASL::CRAM_MD5 2.2000
+      Authen::SASL::EXTERNAL 2.2000
+      Authen::SASL::Perl 2.2000
+      Authen::SASL::Perl::ANONYMOUS 2.2000
+      Authen::SASL::Perl::CRAM_MD5 2.2000
+      Authen::SASL::Perl::DIGEST_MD5 2.2000
+      Authen::SASL::Perl::EXTERNAL 2.2000
+      Authen::SASL::Perl::GSSAPI 2.2000
+      Authen::SASL::Perl::LOGIN 2.2000
+      Authen::SASL::Perl::OAUTHBEARER 2.2000
+      Authen::SASL::Perl::PLAIN 2.2000
+      Authen::SASL::Perl::XOAUTH2 2.2000
+    requirements:
+      Crypt::URandom 0
+      Digest::HMAC_MD5 0
+      ExtUtils::MakeMaker 0
+      perl 5.014000
   Canary-Stability-2013
     pathname: M/ML/MLEHMANN/Canary-Stability-2013.tar.gz
     provides:
@@ -207,6 +228,18 @@ DISTRIBUTIONS
       perl 5.006
       strict 0
       warnings 0
+  Crypt-URandom-0.55
+    pathname: D/DD/DDICK/Crypt-URandom-0.55.tar.gz
+    provides:
+      Crypt::URandom 0.55
+    requirements:
+      Carp 1.26
+      English 0
+      Exporter 0
+      ExtUtils::MakeMaker 0
+      FileHandle 0
+      constant 0
+      perl 5.006
   DBD-Pg-3.21.1
     pathname: T/TU/TURNSTEP/DBD-Pg-3.21.1.tar.gz
     provides:
@@ -880,7 +913,6 @@ DISTRIBUTIONS
     provides:
       Math::BaseConvert 1.8
     requirements:
-      ExtUtils::MakeMaker 0
       Math::BigInt 0
       Memoize 0
       Test 0
