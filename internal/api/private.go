@@ -4,7 +4,10 @@ package api
 // package API::Controller::Message, a copy-paste quirk).
 
 // nick is `decode utf8 => $nick`: invalid bytes become U+FFFD.
-func nick(r *Request) string { return string([]rune(r.Params["nick"])) }
+func nick(r *Request) string { return decodeUTF8(r.Params["nick"]) }
+
+// decodeUTF8 is `decode utf8 => $s`: each invalid byte becomes U+FFFD.
+func decodeUTF8(s string) string { return string([]rune(s)) }
 
 func privateCreate(a *App, r *Request) (Response, error) {
 	_, err := a.DB.Pool.Exec(r.Context(), `
