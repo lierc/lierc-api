@@ -4,3 +4,5 @@ local/
 config.json
 .carmel
 .apn
+
+testdata/fixtures/local/

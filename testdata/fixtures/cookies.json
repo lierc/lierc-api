@@ -1,0 +1,46 @@
+[
+   {
+      "cookie_value" : "1792769372.78598%3ABQsDAAAAAQoDbGVlAAAABHVzZXI%3D%3A10d6a8d11d59d0952ec9aecd714b7b1411b1f301",
+      "name" : "login_ascii",
+      "session" : {
+         "user" : "lee"
+      },
+      "set_cookie_header" : "chats=1792769372.78598%3ABQsDAAAAAQoDbGVlAAAABHVzZXI%3D%3A10d6a8d11d59d0952ec9aecd714b7b1411b1f301; path=/; expires=Fri, 30-Oct-2026 15:29:32 GMT; HttpOnly"
+   },
+   {
+      "cookie_value" : "1792769372.7865%3ABQsDAAAAAQoFMTIzNDUAAAAEdXNlcg%3D%3D%3A8cfeb585d0517622947f3d33c88bc78190d7e1a7",
+      "name" : "login_numeric_id",
+      "session" : {
+         "user" : "12345"
+      },
+      "set_cookie_header" : "chats=1792769372.7865%3ABQsDAAAAAQoFMTIzNDUAAAAEdXNlcg%3D%3D%3A8cfeb585d0517622947f3d33c88bc78190d7e1a7; path=/; expires=Fri, 30-Oct-2026 15:29:32 GMT; HttpOnly"
+   },
+   {
+      "cookie_value" : "1792769372.78681%3ABQsDAAAAARcNcMOkc3N3w7ZyZOKYugAAAAR1c2Vy%3A7e4980a37c3f16827a1caa3fea4aff73d3c0057d",
+      "name" : "login_non_ascii",
+      "session" : {
+         "user" : "pässwörd☺"
+      },
+      "set_cookie_header" : "chats=1792769372.78681%3ABQsDAAAAARcNcMOkc3N3w7ZyZOKYugAAAAR1c2Vy%3A7e4980a37c3f16827a1caa3fea4aff73d3c0057d; path=/; expires=Fri, 30-Oct-2026 15:29:32 GMT; HttpOnly"
+   },
+   {
+      "cookie_value" : "1792769372.78709%3ABQsDAAAAAQoRYS5iK2NAZXhhbXBsZS5jb20AAAAEdXNlcg%3D%3D%3Af9b00cbe40d2596790afc0447d3ac51b9095b2ba",
+      "name" : "login_email_like",
+      "session" : {
+         "user" : "a.b+c@example.com"
+      },
+      "set_cookie_header" : "chats=1792769372.78709%3ABQsDAAAAAQoRYS5iK2NAZXhhbXBsZS5jb20AAAAEdXNlcg%3D%3D%3Af9b00cbe40d2596790afc0447d3ac51b9095b2ba; path=/; expires=Fri, 30-Oct-2026 15:29:32 GMT; HttpOnly"
+   },
+   {
+      "cookie_value" : "1792769372.78742%3ABQsDAAAAAA%3D%3D%3A6ce6765cf54c321c9b94d9940849f3bacf959ef8",
+      "name" : "empty_session",
+      "session" : {},
+      "set_cookie_header" : "chats=1792769372.78742%3ABQsDAAAAAA%3D%3D%3A6ce6765cf54c321c9b94d9940849f3bacf959ef8; path=/; expires=Fri, 30-Oct-2026 15:29:32 GMT; HttpOnly"
+   },
+   {
+      "cookie_value" : "1792769372.78808%3ABQsDAAAAAA%3D%3D%3A6ce6765cf54c321c9b94d9940849f3bacf959ef8",
+      "name" : "logout_after_delete",
+      "session" : {},
+      "set_cookie_header" : "chats=1792769372.78808%3ABQsDAAAAAA%3D%3D%3A6ce6765cf54c321c9b94d9940849f3bacf959ef8; path=/; expires=Fri, 30-Oct-2026 15:29:32 GMT; HttpOnly"
+   }
+]

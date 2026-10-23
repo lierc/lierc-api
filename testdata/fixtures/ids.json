@@ -1,0 +1,91 @@
+{
+   "cnv" : [
+      {
+         "b62" : "0",
+         "hex" : "00000000000000000000000000000000"
+      },
+      {
+         "b62" : "7n42DGM5Tflk9n8mt7Fhc7",
+         "hex" : "ffffffffffffffffffffffffffffffff"
+      },
+      {
+         "b62" : "1",
+         "hex" : "00000000000000000000000000000001"
+      },
+      {
+         "b62" : "47",
+         "hex" : "000000000000000000000000000000ff"
+      },
+      {
+         "b62" : "44pZgF",
+         "hex" : "000000000000000000000000deadbeef"
+      },
+      {
+         "b62" : "G",
+         "hex" : "00000000000000000000000000000010"
+      },
+      {
+         "b62" : "UBsO4td5jEbl6wfnwZr6G",
+         "hex" : "10000000000000000000000000000000"
+      },
+      {
+         "b62" : "3tX16dB2jpss4tZORYcqo4",
+         "hex" : "80000000000000000000000000000000"
+      },
+      {
+         "b62" : "296tiiBb3U904RIpygpjj",
+         "hex" : "0123456789abcdef0123456789abcdef"
+      },
+      {
+         "b62" : "7kuvJXdtscHb9ihU38YrsO",
+         "hex" : "fedcba9876543210fedcba9876543210"
+      },
+      {
+         "b62" : "SYW7RiJxkEgOGusQGwp",
+         "hex" : "000102030405060708090a0b0c0d0e0f"
+      },
+      {
+         "b62" : "5C2goAu3eRqUlrQWakAT4k",
+         "hex" : "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      {
+         "b62" : "IrvF33lgKWNbC5fcxrPRA",
+         "hex" : "0a000000000000000000000000000000"
+      },
+      {
+         "b62" : "1szWVIyZES2MJoAMUmjwV",
+         "hex" : "00ffffffffffffffffffffffffffffff"
+      },
+      {
+         "b62" : "3tX16dB2jpss4tZORYcqo3",
+         "hex" : "7fffffffffffffffffffffffffffffff"
+      },
+      {
+         "b62" : "7n42DEh31NcFqNarHzK4J6",
+         "hex" : "ffffffff000000000000000000000000"
+      },
+      {
+         "b62" : "1f2SI9qI5pVcE5urI",
+         "hex" : "00000001000000010000000000000000"
+      },
+      {
+         "b62" : "3H8pGALtipnCnHud4zBiky",
+         "hex" : "6ba7b8109dad11d180b400c04fd430c8"
+      },
+      {
+         "b62" : "2aUyqjCzEIiEcYMKj7TZtw",
+         "hex" : "550e8400e29b41d4a716446655440000"
+      },
+      {
+         "b62" : "YQJpYwUwvbaLOwTUr4thA",
+         "hex" : "123e4567e89b12d3a456426614174000"
+      }
+   ],
+   "uuid_samples" : [
+      "4htOuoyE0Hg4fh5tuGbN08",
+      "4htZpvIz2BeBseG4tcOL1x",
+      "4htklpUvksD1RdzIZP2N1T",
+      "4htvsSSj0fzPzjmhirgDNK",
+      "4hu7IvFpx91azebj3SHRoH"
+   ]
+}
