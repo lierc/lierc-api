@@ -76,7 +76,7 @@ Array of `{secret, password, hash}` from `Util->hash_password($password, $secret
 
 Array of `{email, valid}` where `valid` is whether
 `Data::Validate::Email::is_email($email)` returns a defined value (the check in
-`Auth.pm` register). 80 cases: plain and malformed addresses, TLDs (gTLD, ccTLD,
+`Auth.pm` register). 71 cases: plain and malformed addresses, TLDs (gTLD, ccTLD,
 `.party`, bogus `.zzzz`), case, subdomains, trailing dot, IP literals, quoted
 local parts, `+` tags, whitespace, extra `@` (Perl's `split` drops trailing empty
 fields, so `a@example.com@` is valid), and label/length limits.
