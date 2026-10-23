@@ -31,10 +31,10 @@ var routes = []route{
 	{Method: "GET", Pattern: "/highlight", Name: "message.highlight", H: messageHighlight},
 	{Method: "GET", Pattern: "/highlight/:event", Name: "message.highlight", H: messageHighlight},
 
-	{Method: "GET", Pattern: "/preference", Name: "pref.list"},
-	{Method: "GET", Pattern: "/preference/:pref", Name: "pref.show"},
-	{Method: "POST", Pattern: "/preference/:pref", Name: "pref.upsert"},
-	{Method: "GET", Pattern: "/unsubscribe", Name: "pref.unsubscribe"},
+	{Method: "GET", Pattern: "/preference", Name: "pref.list", H: prefList},
+	{Method: "GET", Pattern: "/preference/:pref", Name: "pref.show", H: prefShow},
+	{Method: "POST", Pattern: "/preference/:pref", Name: "pref.upsert", H: prefUpsert},
+	{Method: "GET", Pattern: "/unsubscribe", Name: "pref.unsubscribe", H: prefUnsubscribe},
 
 	{Method: "GET", Pattern: "/connection", Name: "connection.list", H: connectionList},
 	{Method: "POST", Pattern: "/connection", Name: "connection.create", H: connectionCreate},
@@ -58,10 +58,10 @@ var routes = []route{
 	{Method: "DELETE", Pattern: "/connection/:id/channel/:channel/ignore/:from", Name: "ignore.delete", H: ignoreDelete},
 	{Method: "GET", Pattern: "/ignore", Name: "ignore.list", H: ignoreList},
 
-	{Method: "GET", Pattern: "/notification/web_push_keys", Name: "webpush.keys"},
-	{Method: "GET", Pattern: "/notification/web_push", Name: "webpush.list"},
-	{Method: "POST", Pattern: "/notification/web_push", Name: "webpush.upsert"},
-	{Method: "DELETE", Pattern: "/notification/web_push/{endpoint:.+}", Name: "webpush.delete"},
+	{Method: "GET", Pattern: "/notification/web_push_keys", Name: "webpush.keys", H: webpushKeys},
+	{Method: "GET", Pattern: "/notification/web_push", Name: "webpush.list", H: webpushList},
+	{Method: "POST", Pattern: "/notification/web_push", Name: "webpush.upsert", H: webpushUpsert},
+	{Method: "DELETE", Pattern: "/notification/web_push/{endpoint:.+}", Name: "webpush.delete", H: webpushDelete},
 
 	{Method: "GET", Pattern: "/notification/apn/config", Name: "apn.config"},
 	{Method: "POST", Pattern: "/notification/apn/device", Name: "apn.device"},
@@ -70,9 +70,9 @@ var routes = []route{
 	{Method: "POST", Pattern: "/v1/devices/:device_id/registrations/:push_id", Name: "apn.register", Public: true},
 	{Method: "DELETE", Pattern: "/v1/devices/:device_id/registrations/:push_id", Name: "apn.unregister", Public: true},
 
-	{Method: "POST", Pattern: "/image", Name: "image.create"},
-	{Method: "GET", Pattern: "/image", Name: "image.list"},
-	{Method: "DELETE", Pattern: "/image/{url:.*}", Name: "image.delete"},
+	{Method: "POST", Pattern: "/image", Name: "image.create", H: imageCreate},
+	{Method: "GET", Pattern: "/image", Name: "image.list", H: imageList},
+	{Method: "DELETE", Pattern: "/image/{url:.*}", Name: "image.delete", H: imageDelete},
 }
 
 type compiledRoute struct {
