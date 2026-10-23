@@ -63,12 +63,12 @@ var routes = []route{
 	{Method: "POST", Pattern: "/notification/web_push", Name: "webpush.upsert", H: webpushUpsert},
 	{Method: "DELETE", Pattern: "/notification/web_push/{endpoint:.+}", Name: "webpush.delete", H: webpushDelete},
 
-	{Method: "GET", Pattern: "/notification/apn/config", Name: "apn.config"},
-	{Method: "POST", Pattern: "/notification/apn/device", Name: "apn.device"},
-	{Method: "POST", Pattern: "/v1/pushPackages/:push_id", Name: "apn.package", Public: true},
-	{Method: "POST", Pattern: "/v1/log", Name: "apn.log", Public: true},
-	{Method: "POST", Pattern: "/v1/devices/:device_id/registrations/:push_id", Name: "apn.register", Public: true},
-	{Method: "DELETE", Pattern: "/v1/devices/:device_id/registrations/:push_id", Name: "apn.unregister", Public: true},
+	{Method: "GET", Pattern: "/notification/apn/config", Name: "apn.config", H: apnConfig},
+	{Method: "POST", Pattern: "/notification/apn/device", Name: "apn.device", H: apnDevice},
+	{Method: "POST", Pattern: "/v1/pushPackages/:push_id", Name: "apn.package", Public: true, H: apnPackage},
+	{Method: "POST", Pattern: "/v1/log", Name: "apn.log", Public: true, H: apnLog},
+	{Method: "POST", Pattern: "/v1/devices/:device_id/registrations/:push_id", Name: "apn.register", Public: true, H: apnRegister},
+	{Method: "DELETE", Pattern: "/v1/devices/:device_id/registrations/:push_id", Name: "apn.unregister", Public: true, H: apnUnregister},
 
 	{Method: "POST", Pattern: "/image", Name: "image.create", H: imageCreate},
 	{Method: "GET", Pattern: "/image", Name: "image.list", H: imageList},

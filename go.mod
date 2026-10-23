@@ -7,6 +7,7 @@ require (
 	github.com/jackc/pgx/v5 v5.7.6
 	github.com/nsqio/go-nsq v1.1.0
 	github.com/nsqio/nsq v1.3.0
+	github.com/smallstep/pkcs7 v0.2.3
 	golang.org/x/crypto v0.40.0
 )
 
