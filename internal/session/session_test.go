@@ -235,7 +235,7 @@ func TestMiddlewareClear(t *testing.T) {
 	}
 	for _, n := range []string{"chats2", "chats"} {
 		ck := find(res, n)
-		if ck == nil || ck.MaxAge != -1 || ck.Value != "" || ck.Path != "/" || ck.Domain != "" {
+		if ck == nil || ck.MaxAge != -1 || ck.Value != "" || ck.Path != "/" || ck.Domain != "" || ck.Secure {
 			t.Fatalf("%s: %+v", n, ck)
 		}
 	}
@@ -282,4 +282,41 @@ func sha1hex(s, key string) string {
 	m := hmac.New(sha1.New, []byte(key))
 	m.Write([]byte(s))
 	return hex.EncodeToString(m.Sum(nil))
+}
+
+func TestMiddlewareClearSecure(t *testing.T) {
+	c := codec()
+	c.Secure = true
+	res := run(c, nil, func(s *Session) { s.Clear() })
+	for _, n := range []string{"chats2", "chats"} {
+		if ck := find(res, n); ck == nil || !ck.Secure || ck.MaxAge != -1 {
+			t.Fatalf("%s: %+v", n, ck)
+		}
+	}
+}
+
+func serveEmpty(c Codec, cookies []*http.Cookie, h func(s *Session)) *http.Response {
+	req := httptest.NewRequest("GET", "/", nil)
+	for _, ck := range cookies {
+		req.AddCookie(ck)
+	}
+	rec := httptest.NewRecorder()
+	c.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		h(FromContext(r.Context()))
+	})).ServeHTTP(rec, req)
+	return rec.Result()
+}
+
+func TestMiddlewareEmptyHandlerSetUser(t *testing.T) {
+	res := serveEmpty(codec(), nil, func(s *Session) { s.SetUser("u9") })
+	if ck := find(res, "chats2"); ck == nil {
+		t.Fatal("cookie lost when handler writes nothing")
+	}
+}
+
+func TestMiddlewareEmptyHandlerClear(t *testing.T) {
+	res := serveEmpty(codec(), nil, func(s *Session) { s.Clear() })
+	if find(res, "chats2") == nil || find(res, "chats") == nil {
+		t.Fatal("expiry cookies lost when handler writes nothing")
+	}
 }

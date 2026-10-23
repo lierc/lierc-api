@@ -144,6 +144,8 @@ func (c Codec) Middleware(next http.Handler) http.Handler {
 		}
 		sw := &cookieWriter{ResponseWriter: w, c: c, s: s}
 		next.ServeHTTP(sw, r.WithContext(context.WithValue(r.Context(), ctxKey{}, s)))
+		// Handler wrote nothing: net/http will send an implicit 200 after we return.
+		sw.setCookies()
 	})
 }
 
@@ -174,7 +176,7 @@ func (w *cookieWriter) setCookies() {
 			http.SetCookie(w.ResponseWriter, &http.Cookie{
 				Name: n, Value: "", Path: "/", MaxAge: -1,
 				Expires:  time.Unix(0, 0),
-				HttpOnly: true, Secure: w.c.Secure && n == cookieName,
+				HttpOnly: true, Secure: w.c.Secure, // Perl sets secure on chats too (bin/api.psgi:20)
 			})
 		}
 	}
