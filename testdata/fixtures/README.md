@@ -8,14 +8,19 @@ prove compatibility with Perl. Regenerating is optional; the files are committed
 From the repository root (needs Perl 5.42 with cpanm, no system libraries):
 
     cpanm -n -L testdata/fixtures/local Plack Plack::Middleware::Session@0.36 \
-        Digest::Bcrypt Data::UUID Math::BaseConvert JSON::XS
+        Digest::Bcrypt Data::UUID Math::BaseConvert JSON::XS \
+        Data::Validate::Email@0.06 Data::Validate::Domain@0.15 Net::Domain::TLD@1.75
     perl -Itestdata/fixtures/local/lib/perl5 -Ilib testdata/fixtures/gen.pl
 
 `testdata/fixtures/local/` is git-ignored.
 
+`gen.pl` also writes `internal/api/tlds.go` (the TLD set of Net::Domain::TLD, used by
+the Go email validator). After regenerating run `gofmt -w internal/api/tlds.go`.
+
 Versions used for the committed files: Plack::Middleware::Session 0.36
 (exactly as in `cpanfile.snapshot`), Digest::Bcrypt 1.212, JSON::XS 4.04,
-Data::UUID 1.227, Math::BaseConvert 1.8, Plack 1.0055 (snapshot has 1.0054;
+Data::Validate::Email 0.06, Data::Validate::Domain 0.15, Net::Domain::TLD 1.75
+(all as in `cpanfile.snapshot`), Data::UUID 1.227, Math::BaseConvert 1.8, Plack 1.0055 (snapshot has 1.0054;
 not relevant to the output), Perl 5.42.0.
 
 The cookie Set-Cookie `expires` and the cookie id/time prefix vary per run, and
@@ -66,3 +71,12 @@ Array of `{secret, password, hash}` from `Util->hash_password($password, $secret
   32-character lowercase hex string (includes all-zero, all-`f`, leading zeros).
 - `uuid_samples`: 5 outputs of `Util->uuid` (random; only the shape is stable:
   base62 of a 128-bit value).
+
+## emails.json
+
+Array of `{email, valid}` where `valid` is whether
+`Data::Validate::Email::is_email($email)` returns a defined value (the check in
+`Auth.pm` register). 80 cases: plain and malformed addresses, TLDs (gTLD, ccTLD,
+`.party`, bogus `.zzzz`), case, subdomains, trailing dot, IP literals, quoted
+local parts, `+` tags, whitespace, extra `@` (Perl's `split` drops trailing empty
+fields, so `a@example.com@` is valid), and label/length limits.

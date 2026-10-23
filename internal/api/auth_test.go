@@ -398,25 +398,41 @@ func TestVerify(t *testing.T) {
 }
 
 func TestIsEmail(t *testing.T) {
-	good := []string{
-		"a@example.com", "first.last@example.com", "user+tag@sub.example.co.uk",
-		"o'brien@example.org", "x_y-z@ex-ample.net", "1234@example.io",
-		"UPPER@EXAMPLE.COM",
+	b, err := os.ReadFile("../../testdata/fixtures/emails.json")
+	if err != nil {
+		t.Fatal(err)
 	}
-	bad := []string{
-		"", "plain", "@example.com", "a@", "a@example", "a@.com", "a@example..com",
-		"a b@example.com", "a@exa mple.com", ".a@example.com", "a.@example.com",
-		"a..b@example.com", "a@-example.com", "a@example-.com", "a@example.c0m",
-		"a@b@example.com", "a@example.com\n", "<a@example.com>", "a@example.c",
+	var cases []struct {
+		Email string `json:"email"`
+		Valid bool   `json:"valid"`
 	}
-	for _, s := range good {
-		if !isEmail(s) {
-			t.Errorf("isEmail(%q) = false", s)
+	if err := json.Unmarshal(b, &cases); err != nil {
+		t.Fatal(err)
+	}
+	if len(cases) < 40 {
+		t.Fatalf("only %d fixture cases", len(cases))
+	}
+	for _, c := range cases {
+		if got := isEmail(c.Email); got != c.Valid {
+			t.Errorf("isEmail(%q) = %v, Perl says %v", c.Email, got, c.Valid)
 		}
 	}
-	for _, s := range bad {
-		if isEmail(s) {
-			t.Errorf("isEmail(%q) = true", s)
-		}
+}
+
+func TestRenderAuthTemplatePercent(t *testing.T) {
+	got := renderAuthTemplate("a%sb", "https://x/y?%s")
+	if !strings.HasPrefix(got, "Hello a%sb,\n") || !strings.Contains(got, "address:\nhttps://x/y?%s\n") {
+		t.Errorf("rendered:\n%s", got)
 	}
+}
+
+func TestLoginLongSecret(t *testing.T) {
+	e := setupAuth(t, true)
+	app := &App{Cfg: config.Config{Secret: "a-secret-longer-than-sixteen"}, DB: e.db, AssetDir: "."}
+	h := e.codec.Middleware(newHandler(app, routes))
+	req := httptest.NewRequest("POST", "/auth", strings.NewReader(url.Values{"email": {"alice"}, "pass": {"x"}}.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	expectError(t, rec, 400, "Salt must be exactly 16 octets long")
 }

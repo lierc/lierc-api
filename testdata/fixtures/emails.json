@@ -1,0 +1,286 @@
+[
+   {
+      "email" : "a@example.com",
+      "valid" : true
+   },
+   {
+      "email" : "first.last@example.com",
+      "valid" : true
+   },
+   {
+      "email" : "user+tag@sub.example.co.uk",
+      "valid" : true
+   },
+   {
+      "email" : "o'brien@example.org",
+      "valid" : false
+   },
+   {
+      "email" : "x_y-z@ex-ample.net",
+      "valid" : true
+   },
+   {
+      "email" : "1234@example.io",
+      "valid" : true
+   },
+   {
+      "email" : "UPPER@EXAMPLE.COM",
+      "valid" : true
+   },
+   {
+      "email" : "",
+      "valid" : false
+   },
+   {
+      "email" : "plain",
+      "valid" : false
+   },
+   {
+      "email" : "@example.com",
+      "valid" : false
+   },
+   {
+      "email" : "a@",
+      "valid" : false
+   },
+   {
+      "email" : "a@example",
+      "valid" : false
+   },
+   {
+      "email" : "a@.com",
+      "valid" : false
+   },
+   {
+      "email" : "a@example..com",
+      "valid" : false
+   },
+   {
+      "email" : "a b@example.com",
+      "valid" : false
+   },
+   {
+      "email" : "a@exa mple.com",
+      "valid" : false
+   },
+   {
+      "email" : ".a@example.com",
+      "valid" : true
+   },
+   {
+      "email" : "a.@example.com",
+      "valid" : true
+   },
+   {
+      "email" : "a..b@example.com",
+      "valid" : true
+   },
+   {
+      "email" : "a@-example.com",
+      "valid" : false
+   },
+   {
+      "email" : "a@example-.com",
+      "valid" : false
+   },
+   {
+      "email" : "a@example.c0m",
+      "valid" : false
+   },
+   {
+      "email" : "a@b@example.com",
+      "valid" : false
+   },
+   {
+      "email" : "a@example.com\n",
+      "valid" : false
+   },
+   {
+      "email" : "<a@example.com>",
+      "valid" : false
+   },
+   {
+      "email" : "a@example.c",
+      "valid" : false
+   },
+   {
+      "email" : "lee@relaychat.party",
+      "valid" : true
+   },
+   {
+      "email" : "a@example.org",
+      "valid" : true
+   },
+   {
+      "email" : "a@example.uk",
+      "valid" : true
+   },
+   {
+      "email" : "a@example.de",
+      "valid" : true
+   },
+   {
+      "email" : "a@example.museum",
+      "valid" : true
+   },
+   {
+      "email" : "a@example.xyz",
+      "valid" : true
+   },
+   {
+      "email" : "a@example.zzzz",
+      "valid" : false
+   },
+   {
+      "email" : "a@example.invalid",
+      "valid" : true
+   },
+   {
+      "email" : "a@example.local",
+      "valid" : false
+   },
+   {
+      "email" : "a@EXAMPLE.PARTY",
+      "valid" : true
+   },
+   {
+      "email" : "a@example.Com",
+      "valid" : true
+   },
+   {
+      "email" : "a@mail.sub.example.com",
+      "valid" : true
+   },
+   {
+      "email" : "a@example.com.",
+      "valid" : true
+   },
+   {
+      "email" : "a@example.com..",
+      "valid" : false
+   },
+   {
+      "email" : "a@a_b.example.com",
+      "valid" : false
+   },
+   {
+      "email" : "a_b@example.com",
+      "valid" : true
+   },
+   {
+      "email" : "a@1.example.com",
+      "valid" : true
+   },
+   {
+      "email" : "a@[127.0.0.1]",
+      "valid" : false
+   },
+   {
+      "email" : "a@127.0.0.1",
+      "valid" : false
+   },
+   {
+      "email" : "a@[IPv6:::1]",
+      "valid" : false
+   },
+   {
+      "email" : "\"quoted\"@example.com",
+      "valid" : false
+   },
+   {
+      "email" : "\"a b\"@example.com",
+      "valid" : false
+   },
+   {
+      "email" : "a!b@example.com",
+      "valid" : false
+   },
+   {
+      "email" : "a#b@example.com",
+      "valid" : false
+   },
+   {
+      "email" : "a/b@example.com",
+      "valid" : false
+   },
+   {
+      "email" : "a&b@example.com",
+      "valid" : false
+   },
+   {
+      "email" : "a%b@example.com",
+      "valid" : false
+   },
+   {
+      "email" : "a=b@example.com",
+      "valid" : false
+   },
+   {
+      "email" : "user+tag@example.com",
+      "valid" : true
+   },
+   {
+      "email" : "+@example.com",
+      "valid" : true
+   },
+   {
+      "email" : "a+b+c@example.com",
+      "valid" : true
+   },
+   {
+      "email" : " a@example.com",
+      "valid" : false
+   },
+   {
+      "email" : "a@example.com ",
+      "valid" : false
+   },
+   {
+      "email" : "a@example.com\t",
+      "valid" : false
+   },
+   {
+      "email" : "\na@example.com",
+      "valid" : false
+   },
+   {
+      "email" : "a@example.com@",
+      "valid" : true
+   },
+   {
+      "email" : "@@",
+      "valid" : false
+   },
+   {
+      "email" : "a@@example.com",
+      "valid" : false
+   },
+   {
+      "email" : "a@b@",
+      "valid" : false
+   },
+   {
+      "email" : "a@xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.com",
+      "valid" : true
+   },
+   {
+      "email" : "a@xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.com",
+      "valid" : false
+   },
+   {
+      "email" : "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx@example.com",
+      "valid" : true
+   },
+   {
+      "email" : "a@abcdefghi.abcdefghi.abcdefghi.abcdefghi.abcdefghi.abcdefghi.abcdefghi.abcdefghi.abcdefghi.abcdefghi.abcdefghi.abcdefghi.abcdefghi.abcdefghi.abcdefghi.abcdefghi.abcdefghi.abcdefghi.abcdefghi.abcdefghi.abcdefghi.abcdefghi.abcdefghi.abcdefghi.abcdefghi.abcdefghi.abcdefghi.abcdefghi.abcdefghi.abcdefghi.com",
+      "valid" : false
+   },
+   {
+      "email" : "0@0.com",
+      "valid" : true
+   },
+   {
+      "email" : "a@a.co",
+      "valid" : true
+   }
+]
