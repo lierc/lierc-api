@@ -223,6 +223,8 @@ func (a *App) apnSign(content []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	// smallstep defaults to SHA-1; openssl 3 smime signs with SHA-256.
+	sd.SetDigestAlgorithm(pkcs7.OIDDigestAlgorithmSHA256)
 	if err := sd.AddSigner(signers[0], key, pkcs7.SignerInfoConfig{}); err != nil {
 		return nil, err
 	}

@@ -252,6 +252,9 @@ func TestPackage(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if len(p7.Signers) != 1 || !p7.Signers[0].DigestAlgorithm.Algorithm.Equal(pkcs7.OIDDigestAlgorithmSHA256) {
+		t.Errorf("digest algorithm is not SHA-256: %+v", p7.Signers)
+	}
 	if len(p7.Content) != 0 {
 		t.Error("signature is not detached")
 	}
