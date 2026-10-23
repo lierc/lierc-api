@@ -17,13 +17,13 @@ type route struct {
 // routes lists lib/API/Routes.pm in order. Handlers are filled in by later
 // tasks; a nil handler answers 404 not found.
 var routes = []route{
-	{Method: "GET", Pattern: "/health", Name: "auth.health"},
-	{Method: "GET", Pattern: "/auth", Name: "auth.show"},
-	{Method: "POST", Pattern: "/auth", Name: "auth.login", Public: true},
-	{Method: "POST", Pattern: "/register", Name: "auth.register", Public: true},
-	{Method: "", Pattern: "/logout", Name: "auth.logout", Public: true},
-	{Method: "GET", Pattern: "/token", Name: "auth.token"},
-	{Method: "GET", Pattern: "/verify", Name: "auth.verify"},
+	{Method: "GET", Pattern: "/health", Name: "auth.health", H: authHealth},
+	{Method: "GET", Pattern: "/auth", Name: "auth.show", H: authShow},
+	{Method: "POST", Pattern: "/auth", Name: "auth.login", Public: true, H: authLogin},
+	{Method: "POST", Pattern: "/register", Name: "auth.register", Public: true, H: authRegister},
+	{Method: "", Pattern: "/logout", Name: "auth.logout", Public: true, H: authLogout},
+	{Method: "GET", Pattern: "/token", Name: "auth.token", H: authToken},
+	{Method: "GET", Pattern: "/verify", Name: "auth.verify", H: authVerify},
 
 	{Method: "GET", Pattern: "/log/:event", Name: "message.log"},
 	{Method: "GET", Pattern: "/missed", Name: "message.missed"},

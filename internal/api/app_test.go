@@ -364,7 +364,8 @@ func TestNilHandlerNotFound(t *testing.T) {
 		t.Fatal(err)
 	}
 	codec := session.Codec{Secret: "s"}
-	h := codec.Middleware(New(config.Config{Secret: "s"}, d, nil, nil))
+	table := []route{{Method: "GET", Pattern: "/auth", Name: "auth.show"}}
+	h := codec.Middleware(newHandler(&App{Cfg: config.Config{Secret: "s"}, DB: d}, table))
 	req := httptest.NewRequest("GET", "/auth", nil)
 	req.AddCookie(&http.Cookie{Name: "chats2", Value: codec.Encode(user)})
 	rec := httptest.NewRecorder()
