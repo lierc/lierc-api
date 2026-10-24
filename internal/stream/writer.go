@@ -14,9 +14,10 @@ import (
 	"github.com/lierc/lierc-api/internal/ids"
 )
 
-// bufferSize is how many queued events a stream may hold. Pings and live
-// events never wait for room: a stream whose buffer is full is dropped as a
-// slow client. Its own replay waits instead.
+// bufferSize is how many pings and live events a stream may queue. They never
+// wait for room: a stream whose buffer is full is dropped as a slow client.
+// Replay events go through their own unbuffered channel, so a long replay
+// never takes up this buffer.
 const bufferSize = 1024
 
 // closeTimeout bounds the save_channels and last_login work done on close.
@@ -25,35 +26,43 @@ const closeTimeout = time.Minute
 var padding = ":" + strings.Repeat(" ", 2<<10) + "\n" // Writer.pm send_padding(2 << 10)
 
 // stream is one open event stream (Writer.pm). Only the request goroutine
-// writes to the response; everything else queues on out.
+// writes to the response; everything else hands it events on out (pings and
+// live events) or replay. The writer takes from both as they come, so replay
+// and live events interleave, as they do in Perl, where live events are
+// written on arrival while the replay waits on liercd.
 type stream struct {
 	id, user, remote string
 	agent            *string
 	created          int64
 
 	out      chan []byte
+	replay   chan []byte
 	done     chan struct{}
 	stopOnce sync.Once
 }
 
 func (st *stream) stop() { st.stopOnce.Do(func() { close(st.done) }) }
 
-// offer queues b without blocking. A full buffer stops the stream.
-func (st *stream) offer(b []byte) {
+// offer queues b without blocking. A full buffer stops the stream and
+// reports false; the caller then deregisters it.
+func (st *stream) offer(b []byte) bool {
 	select {
 	case <-st.done:
-		return
+		return true
 	default:
 	}
 	select {
 	case st.out <- b:
+		return true
 	default:
 		log.Printf("stream %s: buffer full, closing", st.id)
 		st.stop()
+		return false
 	}
 }
 
-// push queues b, waiting for room; false once the stream has stopped.
+// push hands a replay event to the writer, waiting until it takes it; false
+// once the stream has stopped.
 func (st *stream) push(b []byte) bool {
 	select {
 	case <-st.done:
@@ -61,7 +70,7 @@ func (st *stream) push(b []byte) bool {
 	default:
 	}
 	select {
-	case st.out <- b:
+	case st.replay <- b:
 		return true
 	case <-st.done:
 		return false
@@ -79,6 +88,7 @@ func (s *Server) serveStream(w http.ResponseWriter, r *http.Request, user string
 		remote:  remote,
 		created: time.Now().Unix(),
 		out:     make(chan []byte, bufferSize),
+		replay:  make(chan []byte),
 		done:    make(chan struct{}),
 	}
 	if v, ok := r.Header["User-Agent"]; ok {
@@ -96,6 +106,7 @@ func (s *Server) serveStream(w http.ResponseWriter, r *http.Request, user string
 	var replay sync.WaitGroup
 	defer func() {
 		// Runs once per stream, on whatever ended it (Writer.pm on_close).
+		// A slow-client drop has already deregistered it; that is harmless.
 		st.stop()
 		s.deregister(st)
 		cancel()
@@ -126,6 +137,10 @@ func (s *Server) serveStream(w http.ResponseWriter, r *http.Request, user string
 	for {
 		select {
 		case b := <-st.out:
+			if !s.write(rc, w, b) {
+				return
+			}
+		case b := <-st.replay:
 			if !s.write(rc, w, b) {
 				return
 			}

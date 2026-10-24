@@ -100,8 +100,16 @@ func (s *Server) pingAll() {
 	defer s.mu.Unlock()
 	for _, user := range s.streams {
 		for _, st := range user {
-			st.offer(pingEvent())
+			s.offerLocked(st, pingEvent())
 		}
+	}
+}
+
+// offerLocked queues b on st, deregistering st at once if that drops it as a
+// slow client. s.mu must be held. The stream's handler still does the cleanup.
+func (s *Server) offerLocked(st *stream, b []byte) {
+	if !st.offer(b) {
+		s.deregisterLocked(st)
 	}
 }
 
@@ -117,6 +125,10 @@ func (s *Server) register(st *stream) {
 func (s *Server) deregister(st *stream) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	s.deregisterLocked(st)
+}
+
+func (s *Server) deregisterLocked(st *stream) {
 	delete(s.streams[st.user], st.id)
 	if len(s.streams[st.user]) == 0 {
 		delete(s.streams, st.user)
@@ -158,7 +170,7 @@ func (s *Server) Deliver(body []byte) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for _, st := range s.streams[owner] {
-		st.offer(ev)
+		s.offerLocked(st, ev)
 	}
 }
 

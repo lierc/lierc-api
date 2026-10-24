@@ -14,6 +14,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"syscall"
 	"testing"
 	"time"
 
@@ -861,4 +862,130 @@ func TestWriteTimeout(t *testing.T) {
 		}
 	}
 	poll(t, "slow client to be dropped", func() bool { return e.s.count(u) == 0 })
+}
+
+func TestSlowClientDropped(t *testing.T) {
+	e := setup(t)
+	e.s.WriteTimeout = time.Hour // only the buffer rule can drop it
+	u := e.addUser("alice")
+	e.liveConn("ca", u)
+
+	conn, err := net.Dial("tcp", e.srv.Listener.Addr().String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close() // unblocks the stalled writer so the handler can finish
+	conn.(*net.TCPConn).SetReadBuffer(4096)
+	fmt.Fprintf(conn, "GET / HTTP/1.1\r\nHost: x\r\nCookie: chats2=%s\r\n\r\n", e.codec.Encode(u))
+	// Never read from conn again.
+
+	poll(t, "stream registration", func() bool { return e.s.count(u) == 1 })
+	e.waitReplay()
+	e.s.mu.Lock()
+	var st *stream
+	for _, v := range e.s.streams[u] {
+		st = v
+	}
+	e.s.mu.Unlock()
+
+	msg := []byte(`{"ConnectionId":"ca","pad":"` + strings.Repeat("x", 32<<10) + `"}`)
+	for i := 0; e.s.count(u) == 1; i++ {
+		if i == 20000 {
+			t.Fatal("stream never dropped")
+		}
+		e.s.Deliver(msg)
+	}
+	// Deregistered by the delivery that overflowed, not later by the handler.
+	select {
+	case <-st.done:
+	default:
+		t.Error("stream deregistered but not stopped")
+	}
+	if len(st.out) != bufferSize {
+		t.Errorf("dropped with %d queued, want a full buffer (%d)", len(st.out), bufferSize)
+	}
+	res := e.get("/stats", "", "lierc-key", testKey)
+	body, _ := io.ReadAll(res.Body)
+	res.Body.Close()
+	if string(body) != "{}" {
+		t.Errorf("stats after drop = %s", body)
+	}
+}
+
+// A replay far larger than the live buffer, to a client that reads slowly,
+// must not crowd out pings and live events and get the stream dropped.
+func TestLargeReplaySurvivesLiveEvents(t *testing.T) {
+	e := setup(t)
+	u := e.addUser("alice")
+	const channels = 3000
+	chans := make([]string, channels)
+	long := strings.Repeat("c", 300)
+	for i := range chans {
+		chans[i] = fmt.Sprintf(`{"Name":"#%s%04d"}`, long, i)
+	}
+	e.addConn("ca", u, `{"Host":"irc.example"}`)
+	e.fake.Respond("GET", "/ca/status", 200, statusJSON("ca", "me", true, true,
+		`,"Isupport":[],"Channels":[`+strings.Join(chans, ",")+`]`))
+
+	// A small receive buffer, and no reading until the live events are queued,
+	// so the replay backs up behind the socket.
+	dialer := &net.Dialer{Control: func(_, _ string, rc syscall.RawConn) error {
+		return rc.Control(func(fd uintptr) {
+			syscall.SetsockoptInt(int(fd), syscall.SOL_SOCKET, syscall.SO_RCVBUF, 4096)
+		})
+	}}
+	hc := &http.Client{Transport: &http.Transport{DisableKeepAlives: true, DialContext: dialer.DialContext}}
+	req, _ := http.NewRequest("GET", e.srv.URL+"/", nil)
+	req.AddCookie(&http.Cookie{Name: "chats2", Value: e.codec.Encode(u)})
+	res, err := hc.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := &client{t: t, resp: res, events: make(chan event, 20000), errc: make(chan error, 1)}
+	t.Cleanup(c.close)
+
+	poll(t, "replay to fetch status", func() bool {
+		for _, call := range e.fake.Calls() {
+			if call.Path == "/ca/status" {
+				return true
+			}
+		}
+		return false
+	})
+	// Paced so the live events arrive while the replay is backed up behind the
+	// unread socket (the replay itself takes no time to build).
+	const live = 300
+	for i := 0; i < live; i++ {
+		time.Sleep(time.Millisecond)
+		e.s.Deliver([]byte(fmt.Sprintf(`{"ConnectionId":"ca","MessageId":"L%d"}`, i)))
+		if i%10 == 0 {
+			e.s.pingAll()
+		}
+	}
+	if e.s.count(u) != 1 {
+		t.Fatal("stream dropped while replay was backed up")
+	}
+
+	br := bufio.NewReader(res.Body)
+	pad := make([]byte, len(padding))
+	if _, err := io.ReadFull(br, pad); err != nil || string(pad) != padding {
+		t.Fatalf("padding = %q, %v", pad, err)
+	}
+	go c.parse(br)
+
+	joins, seen := 0, map[string]bool{}
+	for joins < channels || len(seen) < live {
+		ev := c.next()
+		switch {
+		case ev.typ == "ping":
+		case ev.hasID:
+			seen[ev.id] = true
+		case strings.Contains(ev.data, `"Command":"JOIN"`):
+			joins++
+		}
+	}
+	c.checkErr()
+	if e.s.count(u) != 1 {
+		t.Error("stream not registered after replay")
+	}
 }

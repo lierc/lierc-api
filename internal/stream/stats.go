@@ -17,15 +17,19 @@ func (s *Server) serveStats(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	writeJSON(w, http.StatusOK, s.stats(r.URL.Query().Get("user")))
+}
+
+// stats snapshots the registry; the response is written after the lock is released.
+func (s *Server) stats(user string) any {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if user := r.URL.Query().Get("user"); user != "" && user != "0" { // Perl: if ($user)
+	if user != "" && user != "0" { // Perl: if ($user)
 		data := []streamInfo{}
 		for _, st := range s.streams[user] {
 			data = append(data, streamInfo{st.remote, st.agent, st.created})
 		}
-		writeJSON(w, http.StatusOK, data)
-		return
+		return data
 	}
 	data := map[string]int{}
 	for user, streams := range s.streams {
@@ -33,5 +37,5 @@ func (s *Server) serveStats(w http.ResponseWriter, r *http.Request) {
 			data[user] = len(streams)
 		}
 	}
-	writeJSON(w, http.StatusOK, data)
+	return data
 }
