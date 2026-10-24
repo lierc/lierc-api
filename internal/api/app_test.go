@@ -5,14 +5,17 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"regexp"
 	"strings"
 	"testing"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/lierc/lierc-api/internal/config"
 	"github.com/lierc/lierc-api/internal/db"
@@ -431,5 +434,57 @@ func TestAPNLogBounded(t *testing.T) {
 	want := `a\nb\r\n` + strings.Repeat("x", 64<<10-5) + "\n"
 	if logged.String() != want {
 		t.Fatalf("logged %d bytes, %d lines; want %d bytes", logged.Len(), strings.Count(logged.String(), "\n"), len(want))
+	}
+}
+
+// Database errors never show their text: a connect error names the host,
+// user and database.
+func TestDBErrorsAreNull(t *testing.T) {
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	addr := l.Addr().String()
+	l.Close()
+	d, err := db.Open(context.Background(), config.Config{DBHost: addr, DBUser: "secretuser", DBName: "secretdb"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d.Close()
+	table := []route{
+		{Method: "GET", Pattern: "/exec", Name: "t.exec", Public: true, H: func(a *App, r *Request) (Response, error) {
+			_, err := a.DB.Pool.Exec(r.Context(), `SELECT 1`)
+			return nil, err
+		}},
+		{Method: "GET", Pattern: "/plain", Name: "t.plain", Public: true, H: func(a *App, r *Request) (Response, error) {
+			return nil, errors.New("Invalid token")
+		}},
+	}
+	h := newHandler(&App{DB: d}, table)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest("GET", "/exec", nil))
+	expectNullError(t, rec)
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest("GET", "/plain", nil))
+	expectError(t, rec, 400, "Invalid token")
+
+	for _, err := range []error{
+		&db.Error{Err: context.DeadlineExceeded},
+		&db.Error{Err: pgx.ErrNoRows},
+		fmt.Errorf("wrapped: %w", &db.Error{Err: errors.New("failed to connect to `user=u database=d`")}),
+	} {
+		rec := httptest.NewRecorder()
+		ErrorFromDB(err).Write(rec)
+		expectNullError(t, rec)
+	}
+	rec = httptest.NewRecorder()
+	ErrorFromDB(&db.Error{Err: &pgconn.PgError{Detail: "Key (x)=(1) already exists."}}).Write(rec)
+	expectError(t, rec, 400, "Key (x)=(1) already exists.")
+}
+
+func expectNullError(t *testing.T, rec *httptest.ResponseRecorder) {
+	t.Helper()
+	if rec.Code != 400 || rec.Body.String() != `{"status":"error","error":null}` {
+		t.Fatalf("%d %s", rec.Code, rec.Body)
 	}
 }

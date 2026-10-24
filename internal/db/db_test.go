@@ -3,8 +3,15 @@ package db_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"net"
 	"testing"
+	"time"
 
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/lierc/lierc-api/internal/config"
+	"github.com/lierc/lierc-api/internal/db"
 	"github.com/lierc/lierc-api/internal/testenv"
 )
 
@@ -128,5 +135,55 @@ func TestCheckTokenWrongUser(t *testing.T) {
 	tok, _ := d.GetToken(ctx, "u1")
 	if ok, _ := d.CheckToken(ctx, "u2", tok); ok {
 		t.Fatal("token accepted for other user")
+	}
+}
+
+func TestErrorsAreWrapped(t *testing.T) {
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	addr := l.Addr().String()
+	l.Close() // nothing listens here now
+	d, err := db.Open(ctx, config.Config{DBHost: addr, DBUser: "u", DBName: "lierc"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d.Close()
+	var de *db.Error
+	var ce *pgconn.ConnectError
+	_, err = d.Pool.Exec(ctx, `SELECT 1`)
+	if !errors.As(err, &de) || !errors.As(err, &ce) {
+		t.Fatalf("Exec: %T %v", err, err)
+	}
+	if _, err := d.UserExists(ctx, "x"); !errors.As(err, &de) {
+		t.Fatalf("QueryRow: %T %v", err, err)
+	}
+	if err := d.Ping(ctx); !errors.As(err, &de) {
+		t.Fatalf("Ping: %T %v", err, err)
+	}
+
+	live := testenv.Postgres(t)
+	if _, err := live.Pool.Exec(ctx, `SELECT 1/0`); !errors.As(err, &de) {
+		t.Fatalf("PgError: %T %v", err, err)
+	}
+	var n int
+	err = live.Pool.QueryRow(ctx, `SELECT 1 WHERE false`).Scan(&n)
+	if !errors.As(err, &de) || !errors.Is(err, pgx.ErrNoRows) {
+		t.Fatalf("ErrNoRows: %T %v", err, err)
+	}
+	rows, err := live.Pool.Query(ctx, `SELECT 'x'`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rows.Next()
+	if err := rows.Scan(&n); !errors.As(err, &de) {
+		t.Fatalf("rows.Scan: %T %v", err, err)
+	}
+	rows.Close()
+	tctx, cancel := context.WithTimeout(ctx, time.Millisecond)
+	defer cancel()
+	if _, err := live.Pool.Exec(tctx, `SELECT pg_sleep(1)`); !errors.As(err, &de) {
+		t.Fatalf("timeout: %T %v", err, err)
 	}
 }

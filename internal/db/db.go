@@ -15,7 +15,8 @@ import (
 	"github.com/lierc/lierc-api/internal/ids"
 )
 
-type DB struct{ Pool *pgxpool.Pool }
+// DB holds the pool; every error it returns is an *Error.
+type DB struct{ Pool *Pool }
 
 type User struct{ ID, Username, Email string }
 
@@ -46,7 +47,7 @@ func Open(ctx context.Context, cfg config.Config) (*DB, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &DB{Pool: pool}, nil
+	return &DB{Pool: &Pool{pool}}, nil
 }
 
 func (d *DB) Close() { d.Pool.Close() }

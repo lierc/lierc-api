@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/lierc/lierc-api/internal/db"
 )
 
 // Response is what a handler returns; Write sends it (lib/API/Responses.pm).
@@ -111,7 +112,9 @@ func Unauthorized(msg string) Response {
 }
 
 // ErrorFromDB is a 400 for err. For a Postgres error the message is only its
-// DETAIL, or null when there is none (API::Responses::error on DBD:: errors).
+// DETAIL, or null when there is none; any other database error (connect,
+// pool, timeout) is null too (API::Responses::error on DBD:: errors). Other
+// errors keep their text.
 func ErrorFromDB(err error) Response {
 	var pg *pgconn.PgError
 	if errors.As(err, &pg) {
@@ -119,6 +122,10 @@ func ErrorFromDB(err error) Response {
 			return errorStatus(nil, http.StatusBadRequest)
 		}
 		return Error(pg.Detail)
+	}
+	var de *db.Error
+	if errors.As(err, &de) {
+		return errorStatus(nil, http.StatusBadRequest)
 	}
 	return Error(err.Error())
 }
