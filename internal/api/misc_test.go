@@ -230,3 +230,31 @@ func TestImageDelete(t *testing.T) {
 		t.Fatalf("rows after delete = %d", n)
 	}
 }
+
+// Image.pm list: min($limit || 15, 50) binds the raw string at or below the
+// max, and $page * $limit is numeric.
+func TestImageListPerlNumification(t *testing.T) {
+	e := setupMisc(t, "")
+	for i := 0; i < 60; i++ {
+		if _, err := e.db.Pool.Exec(context.Background(),
+			`INSERT INTO image ("user", url, delete_hash) VALUES ($1, $2, 'h')`, e.id, "u"+string(rune('A'+i/26))+string(rune('a'+i%26))); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for q, want := range map[string]int{
+		"?limit=": 15, "?limit=0": 15, "?limit=60abc": 50, "?limit=abc": -1, "?limit=1.5": -1, "?limit=1e1": -1,
+		"?page=abc": 15, "?page=0": 15, "?page=": 15, "?page=1.5": -1, "?page=3": 15, "?page=1e0&limit=50": 10, "?page=-1": -1,
+	} {
+		rec := e.get("/image" + q)
+		if want < 0 {
+			if rec.Code != 400 || rec.Body.String() != `{"status":"error","error":null}` {
+				t.Errorf("%q: %d %s", q, rec.Code, rec.Body)
+			}
+			continue
+		}
+		var rows []map[string]string
+		if rec.Code != 200 || json.Unmarshal(rec.Body.Bytes(), &rows) != nil || len(rows) != want {
+			t.Errorf("%q: %d %s, want %d rows", q, rec.Code, rec.Body, want)
+		}
+	}
+}

@@ -3,12 +3,10 @@ package api
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
 	"io"
 	"mime"
 	"mime/multipart"
 	"net/http"
-	"strconv"
 	"strings"
 )
 
@@ -76,24 +74,21 @@ func imageDelete(a *App, r *Request) (Response, error) {
 }
 
 func imageList(a *App, r *Request) (Response, error) {
-	limit, err := limitParam(r, 15, 50)
-	if err != nil {
-		return nil, err
+	limit := limitParam(r, 15, 50)
+	// `$page * $limit` (Image.pm list) is computed numerically and bound in
+	// Perl's number form: "abc" is 0, "1.5" gives a fractional OFFSET that
+	// Postgres rejects.
+	page := perlNumber{isInt: true}
+	if v, _ := r.Param("page"); v != "" && v != "0" { // `|| 0`
+		page = perlNum(v)
 	}
-	page := 0
-	if v, _ := r.Param("page"); v != "" && v != "0" {
-		f, err := strconv.ParseFloat(strings.TrimSpace(v), 64)
-		if err != nil {
-			return nil, fmt.Errorf("invalid input syntax for type bigint: %q", v)
-		}
-		page = int(f)
-	}
+	offset := perlMul(page, limitNum(limit)).String()
 	rows, err := a.DB.Pool.Query(r.Context(), `
 		SELECT url, created::text
 		FROM image
 		WHERE "user"=$1
 		ORDER BY created DESC
-		LIMIT $2 OFFSET $3`, r.Session.User(), limit, page*limit)
+		LIMIT $2 OFFSET $3`, r.Session.User(), limit, offset)
 	if err != nil {
 		return nil, err
 	}

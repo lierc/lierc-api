@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"strconv"
 	"strings"
 
 	"github.com/jackc/pgx/v5"
@@ -25,21 +24,28 @@ type logEntry struct {
 // channelName is `lc decode utf8 => $req->captures->{channel}`.
 func channelName(r *Request) string { return strings.ToLower(decodeUTF8(r.Params["channel"])) }
 
-// limitParam is `min($req->parameters->{limit} || def, max)`.
-func limitParam(r *Request, def, max int) (int, error) {
+// limitParam is `min($req->parameters->{limit} || def, max)`. List::Util min
+// compares numerically but returns the original value, so a limit at or below
+// max is the raw string, which DBD::Pg sends to Postgres as is: "abc" or
+// "1.5" make the query fail, while "60abc" numifies above max and becomes max.
+// The result is an int or the raw string, bound as the LIMIT parameter.
+func limitParam(r *Request, def, max int) any {
 	v, _ := r.Param("limit")
 	if v == "" || v == "0" { // Perl falsiness
-		return def, nil
+		return def
 	}
-	n, err := strconv.ParseFloat(strings.TrimSpace(v), 64)
-	if err != nil {
-		// Perl would pass the string on to LIMIT; Postgres rejects it.
-		return 0, fmt.Errorf("invalid input syntax for type bigint: %q", v)
+	if perlNum(v).f > float64(max) {
+		return max
 	}
-	if n > float64(max) {
-		return max, nil
+	return v
+}
+
+// limitNum numifies a limitParam result.
+func limitNum(limit any) perlNumber {
+	if n, ok := limit.(int); ok {
+		return perlNumber{i: int64(n), f: float64(n), isInt: true}
 	}
-	return int(n), nil
+	return perlNum(limit.(string))
 }
 
 // scanLog reads rows of (id, message, connection, highlight) and, with
@@ -140,10 +146,7 @@ func channelDate(a *App, r *Request) (Response, error) {
 }
 
 func channelLast(a *App, r *Request) (Response, error) {
-	limit, err := limitParam(r, 5, 20)
-	if err != nil {
-		return nil, err
-	}
+	limit := limitParam(r, 5, 20)
 	var query *string
 	if q, ok := r.Param("query"); ok {
 		q = decodeUTF8(q)
@@ -175,10 +178,7 @@ func channelLast(a *App, r *Request) (Response, error) {
 }
 
 func channelLogs(a *App, r *Request) (Response, error) {
-	limit, err := limitParam(r, 50, 150)
-	if err != nil {
-		return nil, err
-	}
+	limit := limitParam(r, 50, 150)
 	rows, err := a.DB.Pool.Query(r.Context(), `
 		SELECT id, message, connection, highlight FROM log
 		  WHERE channel=$1 AND connection=$2
@@ -194,10 +194,7 @@ func channelLogs(a *App, r *Request) (Response, error) {
 }
 
 func channelLogsID(a *App, r *Request) (Response, error) {
-	limit, err := limitParam(r, 50, 150)
-	if err != nil {
-		return nil, err
-	}
+	limit := limitParam(r, 50, 150)
 	rows, err := a.DB.Pool.Query(r.Context(), `
 		SELECT id, message, connection, highlight FROM log
 		  WHERE channel=$1 AND connection=$2 AND id < $3

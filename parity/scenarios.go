@@ -532,7 +532,9 @@ var Scenarios = []Scenario{
 			),
 			get("/image").allow(sameFormat("$[*].created", timestampFormat)),
 			get("/image?limit=1&page=1").allow(sameFormat("$[*].created", timestampFormat)),
-			// Perl numifies these: "abc" || 15 is "abc", min("abc", 50) is 0.
+			// min("abc" || 15, 50) is the string "abc", which Postgres rejects
+			// as a LIMIT (400, error null); page "abc" numifies to 0 in
+			// $page * $limit.
 			get("/image?limit=abc").allow(sameFormat("$[*].created", timestampFormat)),
 			get("/image?page=abc").allow(sameFormat("$[*].created", timestampFormat)),
 			// Perl's Imgur URL is hard-coded: only paths that never reach

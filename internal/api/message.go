@@ -8,10 +8,7 @@ import (
 // Handlers ported from lib/API/Controller/Message.pm.
 
 func messageHighlight(a *App, r *Request) (Response, error) {
-	limit, err := limitParam(r, 50, 150)
-	if err != nil {
-		return nil, err
-	}
+	limit := limitParam(r, 50, 150)
 	args := []any{r.Session.User()}
 	sql := `
 		SELECT l.id, l.message, l.connection, l.self, l.highlight

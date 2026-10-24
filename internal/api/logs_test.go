@@ -347,3 +347,26 @@ func TestIgnoreListColumns(t *testing.T) {
 		t.Fatalf("ignore table has %d columns", n)
 	}
 }
+
+// Perl binds the raw limit string unless it numifies above the max
+// (Channel.pm logs: min($limit || 50, 150)), so Postgres rejects junk.
+func TestLogsLimitPerlNumification(t *testing.T) {
+	e := setupConn(t)
+	c := e.create(connBody)
+	e.db.Pool.Exec(context.Background(), `
+		INSERT INTO log (connection, "user", channel, command, time, message)
+		SELECT $1,$2,'#a','PRIVMSG',NOW(),'{"Params":["#a","x"]}' FROM generate_series(1,200)`, c, e.id)
+	base := "/connection/" + c + "/channel/%23a/events"
+	for q, want := range map[string]int{"?limit=": 50, "?limit=0": 50, "?limit=200abc": 150, "?limit=1e1": -1, "?limit=abc": -1, "?limit=1.5": -1, "?limit=60abc": -1, "?limit=%207": 7} {
+		rec := e.get(base + q)
+		if want < 0 {
+			if rec.Code != 400 || rec.Body.String() != `{"status":"error","error":null}` {
+				t.Errorf("%q: %d %s", q, rec.Code, rec.Body)
+			}
+			continue
+		}
+		if got := decodeEntries(t, rec); len(got) != want {
+			t.Errorf("%q: %d rows, want %d", q, len(got), want)
+		}
+	}
+}
