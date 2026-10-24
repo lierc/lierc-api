@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"mime/quotedprintable"
 	"net/http"
@@ -11,7 +12,9 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/lierc/lierc-api/internal/config"
 	"github.com/lierc/lierc-api/internal/db"
@@ -435,4 +438,57 @@ func TestLoginLongSecret(t *testing.T) {
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 	expectError(t, rec, 400, "Salt must be exactly 16 octets long")
+}
+
+func TestHashPasswordBounded(t *testing.T) {
+	const limit = 3
+	oldSlots, oldFunc := hashSlots, hashFunc
+	t.Cleanup(func() { hashSlots, hashFunc = oldSlots, oldFunc })
+	hashSlots = make(chan struct{}, limit)
+	var cur, peak atomic.Int32
+	release := make(chan struct{})
+	hashFunc = func(pass, secret string) (string, error) {
+		n := cur.Add(1)
+		for {
+			p := peak.Load()
+			if n <= p || peak.CompareAndSwap(p, n) {
+				break
+			}
+		}
+		<-release
+		cur.Add(-1)
+		return "h", nil
+	}
+
+	var wg sync.WaitGroup
+	for i := 0; i < 10; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if _, err := hashPassword(context.Background(), "p", "s"); err != nil {
+				t.Error(err)
+			}
+		}()
+	}
+	// Wait until the slots are full, then check nobody else got in.
+	for cur.Load() < limit {
+		time.Sleep(time.Millisecond)
+	}
+	time.Sleep(20 * time.Millisecond)
+	if n := cur.Load(); n != limit {
+		t.Fatalf("%d concurrent hashes, limit %d", n, limit)
+	}
+
+	// A waiter whose context ends gives up without hashing.
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := hashPassword(ctx, "p", "s"); !errors.Is(err, context.Canceled) {
+		t.Fatalf("cancelled waiter: %v", err)
+	}
+
+	close(release)
+	wg.Wait()
+	if p := peak.Load(); p != limit {
+		t.Fatalf("peak %d, want %d", p, limit)
+	}
 }

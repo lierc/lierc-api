@@ -1,8 +1,10 @@
 package api
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"runtime"
 	"strings"
 
 	"github.com/jackc/pgx/v5"
@@ -34,6 +36,26 @@ func renderAuthTemplate(name, link string) string {
 	return fmt.Sprintf(authTemplate, e(name), e(link))
 }
 
+// hashSlots bounds concurrent bcrypt hashing to one per CPU: cost 15 is
+// seconds of CPU, on unauthenticated routes. Callers queue as they would for
+// one of Perl's fixed pool of workers.
+var (
+	hashSlots = make(chan struct{}, runtime.NumCPU())
+	hashFunc  = password.Hash
+)
+
+// hashPassword is password.Hash once a slot is free; it gives up with the
+// context's error if ctx ends first.
+func hashPassword(ctx context.Context, pass, secret string) (string, error) {
+	select {
+	case hashSlots <- struct{}{}:
+	case <-ctx.Done():
+		return "", ctx.Err()
+	}
+	defer func() { <-hashSlots }()
+	return hashFunc(pass, secret)
+}
+
 func authHealth(a *App, r *Request) (Response, error) {
 	if err := a.DB.Ping(r.Context()); err != nil {
 		return nil, err
@@ -57,7 +79,7 @@ func authShow(a *App, r *Request) (Response, error) {
 func authLogin(a *App, r *Request) (Response, error) {
 	pass, _ := r.Param("pass")
 	email, _ := r.Param("email")
-	hashed, err := password.Hash(pass, a.Cfg.Secret)
+	hashed, err := hashPassword(r.Context(), pass, a.Cfg.Secret)
 	if err != nil {
 		return nil, err
 	}
@@ -98,7 +120,7 @@ func authRegister(a *App, r *Request) (Response, error) {
 		return Error("Invalid email address"), nil
 	}
 
-	hashed, err := password.Hash(pass, a.Cfg.Secret)
+	hashed, err := hashPassword(r.Context(), pass, a.Cfg.Secret)
 	if err != nil {
 		return nil, err
 	}
