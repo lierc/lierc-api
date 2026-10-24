@@ -40,6 +40,9 @@ func TestDefaults(t *testing.T) {
 	if !reflect.DeepEqual(c.TrustedProxies, []string{"127.0.0.1", "::1"}) {
 		t.Errorf("TrustedProxies = %v", c.TrustedProxies)
 	}
+	if c.DBMaxConns != 20 {
+		t.Errorf("DBMaxConns = %d", c.DBMaxConns)
+	}
 	if c.MaxBodyBytes != 33554432 {
 		t.Errorf("MaxBodyBytes = %d", c.MaxBodyBytes)
 	}
@@ -132,6 +135,18 @@ func TestMaxBodyBytes(t *testing.T) {
 	for _, bad := range []string{"0", "-1", "lots"} {
 		if _, err := Load(env(map[string]string{"MAX_BODY_BYTES": bad}), "api"); err == nil {
 			t.Errorf("MAX_BODY_BYTES=%q accepted", bad)
+		}
+	}
+}
+
+func TestDBMaxConns(t *testing.T) {
+	c, err := Load(env(map[string]string{"DB_MAX_CONNS": "5"}), "stream")
+	if err != nil || c.DBMaxConns != 5 {
+		t.Errorf("got %d, %v", c.DBMaxConns, err)
+	}
+	for _, bad := range []string{"0", "-2", "x", "99999999999"} {
+		if _, err := Load(env(map[string]string{"DB_MAX_CONNS": bad}), "api"); err == nil {
+			t.Errorf("DB_MAX_CONNS=%q accepted", bad)
 		}
 	}
 }

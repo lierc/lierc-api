@@ -187,3 +187,16 @@ func TestErrorsAreWrapped(t *testing.T) {
 		t.Fatalf("timeout: %T %v", err, err)
 	}
 }
+
+func TestPoolMaxConns(t *testing.T) {
+	for in, want := range map[int]int32{0: 20, 7: 7} {
+		d, err := db.Open(ctx, config.Config{DBHost: "127.0.0.1:1", DBName: "lierc", DBMaxConns: in})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := d.Pool.Config().MaxConns; got != want {
+			t.Errorf("DBMaxConns %d: MaxConns = %d, want %d", in, got, want)
+		}
+		d.Close()
+	}
+}

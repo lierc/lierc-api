@@ -22,7 +22,12 @@ type Config struct {
 	ImgurBaseURL                                                  string
 	// MaxBodyBytes caps a request body (MAX_BODY_BYTES); larger is a 413.
 	MaxBodyBytes int64
+	// DBMaxConns is the Postgres pool size (DB_MAX_CONNS).
+	DBMaxConns int
 }
+
+// DefaultDBMaxConns is the DB_MAX_CONNS default.
+const DefaultDBMaxConns = 20
 
 // DefaultMaxBodyBytes is the MAX_BODY_BYTES default, 32 MiB.
 const DefaultMaxBodyBytes = 32 << 20
@@ -103,6 +108,12 @@ func Load(getenv func(string) string, mode string) (Config, error) {
 		return Config{}, fmt.Errorf("MAX_BODY_BYTES: %w", err)
 	}
 	c.MaxBodyBytes = n
+
+	n, err = positiveInt(or("DB_MAX_CONNS", ""), DefaultDBMaxConns)
+	if err != nil || n > 1<<31-1 {
+		return Config{}, fmt.Errorf("DB_MAX_CONNS: %q is not a positive integer", getenv("DB_MAX_CONNS"))
+	}
+	c.DBMaxConns = int(n)
 
 	smtp, err := parseSMTPOpts(getenv("SMTP_OPTS"))
 	if err != nil {

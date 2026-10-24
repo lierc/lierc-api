@@ -8,6 +8,7 @@ import (
 	"errors"
 	"net"
 	"net/url"
+	"strconv"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -41,7 +42,11 @@ func Open(ctx context.Context, cfg config.Config) (*DB, error) {
 			u.User = url.User(cfg.DBUser)
 		}
 	}
-	q := url.Values{"sslmode": {"prefer"}}
+	maxConns := cfg.DBMaxConns
+	if maxConns <= 0 {
+		maxConns = config.DefaultDBMaxConns
+	}
+	q := url.Values{"sslmode": {"prefer"}, "pool_max_conns": {strconv.Itoa(maxConns)}}
 	u.RawQuery = q.Encode()
 	pool, err := pgxpool.New(ctx, u.String())
 	if err != nil {
