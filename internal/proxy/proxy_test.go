@@ -65,3 +65,17 @@ func TestTrustedPeerWithoutHeader(t *testing.T) {
 		t.Fatalf("RemoteAddr = %q", remote)
 	}
 }
+
+func TestTrustedIPv6Loopback(t *testing.T) {
+	trusted := []string{"127.0.0.1", "::1"}
+	remote, line := serve(t, trusted, "[::1]:5555", "9.9.9.9")
+	if remote != "9.9.9.9:5555" {
+		t.Fatalf("RemoteAddr = %q", remote)
+	}
+	if !regexp.MustCompile(`^9\.9\.9\.9 `).MatchString(line) {
+		t.Fatalf("log line = %q", line)
+	}
+	if remote, _ := serve(t, trusted, "[::2]:5555", "9.9.9.9"); remote != "[::2]:5555" {
+		t.Fatalf("untrusted v6 RemoteAddr = %q", remote)
+	}
+}

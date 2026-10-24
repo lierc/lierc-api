@@ -92,7 +92,7 @@ func Load(getenv func(string) string, mode string) (Config, error) {
 		return Config{}, fmt.Errorf("unknown mode %q", mode)
 	}
 
-	for _, p := range strings.Split(or("TRUSTED_PROXIES", "127.0.0.1"), ",") {
+	for _, p := range strings.Split(or("TRUSTED_PROXIES", "127.0.0.1,::1"), ",") {
 		if p = strings.TrimSpace(p); p != "" {
 			c.TrustedProxies = append(c.TrustedProxies, p)
 		}

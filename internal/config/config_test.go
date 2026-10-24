@@ -37,7 +37,7 @@ func TestDefaults(t *testing.T) {
 			t.Errorf("%s = %q, want %q", k, v[0], v[1])
 		}
 	}
-	if !reflect.DeepEqual(c.TrustedProxies, []string{"127.0.0.1"}) {
+	if !reflect.DeepEqual(c.TrustedProxies, []string{"127.0.0.1", "::1"}) {
 		t.Errorf("TrustedProxies = %v", c.TrustedProxies)
 	}
 	if c.MaxBodyBytes != 33554432 {
