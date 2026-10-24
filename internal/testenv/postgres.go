@@ -82,10 +82,14 @@ func schema() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	// lierc.sql has two statements Postgres rejects: log_user_highlight lacks
-	// "on log", and log_tag_msgid lacks a trailing ';'. Patch them in memory
-	// only; the file stays verbatim.
-	s := string(b)
+	return PatchSchema(string(b))
+}
+
+// PatchSchema fixes the two statements in lierc.sql that Postgres rejects:
+// log_user_highlight lacks "on log", and log_tag_msgid lacks a trailing ';'.
+// The file itself stays verbatim; callers patch it in memory (tests) or when
+// loading it into a database (the parity suite, via the fakes binary).
+func PatchSchema(s string) (string, error) {
 	for _, r := range [][2]string{
 		{"create index log_user_highlight (", "create index log_user_highlight on log ("},
 		{"->'msgid'))\ncreate index on log (time);", "->'msgid'));\ncreate index on log (time);"},

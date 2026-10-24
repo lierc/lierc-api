@@ -33,6 +33,27 @@ jobs:
       - name: Test password package
         run: go test -timeout 30m ./internal/password/...
 
+  # Perl/Go parity suite (parity/README.md). It does not gate the image job
+  # yet.
+  parity:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Start the Perl and Go stacks
+        run: docker compose -f parity/compose.yml up -d --build --wait --wait-timeout 600
+      - name: Parity tests
+        run: go test -tags parity -timeout 45m -v ./parity/
+      - name: Compose logs
+        if: failure()
+        run: docker compose -f parity/compose.yml logs --no-color
+      - name: Tear down
+        if: always()
+        run: docker compose -f parity/compose.yml down -v
+
   image:
     if: github.event_name == 'push' && github.ref == 'refs/heads/master'
     needs: [test, test-password]

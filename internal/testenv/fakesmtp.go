@@ -39,17 +39,9 @@ func FakeSMTPWith(t testing.TB, useTLS bool, user, pass string) (config.SMTPOpts
 		cert := selfSigned(t)
 		ln = tls.NewListener(ln, &tls.Config{Certificates: []tls.Certificate{cert}})
 	}
-	s := &smtpServer{user: user, pass: pass}
+	s := NewSMTPServer(user, pass)
 	t.Cleanup(func() { ln.Close() })
-	go func() {
-		for {
-			c, err := ln.Accept()
-			if err != nil {
-				return
-			}
-			go s.serve(c)
-		}
-	}()
+	go s.Serve(ln)
 	opts := config.SMTPOpts{
 		Host:     "127.0.0.1",
 		Port:     ln.Addr().(*net.TCPAddr).Port,
@@ -61,7 +53,7 @@ func FakeSMTPWith(t testing.TB, useTLS bool, user, pass string) (config.SMTPOpts
 	if useTLS {
 		opts.Extra["SSL_verify_mode"] = "0"
 	}
-	return opts, s.received
+	return opts, s.Received
 }
 
 func selfSigned(t testing.TB) tls.Certificate {
@@ -84,19 +76,45 @@ func selfSigned(t testing.TB) tls.Certificate {
 	return tls.Certificate{Certificate: [][]byte{der}, PrivateKey: key}
 }
 
-type smtpServer struct {
+// SMTPServer is a minimal SMTP sink that records every message it accepts.
+// When user is set it requires AUTH PLAIN or LOGIN with user and pass.
+type SMTPServer struct {
 	user, pass string
 	mu         sync.Mutex
 	msgs       []mail.Received
 }
 
-func (s *smtpServer) received() []mail.Received {
+// NewSMTPServer returns an SMTPServer; call Serve to accept connections.
+func NewSMTPServer(user, pass string) *SMTPServer {
+	return &SMTPServer{user: user, pass: pass}
+}
+
+// Serve accepts connections on ln until it is closed.
+func (s *SMTPServer) Serve(ln net.Listener) {
+	for {
+		c, err := ln.Accept()
+		if err != nil {
+			return
+		}
+		go s.serve(c)
+	}
+}
+
+// Received returns the messages accepted so far.
+func (s *SMTPServer) Received() []mail.Received {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return append([]mail.Received(nil), s.msgs...)
 }
 
-func (s *smtpServer) serve(c net.Conn) {
+// Reset forgets the messages accepted so far.
+func (s *SMTPServer) Reset() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.msgs = nil
+}
+
+func (s *SMTPServer) serve(c net.Conn) {
 	defer c.Close()
 	c.SetDeadline(time.Now().Add(30 * time.Second))
 	r := bufio.NewReader(c)

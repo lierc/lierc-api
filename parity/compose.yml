@@ -1,0 +1,118 @@
+# Perl and Go servers side by side on one database, for the parity suite.
+#   docker compose -f parity/compose.yml up -d --build --wait
+#   go test -tags parity ./parity/ -v
+# Host ports: Perl api 5004, Perl stream 5003, Go api 5014, Go stream 5013,
+# Postgres 15432, nsqd HTTP 14151, fakes control API 18090.
+name: lierc-parity
+
+x-env: &env
+  API_SECRET: parity-secret # at most 16 bytes: it is the bcrypt salt
+  API_KEY: parity-key
+  API_SECURE: "0"
+  LIERCD_HOST: fakes # Perl and Go both reach liercd at http://fakes:5005/
+  POSTGRES_HOST: postgres
+  POSTGRES_USER: lierc
+  POSTGRES_PASSWORD: lierc
+  POSTGRES_DB: lierc
+  NSQD_HOST: nsqd
+  SMTP_OPTS: Host,fakes,Port,2525
+  FROM_ADDRESS: parity@example.com
+  # Go only. Perl's Imgur URL is hard-coded, so the suite only exercises the
+  # image paths that never reach Imgur.
+  LIERC_IMGUR_URL: http://fakes:8081
+  # VAPID_PUBLIC is deliberately unset: /notification/web_push_keys -> null.
+
+x-perl: &perl
+  build:
+    context: ..
+    dockerfile: Dockerfile
+  image: lierc-parity-perl
+  environment: *env
+  depends_on:
+    postgres: { condition: service_healthy }
+    nsqd: { condition: service_healthy }
+    fakes: { condition: service_started }
+
+x-go: &go
+  build:
+    context: ..
+    dockerfile: go.Dockerfile
+  image: lierc-parity-go
+  # The Go servers exit if a dependency is down at start (nsqd for the
+  # stream); restart until it is up.
+  restart: on-failure
+  depends_on:
+    postgres: { condition: service_healthy }
+    nsqd: { condition: service_healthy }
+    fakes: { condition: service_started }
+
+services:
+  postgres:
+    build:
+      context: ..
+      dockerfile: parity/fakes.Dockerfile
+      target: postgres
+    environment:
+      POSTGRES_USER: lierc
+      POSTGRES_PASSWORD: lierc
+      POSTGRES_DB: lierc
+    ports: ["15432:5432"]
+    healthcheck:
+      # -h 127.0.0.1: the server that runs the init scripts listens only on
+      # the Unix socket, so this passes only once lierc.sql has loaded.
+      test: ["CMD", "pg_isready", "-h", "127.0.0.1", "-U", "lierc", "-d", "lierc"]
+      interval: 2s
+      timeout: 5s
+      retries: 60
+
+  nsqd:
+    image: nsqio/nsq:v1.3.0
+    command: ["/nsqd", "--broadcast-address=nsqd"]
+    ports: ["14151:4151"]
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:4151/ping"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+
+  fakes:
+    build:
+      context: ..
+      dockerfile: parity/fakes.Dockerfile
+      target: fakes
+    ports: ["18090:8090"]
+
+  perl-api:
+    <<: *perl
+    # The image's default CMD: Gazelle on :5004.
+    ports: ["5004:5004"]
+    healthcheck: &perl-health
+      test: ["CMD", "perl", "-MIO::Socket::INET", "-e", "exit !IO::Socket::INET->new(PeerAddr => '127.0.0.1:5004')"]
+      interval: 2s
+      timeout: 5s
+      retries: 60
+
+  perl-stream:
+    <<: *perl
+    # The production stream command (relaychat-infra lierc-api-stream.service).
+    command: ["perl", "-Ilocal/lib/perl5/", "local/bin/plackup", "--server", "Twiggy", "-Ilib", "--listen", ":5003", "bin/stream.psgi"]
+    ports: ["5003:5003"]
+    healthcheck:
+      <<: *perl-health
+      test: ["CMD", "perl", "-MIO::Socket::INET", "-e", "exit !IO::Socket::INET->new(PeerAddr => '127.0.0.1:5003')"]
+
+  go-api:
+    <<: *go
+    command: ["api"]
+    environment:
+      <<: *env
+      LISTEN: ":5014"
+    ports: ["5014:5014"]
+
+  go-stream:
+    <<: *go
+    command: ["stream"]
+    environment:
+      <<: *env
+      LISTEN: ":5013"
+    ports: ["5013:5013"]
