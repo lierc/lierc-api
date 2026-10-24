@@ -5,6 +5,7 @@ import (
 	"crypto/sha1"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -318,5 +319,22 @@ func TestMiddlewareEmptyHandlerClear(t *testing.T) {
 	res := serveEmpty(codec(), nil, func(s *Session) { s.Clear() })
 	if find(res, "chats2") == nil || find(res, "chats") == nil {
 		t.Fatal("expiry cookies lost when handler writes nothing")
+	}
+}
+
+type failFlusher struct{ *httptest.ResponseRecorder }
+
+var errFlush = errors.New("flush failed")
+
+func (failFlusher) FlushError() error { return errFlush }
+
+func TestFlushErrorPropagates(t *testing.T) {
+	var got error
+	h := Codec{Secret: secret}.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		got = http.NewResponseController(w).Flush()
+	}))
+	h.ServeHTTP(failFlusher{httptest.NewRecorder()}, httptest.NewRequest("GET", "/", nil))
+	if !errors.Is(got, errFlush) {
+		t.Fatalf("Flush() = %v", got)
 	}
 }

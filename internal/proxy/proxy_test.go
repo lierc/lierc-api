@@ -2,6 +2,7 @@ package proxy
 
 import (
 	"bytes"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -77,5 +78,25 @@ func TestTrustedIPv6Loopback(t *testing.T) {
 	}
 	if remote, _ := serve(t, trusted, "[::2]:5555", "9.9.9.9"); remote != "[::2]:5555" {
 		t.Fatalf("untrusted v6 RemoteAddr = %q", remote)
+	}
+}
+
+type failFlusher struct{ *httptest.ResponseRecorder }
+
+var errFlush = errors.New("flush failed")
+
+func (failFlusher) FlushError() error { return errFlush }
+
+func TestFlushErrorPropagates(t *testing.T) {
+	old := logOutput
+	logOutput = io.Discard
+	t.Cleanup(func() { logOutput = old })
+	var got error
+	h := Wrap(nil, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		got = http.NewResponseController(w).Flush()
+	}))
+	h.ServeHTTP(failFlusher{httptest.NewRecorder()}, httptest.NewRequest("GET", "/", nil))
+	if !errors.Is(got, errFlush) {
+		t.Fatalf("Flush() = %v", got)
 	}
 }

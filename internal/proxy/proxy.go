@@ -114,3 +114,8 @@ func (w *logWriter) Flush() {
 		f.Flush()
 	}
 }
+
+// FlushError lets http.ResponseController.Flush report a failed flush.
+func (w *logWriter) FlushError() error {
+	return http.NewResponseController(w.ResponseWriter).Flush()
+}

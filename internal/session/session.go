@@ -201,3 +201,9 @@ func (w *cookieWriter) Flush() {
 		f.Flush()
 	}
 }
+
+// FlushError lets http.ResponseController.Flush report a failed flush.
+func (w *cookieWriter) FlushError() error {
+	w.setCookies()
+	return http.NewResponseController(w.ResponseWriter).Flush()
+}
