@@ -68,11 +68,13 @@ Go needs a bcrypt primitive that takes a raw salt and returns the raw digest. `g
 
 Same env vars and defaults as `lib/API/Config.pm`: `API_BASE`, `LIERCD_HOST`, `POSTGRES_HOST/USER/PASSWORD/DB`, `API_SECRET`, `API_KEY`, `API_SECURE`, `NSQD_HOST` (port 4150), `IMGUR_KEY`, `SMTP_OPTS` (comma-separated key,value pairs passed to `Net::SMTP->new`: `Host`, `Port`, `SSL` for implicit TLS, `Hello`, plus `AuthUser`/`AuthPass`), `FROM_ADDRESS`, `VAPID_PUBLIC`, `LIERC_NO_SMTP`, `APN_*`. `NSQ_TAIL` becomes unused. Note that the stream app's Postgres pool hard-codes `dbname => "lierc"` and ignores `POSTGRES_DB`. Go copies this: the `stream` subcommand always uses database `lierc`, so the two stream servers can never read different databases (Claude's call).
 
-New settings Perl doesn't need (Claude's call): `LISTEN` (default `:5004` for `api`, `:5003` for `stream`), because Perl sets its listen address on the plackup command line; and `TRUSTED_PROXIES` (default `127.0.0.1`), the addresses whose `X-Forwarded-*` headers are trusted.
+New settings Perl doesn't need (Claude's call): `LISTEN` (default `:5004` for `api`, `:5003` for `stream`), because Perl sets its listen address on the plackup command line; and `TRUSTED_PROXIES` (default `127.0.0.1,::1`), the addresses whose `X-Forwarded-*` headers are trusted.
+
+Also `MAX_BODY_BYTES` (default `33554432`, 32 MiB), the largest request body accepted (larger is a 413 `Request entity too large`), and `DB_MAX_CONNS` (default `20`), the Postgres pool size per process.
 
 ### Reverse proxy
 
-Perl trusts `X-Forwarded-*` only from `127.0.0.1` (for access logs and `/stats` remote addresses). Go does the same by default, and `TRUSTED_PROXIES` covers a Go container that the proxy doesn't reach over loopback.
+Perl trusts `X-Forwarded-*` only from `127.0.0.1` (for access logs and `/stats` remote addresses). Go does the same by default, plus `::1`, and `TRUSTED_PROXIES` covers a Go container that the proxy doesn't reach over loopback.
 
 While both run, `bin/lctl stats` (hard-coded to `127.0.0.1:5003`) sees only the streams on the server listening there. This is accepted for the side-by-side period (Claude's call).
 
