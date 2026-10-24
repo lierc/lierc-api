@@ -1,6 +1,7 @@
 package api
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -385,5 +386,50 @@ func TestRouteTable(t *testing.T) {
 	}
 	if public != 7 {
 		t.Fatalf("public routes = %d, want 7", public)
+	}
+}
+
+func TestBodyCap(t *testing.T) {
+	h := newHandler(&App{Cfg: config.Config{MaxBodyBytes: 16}}, routes)
+	var logged bytes.Buffer
+	old := apnLogOutput
+	apnLogOutput = &logged
+	t.Cleanup(func() { apnLogOutput = old })
+	post := func(h http.Handler, target, body string) *httptest.ResponseRecorder {
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, httptest.NewRequest("POST", target, strings.NewReader(body)))
+		return rec
+	}
+	for _, target := range []string{"/v1/log", "/auth", "/register"} {
+		rec := post(h, target, strings.Repeat("x", 17))
+		if rec.Code != 413 || rec.Body.String() != `{"status":"error","error":"Request entity too large"}` ||
+			rec.Header().Get("Content-Type") != "application/javascript;charset=utf-8" {
+			t.Errorf("%s: %d %s", target, rec.Code, rec.Body)
+		}
+	}
+	if rec := post(h, "/v1/log", strings.Repeat("x", 16)); rec.Code != 204 {
+		t.Errorf("at cap: %d %s", rec.Code, rec.Body)
+	}
+	// An unset cap is the 32 MiB default.
+	dh := newHandler(&App{}, routes)
+	if rec := post(dh, "/v1/log", strings.Repeat("y", 1<<20)); rec.Code != 204 {
+		t.Errorf("1 MiB with default cap: %d %s", rec.Code, rec.Body)
+	}
+	if rec := post(dh, "/v1/log", strings.Repeat("z", config.DefaultMaxBodyBytes+1)); rec.Code != 413 {
+		t.Errorf("over default cap: %d", rec.Code)
+	}
+}
+
+func TestAPNLogBounded(t *testing.T) {
+	var logged bytes.Buffer
+	old := apnLogOutput
+	apnLogOutput = &logged
+	t.Cleanup(func() { apnLogOutput = old })
+	h := newHandler(&App{}, routes)
+	body := "a\nb\r\n" + strings.Repeat("x", 100<<10)
+	h.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest("POST", "/v1/log", strings.NewReader(body)))
+	want := `a\nb\r\n` + strings.Repeat("x", 64<<10-5) + "\n"
+	if logged.String() != want {
+		t.Fatalf("logged %d bytes, %d lines; want %d bytes", logged.Len(), strings.Count(logged.String(), "\n"), len(want))
 	}
 }

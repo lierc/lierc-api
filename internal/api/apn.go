@@ -13,6 +13,7 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -76,9 +77,21 @@ func apnRegister(a *App, r *Request) (Response, error) {
 	return OK(), nil
 }
 
+const apnLogMax = 64 << 10
+
+var (
+	apnLogOutput io.Writer = os.Stderr
+	logEscape              = strings.NewReplacer("\n", `\n`, "\r", `\r`)
+)
+
 func apnLog(a *App, r *Request) (Response, error) {
-	// Perl: warn $req->content
-	fmt.Fprintln(os.Stderr, string(r.Body))
+	// Perl: warn $req->content. Only the first 64 KiB is logged, on one line,
+	// so a request cannot flood the log.
+	b := r.Body
+	if len(b) > apnLogMax {
+		b = b[:apnLogMax]
+	}
+	fmt.Fprintln(apnLogOutput, logEscape.Replace(string(b)))
 	return NoContent(), nil
 }
 

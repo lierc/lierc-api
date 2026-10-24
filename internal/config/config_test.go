@@ -40,6 +40,9 @@ func TestDefaults(t *testing.T) {
 	if !reflect.DeepEqual(c.TrustedProxies, []string{"127.0.0.1"}) {
 		t.Errorf("TrustedProxies = %v", c.TrustedProxies)
 	}
+	if c.MaxBodyBytes != 33554432 {
+		t.Errorf("MaxBodyBytes = %d", c.MaxBodyBytes)
+	}
 	if !reflect.DeepEqual(c.APN.AllowedDomains, []string{"https://relaychat.party"}) {
 		t.Errorf("AllowedDomains = %v", c.APN.AllowedDomains)
 	}
@@ -118,5 +121,17 @@ func TestAPNAllowedDomainsSplitOnSpace(t *testing.T) {
 	c, _ := Load(env(map[string]string{"APN_ALLOWED_DOMAINS": "https://a.example  https://b.example"}), "api")
 	if !reflect.DeepEqual(c.APN.AllowedDomains, []string{"https://a.example", "https://b.example"}) {
 		t.Errorf("got %v", c.APN.AllowedDomains)
+	}
+}
+
+func TestMaxBodyBytes(t *testing.T) {
+	c, err := Load(env(map[string]string{"MAX_BODY_BYTES": "1024"}), "api")
+	if err != nil || c.MaxBodyBytes != 1024 {
+		t.Errorf("got %d, %v", c.MaxBodyBytes, err)
+	}
+	for _, bad := range []string{"0", "-1", "lots"} {
+		if _, err := Load(env(map[string]string{"MAX_BODY_BYTES": bad}), "api"); err == nil {
+			t.Errorf("MAX_BODY_BYTES=%q accepted", bad)
+		}
 	}
 }

@@ -20,7 +20,12 @@ type Config struct {
 	Listen                                                        string
 	TrustedProxies                                                []string
 	ImgurBaseURL                                                  string
+	// MaxBodyBytes caps a request body (MAX_BODY_BYTES); larger is a 413.
+	MaxBodyBytes int64
 }
+
+// DefaultMaxBodyBytes is the MAX_BODY_BYTES default, 32 MiB.
+const DefaultMaxBodyBytes = 32 << 20
 
 type SMTPOpts struct {
 	Host     string
@@ -93,12 +98,30 @@ func Load(getenv func(string) string, mode string) (Config, error) {
 		}
 	}
 
+	n, err := positiveInt(or("MAX_BODY_BYTES", ""), DefaultMaxBodyBytes)
+	if err != nil {
+		return Config{}, fmt.Errorf("MAX_BODY_BYTES: %w", err)
+	}
+	c.MaxBodyBytes = n
+
 	smtp, err := parseSMTPOpts(getenv("SMTP_OPTS"))
 	if err != nil {
 		return Config{}, err
 	}
 	c.SMTP = smtp
 	return c, nil
+}
+
+// positiveInt parses s as a positive integer, or returns def when s is empty.
+func positiveInt(s string, def int64) (int64, error) {
+	if s == "" {
+		return def, nil
+	}
+	n, err := strconv.ParseInt(s, 10, 64)
+	if err != nil || n <= 0 {
+		return 0, fmt.Errorf("%q is not a positive integer", s)
+	}
+	return n, nil
 }
 
 // perlTrue reports Perl truthiness of an env string: "" and "0" are false.

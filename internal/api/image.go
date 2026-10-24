@@ -107,41 +107,72 @@ func imageList(a *App, r *Request) (Response, error) {
 	return JSON(out), nil
 }
 
+// writeUploads re-encodes the file parts of the multipart body as a new
+// multipart body on w with the given boundary, and returns how many it wrote.
+// Plain fields are dropped (Image.pm sends only $req->uploads).
+func writeUploads(w io.Writer, body []byte, inBoundary, outBoundary string) (int, error) {
+	mw := multipart.NewWriter(w)
+	if err := mw.SetBoundary(outBoundary); err != nil {
+		return 0, err
+	}
+	n := 0
+	mr := multipart.NewReader(bytes.NewReader(body), inBoundary)
+	for {
+		p, err := mr.NextPart()
+		if err != nil {
+			break
+		}
+		if p.FileName() == "" { // only uploads, not plain fields
+			continue
+		}
+		pw, err := mw.CreatePart(p.Header)
+		if err != nil {
+			return n, err
+		}
+		if _, err := io.Copy(pw, p); err != nil {
+			return n, err
+		}
+		n++
+	}
+	if n == 0 {
+		return 0, nil
+	}
+	return n, mw.Close()
+}
+
+type countWriter struct{ n int64 }
+
+func (c *countWriter) Write(b []byte) (int, error) { c.n += int64(len(b)); return len(b), nil }
+
 func imageCreate(a *App, r *Request) (Response, error) {
 	ct, params, _ := mime.ParseMediaType(r.Header.Get("Content-Type"))
-	var buf bytes.Buffer
-	mw := multipart.NewWriter(&buf)
-	n := 0
-	if strings.HasPrefix(ct, "multipart/") && params["boundary"] != "" {
-		mr := multipart.NewReader(bytes.NewReader(r.Body), params["boundary"])
-		for {
-			p, err := mr.NextPart()
-			if err != nil {
-				break
-			}
-			if p.FileName() == "" { // only uploads, not plain fields
-				continue
-			}
-			w, err := mw.CreatePart(p.Header)
-			if err != nil {
-				return nil, err
-			}
-			if _, err := io.Copy(w, p); err != nil {
-				return nil, err
-			}
-			n++
-		}
+	if !strings.HasPrefix(ct, "multipart/") || params["boundary"] == "" {
+		return Error("No upload"), nil
+	}
+	// Measure the re-encoded body first, then stream it to Imgur with a
+	// Content-Length, so the upload is not buffered a second time.
+	boundary := multipart.NewWriter(nil).Boundary()
+	var size countWriter
+	n, err := writeUploads(&size, r.Body, params["boundary"], boundary)
+	if err != nil {
+		return nil, err
 	}
 	if n == 0 {
 		return Error("No upload"), nil
 	}
-	mw.Close()
+	pr, pw := io.Pipe()
+	go func() {
+		_, err := writeUploads(pw, r.Body, params["boundary"], boundary)
+		pw.CloseWithError(err)
+	}()
+	defer pr.Close()
 
-	req, err := http.NewRequestWithContext(r.Context(), "POST", a.Cfg.ImgurBaseURL+"/3/upload", &buf)
+	req, err := http.NewRequestWithContext(r.Context(), "POST", a.Cfg.ImgurBaseURL+"/3/upload", pr)
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("Content-Type", mw.FormDataContentType())
+	req.ContentLength = size.n
+	req.Header.Set("Content-Type", "multipart/form-data; boundary="+boundary)
 	resp, code, body, err := a.imgurDo(req)
 	if err != nil {
 		return nil, err

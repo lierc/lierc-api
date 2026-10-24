@@ -3,6 +3,7 @@
 package api
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -156,8 +157,18 @@ func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	body, err := io.ReadAll(r.Body)
+	limit := s.app.Cfg.MaxBodyBytes
+	if limit <= 0 {
+		limit = config.DefaultMaxBodyBytes
+	}
+	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, limit))
 	if err != nil {
+		var tooBig *http.MaxBytesError
+		if errors.As(err, &tooBig) {
+			msg := "Request entity too large"
+			errorStatus(&msg, http.StatusRequestEntityTooLarge).Write(w)
+			return
+		}
 		Error(err.Error()).Write(w)
 		return
 	}
