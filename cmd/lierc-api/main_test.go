@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -78,27 +79,68 @@ func TestServesStreamUnauthorized(t *testing.T) {
 	}
 }
 
-func TestStreamExitsWhenNSQUnreachable(t *testing.T) {
-	d := testenv.Postgres(t)
-	cc := d.Pool.Config().ConnConfig
+// The server starts and serves without nsqd, and still shuts down cleanly.
+func TestStreamServesWithoutNSQ(t *testing.T) {
 	env := map[string]string{
-		"POSTGRES_HOST":     net.JoinHostPort(cc.Host, strconv.Itoa(int(cc.Port))),
-		"POSTGRES_USER":     cc.User,
-		"POSTGRES_PASSWORD": cc.Password,
-		"LISTEN":            "127.0.0.1:0",
-		"NSQD_HOST":         "127.0.0.2", // nothing listens on :4150 here
+		"POSTGRES_HOST": "127.0.0.1:1", // never queried without a cookie
+		"LISTEN":        "127.0.0.1:0",
+		"NSQD_HOST":     "127.0.0.2:1", // nothing listens here
 	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	addr := make(chan net.Addr, 1)
 	done := make(chan int, 1)
-	var logs bytes.Buffer
+	var logs syncBuffer
 	go func() {
-		done <- run(context.Background(), []string{"stream"}, func(k string) string { return env[k] }, &logs, nil)
+		done <- run(ctx, []string{"stream"}, func(k string) string { return env[k] }, &logs, func(a net.Addr) { addr <- a })
 	}()
+	var a net.Addr
+	select {
+	case a = <-addr:
+	case code := <-done:
+		t.Fatalf("exited %d without nsqd: %s", code, logs.String())
+	case <-time.After(30 * time.Second):
+		t.Fatal("server did not start")
+	}
+	time.Sleep(200 * time.Millisecond) // the first connection attempt fails
 	select {
 	case code := <-done:
-		if code == 0 {
-			t.Errorf("exit 0, want non-zero")
-		}
-	case <-time.After(30 * time.Second):
-		t.Fatal("stream kept running without NSQ")
+		t.Fatalf("exited %d without nsqd: %s", code, logs.String())
+	default:
 	}
+	resp, err := http.Get("http://" + a.String() + "/")
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != 401 {
+		t.Errorf("status = %d, want 401", resp.StatusCode)
+	}
+	cancel()
+	select {
+	case code := <-done:
+		if code != 0 {
+			t.Errorf("exit %d: %s", code, logs.String())
+		}
+	case <-time.After(15 * time.Second):
+		t.Fatal("no shutdown")
+	}
+}
+
+// syncBuffer is a bytes.Buffer safe for the server's logger goroutines.
+type syncBuffer struct {
+	mu sync.Mutex
+	b  bytes.Buffer
+}
+
+func (b *syncBuffer) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.b.Write(p)
+}
+
+func (b *syncBuffer) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.b.String()
 }

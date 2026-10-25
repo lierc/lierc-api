@@ -656,6 +656,81 @@ func TestLiveDelivery(t *testing.T) {
 	}
 }
 
+// freeAddr returns a local TCP address that nothing listens on.
+func freeAddr(t *testing.T) string {
+	t.Helper()
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer l.Close()
+	return l.Addr().String()
+}
+
+func TestNSQReconnectDefault(t *testing.T) {
+	if got := New(config.Config{}, nil, nil).NSQReconnect; got != 5*time.Second {
+		t.Fatalf("NSQReconnect = %s, want 5s", got)
+	}
+}
+
+// nsqd is not running when Consume starts; it subscribes once nsqd is up.
+func TestConsumeWaitsForNSQD(t *testing.T) {
+	e := setup(t)
+	e.s.NSQReconnect = 50 * time.Millisecond
+	u := e.addUser("alice")
+	e.liveConn("ca", u)
+	c := e.openReplayed(u)
+	addr := freeAddr(t)
+	consume(t, e.s, addr)
+	time.Sleep(200 * time.Millisecond) // a few failed attempts
+
+	_, publish, _ := testenv.NSQDAt(t, addr)
+	awaitSubscribed(t, publish, "ca", c)
+	publish("logged", []byte(`{"ConnectionId":"ca","MessageId":1}`))
+	if ev := c.nextIRC(); ev.id != "1" {
+		t.Fatalf("got %+v", ev)
+	}
+}
+
+// nsqd restarts; the consumer reconnects after NSQReconnect.
+func TestConsumeReconnects(t *testing.T) {
+	addr, publish, stop := testenv.NSQDAt(t, "127.0.0.1:0")
+	e := setup(t)
+	e.s.NSQReconnect = 50 * time.Millisecond
+	u := e.addUser("alice")
+	e.liveConn("ca", u)
+	c := e.openReplayed(u)
+	consume(t, e.s, addr)
+	awaitSubscribed(t, publish, "ca", c)
+
+	stop()
+	_, publish, _ = testenv.NSQDAt(t, addr)
+	awaitSubscribed(t, publish, "ca", c)
+	publish("logged", []byte(`{"ConnectionId":"ca","MessageId":2}`))
+	if ev := c.nextIRC(); ev.id != "2" {
+		t.Fatalf("got %+v", ev)
+	}
+}
+
+// Consume returns nil when ctx ends while nsqd has never been reachable.
+func TestConsumeStopsWhileWaiting(t *testing.T) {
+	e := setup(t)
+	e.s.NSQReconnect = time.Minute
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { done <- e.s.Consume(ctx, freeAddr(t)) }()
+	time.Sleep(100 * time.Millisecond)
+	cancel()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("Consume: %v", err)
+		}
+	case <-time.After(waitFor):
+		t.Fatal("Consume did not return")
+	}
+}
+
 func TestTwoConsumersBothDeliver(t *testing.T) {
 	addr, publish := testenv.NSQD(t)
 	e1 := setup(t)

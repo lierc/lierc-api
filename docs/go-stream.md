@@ -46,7 +46,10 @@ As in Perl, the database name is always `lierc`; `POSTGRES_DB` is ignored.
 
 It subscribes to NSQ on its own ephemeral channel
 (`lierc-api-go-<random>#ephemeral`), so it can run next to the Perl stream and
-both see every message. It exits non-zero if it cannot reach nsqd at start.
+both see every message. If nsqd is down, at start or later, it keeps serving
+streams (replay works; live messages wait) and retries nsqd every 5 s, not
+go-nsq's default 60 s. Messages published while it is disconnected are lost,
+as with any ephemeral channel.
 
 ## Cutting over
 

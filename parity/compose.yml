@@ -34,8 +34,6 @@ x-go: &go
     context: ..
     dockerfile: go.Dockerfile
   image: lierc-parity-go
-  # The Go server exits if a dependency is down at start; restart until it is up.
-  restart: on-failure
   depends_on:
     postgres: { condition: service_healthy }
     nsqd: { condition: service_healthy }

@@ -2,7 +2,9 @@ package stream
 
 import (
 	"context"
+	"errors"
 	"log"
+	"time"
 
 	"github.com/lierc/lierc-api/internal/ids"
 	"github.com/nsqio/go-nsq"
@@ -10,10 +12,16 @@ import (
 
 // Consume subscribes to topic "logged" on a channel of its own, so every
 // stream process sees every message, and delivers each message until ctx is
-// done. It returns early only if it cannot connect.
+// done. If nsqd is down, at start or later, it retries every NSQReconnect;
+// messages published meanwhile are lost. It returns early only if the
+// consumer cannot be created.
 func (s *Server) Consume(ctx context.Context, nsqAddr string) error {
 	channel := "lierc-api-go-" + ids.New() + "#ephemeral"
-	c, err := nsq.NewConsumer("logged", channel, nsq.NewConfig())
+	cfg := nsq.NewConfig()
+	// Without nsqlookupd, go-nsq waits LookupdPollInterval (default 60s)
+	// before each attempt to reconnect to a lost nsqd.
+	cfg.LookupdPollInterval = s.NSQReconnect
+	c, err := nsq.NewConsumer("logged", channel, cfg)
 	if err != nil {
 		return err
 	}
@@ -22,10 +30,21 @@ func (s *Server) Consume(ctx context.Context, nsqAddr string) error {
 		s.Deliver(m.Body)
 		return nil
 	}))
-	if err := c.ConnectToNSQD(nsqAddr); err != nil {
-		c.Stop()
-		<-c.StopChan
-		return err
+	// go-nsq retries only connections that were once up, so the first
+	// connection is retried here.
+	for {
+		err := c.ConnectToNSQD(nsqAddr)
+		if err == nil || errors.Is(err, nsq.ErrAlreadyConnected) {
+			break
+		}
+		log.Printf("nsq: connect to %s: %v (retrying in %s)", nsqAddr, err, s.NSQReconnect)
+		select {
+		case <-ctx.Done():
+			c.Stop()
+			<-c.StopChan
+			return nil
+		case <-time.After(s.NSQReconnect):
+		}
 	}
 	<-ctx.Done()
 	c.Stop()

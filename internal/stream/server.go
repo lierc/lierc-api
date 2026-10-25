@@ -25,6 +25,9 @@ type Server struct {
 	PingInterval time.Duration
 	// WriteTimeout is how long one write may block before the stream is closed (Writer.pm wtimeout).
 	WriteTimeout time.Duration
+	// NSQReconnect is the wait between attempts to reach nsqd, at start and
+	// after a lost connection.
+	NSQReconnect time.Duration
 
 	cfg config.Config
 	db  *db.DB
@@ -40,6 +43,7 @@ func New(cfg config.Config, d *db.DB, lc *liercd.Client) *Server {
 	return &Server{
 		PingInterval: 15 * time.Second,
 		WriteTimeout: 3 * time.Minute,
+		NSQReconnect: 5 * time.Second,
 		cfg:          cfg,
 		db:           d,
 		lc:           lc,

@@ -2,6 +2,7 @@ package testenv
 
 import (
 	"fmt"
+	"sync"
 	"sync/atomic"
 	"testing"
 
@@ -16,8 +17,16 @@ func (quietLogger) Output(int, string) error { return nil }
 // and a function that publishes a message to a topic.
 func NSQD(t testing.TB) (tcpAddr string, publish func(topic string, body []byte)) {
 	t.Helper()
+	tcpAddr, publish, _ = NSQDAt(t, "127.0.0.1:0")
+	return tcpAddr, publish
+}
+
+// NSQDAt is NSQD listening on addr, and also returns a function that shuts
+// the nsqd down (it is shut down at cleanup either way).
+func NSQDAt(t testing.TB, addr string) (tcpAddr string, publish func(topic string, body []byte), stop func()) {
+	t.Helper()
 	opts := nsqd.NewOptions()
-	opts.TCPAddress = "127.0.0.1:0"
+	opts.TCPAddress = addr
 	opts.HTTPAddress = ""
 	opts.HTTPSAddress = ""
 	opts.BroadcastAddress = "127.0.0.1"
@@ -28,7 +37,9 @@ func NSQD(t testing.TB) (tcpAddr string, publish func(topic string, body []byte)
 		t.Fatalf("nsqd.New: %v", err)
 	}
 	go n.Main()
-	t.Cleanup(n.Exit)
+	var once sync.Once
+	stop = func() { once.Do(n.Exit) }
+	t.Cleanup(stop)
 	var seq atomic.Uint64
 	// IDs must be hex text like nsqd's own: clients echo them in
 	// newline-terminated FIN commands, so raw bytes such as '\n' break the
@@ -42,5 +53,5 @@ func NSQD(t testing.TB) (tcpAddr string, publish func(topic string, body []byte)
 		if err := n.GetTopic(topic).PutMessage(msg); err != nil {
 			t.Errorf("nsqd publish: %v", err)
 		}
-	}
+	}, stop
 }
