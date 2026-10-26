@@ -12,8 +12,6 @@ our %DEFAULT = (
   secret   => "changeme",
   key      => "changeme",
   secure   => 0,
-  nsqd     => "127.0.0.1",
-  nsq_tail => "/usr/local/bin/nsq_tail",
   smtp_opts => { Host => 'localhost' },
   from_address => 'do-not-reply@relaychat.party',
   imgur_key => "",
@@ -53,8 +51,6 @@ sub dbuser   { $ENV{POSTGRES_USER}     || $DEFAULT{dbuser}   }
 sub dbpass   { $ENV{POSTGRES_PASSWORD} || $DEFAULT{dbpass}   }
 sub dbname   { $ENV{POSTGRES_DB}       || $DEFAULT{dbname}   }
 sub secret   { $ENV{API_SECRET}        || $DEFAULT{secret}   }
-sub nsqhost  { $ENV{NSQD_HOST}         || $DEFAULT{nsqd}     }
-sub nsq_tail { $ENV{NSQ_TAIL}          || $DEFAULT{nsq_tail} }
 sub secure   { $ENV{API_SECURE}        || $DEFAULT{secure}   }
 sub key      { $ENV{API_KEY}           || $DEFAULT{key}      }
 sub imgur_key { $ENV{IMGUR_KEY}        || $DEFAULT{imgur_key} }
@@ -78,11 +74,6 @@ sub from_address { $ENV{FROM_ADDRESS} || $DEFAULT{from_address} }
 sub dsn     {
   my $self = shift;
   sprintf "dbi:Pg:dbname=%s;host=%s", $self->dbname, $self->dbhost;
-}
-
-sub nsq_address {
-  my $self = shift;
-  sprintf "%s:4150", $self->nsqhost;
 }
 
 sub as_hash {

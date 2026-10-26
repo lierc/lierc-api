@@ -1,5 +1,5 @@
-// Command lierc-api runs the SSE event stream (`lierc-api stream`), the Go
-// replacement for bin/stream.psgi. The JSON API is still bin/api.psgi.
+// Command lierc-api runs the SSE event stream (`lierc-api stream`). The JSON
+// API is still bin/api.psgi.
 package main
 
 import (
