@@ -14,7 +14,6 @@ our %DEFAULT = (
   secure   => 0,
   smtp_opts => { Host => 'localhost' },
   from_address => 'do-not-reply@relaychat.party',
-  imgur_key => "",
   apn => {
     website_name => "Relaychat Party",
     website_pushid => "web.party.relaychat",
@@ -53,7 +52,6 @@ sub dbname   { $ENV{POSTGRES_DB}       || $DEFAULT{dbname}   }
 sub secret   { $ENV{API_SECRET}        || $DEFAULT{secret}   }
 sub secure   { $ENV{API_SECURE}        || $DEFAULT{secure}   }
 sub key      { $ENV{API_KEY}           || $DEFAULT{key}      }
-sub imgur_key { $ENV{IMGUR_KEY}        || $DEFAULT{imgur_key} }
 
 # Key/value pairs for Net::SMTP->new, plus AuthUser/AuthPass for the optional
 # AUTH exchange, eg

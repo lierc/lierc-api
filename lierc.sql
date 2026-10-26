@@ -95,11 +95,3 @@ create table apn (
   updated timestamp not null default now(),
   primary key ("user", device_id)
 );
-
-create table image (
-  "user" varchar(24) not null,
-  url varchar(255) not null,
-  delete_hash varchar(32) not null,
-  created timestamp not null default NOW(),
-  primary key ("user", url)
-);
