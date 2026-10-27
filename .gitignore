@@ -3,6 +3,5 @@ bower_components
 local/
 config.json
 .carmel
-.apn
 
 testdata/fixtures/local/

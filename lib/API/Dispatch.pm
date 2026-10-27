@@ -26,7 +26,6 @@ sub handle {
 
   return $self->unauthorized
     unless ($name && $name =~ /^auth\.(?:login|register|logout)$/)
-      or ($name && $name =~ /^apn\.(?:package|log|(?:un)?register)$/)
       or $self->logged_in($req->session);
 
   if ($req->captures->{id}) {

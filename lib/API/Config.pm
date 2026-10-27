@@ -14,33 +14,11 @@ our %DEFAULT = (
   secure   => 0,
   smtp_opts => { Host => 'localhost' },
   from_address => 'do-not-reply@relaychat.party',
-  apn => {
-    website_name => "Relaychat Party",
-    website_pushid => "web.party.relaychat",
-    allowed_domains => "https://relaychat.party",
-    format_string => "https://relaychat.party/app/#!/%@/%@",
-    service_url => "https://relaychat.party",
-    cert_file => ".apn/apn.pem",
-    key_file  => ".apn/apn.key",
-  }
 );
 
 sub new {
   my $class = shift;
   bless {}, $class;
-}
-
-sub apn {
-  my %def = %{ $DEFAULT{apn}};
-  return +{
-    website_name    => $ENV{APN_NAME} || $def{website_name},
-    website_pushid  => $ENV{APN_PUSHID} || $def{website_pushid},
-    allowed_domains => [split " ", ($ENV{APN_ALLOWED_DOMAINS} || $def{allowed_domains})],
-    format_string   => $ENV{APN_FORMAT_STRING} || $def{format_string},
-    service_url     => $ENV{APN_SERVICE_URL} || $def{service_url},
-    cert_file       => $ENV{APN_CERT_FILE} || $def{cert_file},
-    key_file        => $ENV{APN_KEY_FILE} || $def{key_file},
-  }
 }
 
 sub base     { $ENV{API_BASE}          || $DEFAULT{base}     }
@@ -78,7 +56,7 @@ sub as_hash {
   my $self = shift;
   return map {
     $_ => $self->$_
-  } qw(base host dsn dbuser dbpass dbhost secret secure apn smtp_opts from_address);
+  } qw(base host dsn dbuser dbpass dbhost secret secure smtp_opts from_address);
 }
 
 1;
