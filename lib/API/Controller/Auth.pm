@@ -98,7 +98,7 @@ sub register {
     $auth_template,
     {
       name => $user,
-      link => $app->url . "/api/verify?$token",
+      link => $app->site_url . "/api/verify?$token",
     }
   );
 

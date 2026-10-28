@@ -4,7 +4,7 @@ use JSON::XS;
 
 our %DEFAULT = (
   base     => "",
-  url      => "https://relaychat.party",
+  site_url => "https://relaychat.party",
   host     => "127.0.0.1",
   dbhost   => "127.0.0.1",
   dbuser   => undef,
@@ -23,7 +23,7 @@ sub new {
 }
 
 sub base     { $ENV{API_BASE}          || $DEFAULT{base}     }
-sub url      { $ENV{API_URL}           || $DEFAULT{url}      }
+sub site_url { $ENV{API_URL}           || $DEFAULT{site_url} }
 sub host     { $ENV{LIERCD_HOST}       || $DEFAULT{host}     }
 sub dbhost   { $ENV{POSTGRES_HOST}     || $DEFAULT{dbhost}   }
 sub dbuser   { $ENV{POSTGRES_USER}     || $DEFAULT{dbuser}   }
@@ -68,7 +68,7 @@ sub as_hash {
   my $self = shift;
   return map {
     $_ => $self->$_
-  } qw(base url host dsn dbuser dbpass dbhost secret secure smtp_opts from_address);
+  } qw(base site_url host dsn dbuser dbpass dbhost secret secure smtp_opts from_address);
 }
 
 1;

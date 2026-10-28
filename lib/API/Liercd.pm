@@ -8,7 +8,7 @@ sub ua {
   $self->{ua} ||= LWP::UserAgent->new;
 }
 
-sub url {
+sub liercd_url {
   my ($self, $path) = @_;
   sprintf "http://%s:5005/%s", $self->host, $path;
 }
@@ -16,7 +16,7 @@ sub url {
 sub request {
   my ($self, $meth, $path, $content, $type) = @_;
   $type = "application/javascript" unless defined $type;
-  my $req = HTTP::Request->new($meth, $self->url($path), [], $content);
+  my $req = HTTP::Request->new($meth, $self->liercd_url($path), [], $content);
   my $res = $self->ua->request( $req );
   return $res;
 }
