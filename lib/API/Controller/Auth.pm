@@ -98,7 +98,7 @@ sub register {
     $auth_template,
     {
       name => $user,
-      link => "https://relaychat.party/api/verify?$token",
+      link => $app->url . "/api/verify?$token",
     }
   );
 
