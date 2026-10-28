@@ -41,7 +41,7 @@ type Server struct {
 
 func New(cfg config.Config, d *db.DB, lc *liercd.Client) *Server {
 	return &Server{
-		PingInterval: 15 * time.Second,
+		PingInterval: 5 * time.Second,
 		WriteTimeout: 3 * time.Minute,
 		NSQReconnect: 5 * time.Second,
 		cfg:          cfg,

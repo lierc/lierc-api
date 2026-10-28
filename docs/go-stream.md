@@ -18,7 +18,7 @@ See also `docs/lierc-api.md`, "Event stream":
   user. Then 2 KB of comment padding, a `ping`, the replay of each
   connection's state (recreating it in liercd if needed), and live messages
   from NSQ topic `logged` for the user's connections.
-- Pings every 15 s; a stream whose write blocks for 3 minutes is dropped. On
+- Pings every 5 s; a stream whose write blocks for 3 minutes is dropped. On
   close it saves each connection's joined channels into its config and updates
   `last_login`.
 
