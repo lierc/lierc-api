@@ -22,6 +22,11 @@ sub json {
     [$json]];
 }
 
+sub redirect {
+  my ($self, $location) = @_;
+  return [302, ["Location", $location], []];
+}
+
 sub nocontent {
   return [204, [], []];
 }

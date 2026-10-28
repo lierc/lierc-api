@@ -158,10 +158,10 @@ sub verify {
 
   my $row = $app->dbh->selectcol_arrayref('SELECT id FROM "user" WHERE verify_token=?', {}, $query);
 
-  return $app->unauthorized unless $row;
+  return $app->unauthorized unless @$row;
 
   $app->dbh->do('UPDATE "user" SET verified=true WHERE id=?', {}, $row->[0]);
-  $app->ok;
+  $app->redirect($app->site_url . "/app/");
 }
 
 sub token {
