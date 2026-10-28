@@ -1054,3 +1054,52 @@ func TestLargeReplaySurvivesLiveEvents(t *testing.T) {
 		t.Error("stream not registered after replay")
 	}
 }
+
+// drained waits for the server to end c's stream, skipping any events.
+func (c *client) drained() {
+	c.t.Helper()
+	for {
+		select {
+		case _, ok := <-c.events:
+			if !ok {
+				c.checkErr()
+				return
+			}
+		case <-time.After(waitFor):
+			c.t.Fatal("stream still open")
+		}
+	}
+}
+
+// Shutdown ends open streams at once instead of waiting out its deadline,
+// and streams opened while it runs end as soon as they start.
+func TestShutdownClosesStreams(t *testing.T) {
+	e := setup(t)
+	u := e.addUser("alice")
+	e.liveConn("c1", u)
+	c := e.openReplayed(u)
+	e.srv.Config.RegisterOnShutdown(e.s.CloseStreams)
+
+	ctx, cancel := context.WithTimeout(context.Background(), waitFor)
+	defer cancel()
+	start := time.Now()
+	if err := e.srv.Config.Shutdown(ctx); err != nil {
+		t.Fatalf("shutdown: %v after %v", err, time.Since(start))
+	}
+	c.drained()
+	if n := e.s.count(u); n != 0 {
+		t.Errorf("%d streams still registered", n)
+	}
+}
+
+func TestStreamAfterCloseStreamsEnds(t *testing.T) {
+	e := setup(t)
+	u := e.addUser("alice")
+	e.liveConn("c1", u)
+	e.s.CloseStreams()
+	c := e.open(u)
+	c.drained()
+	if n := e.s.count(u); n != 0 {
+		t.Errorf("%d streams still registered", n)
+	}
+}

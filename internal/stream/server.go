@@ -35,6 +35,7 @@ type Server struct {
 
 	mu      sync.Mutex
 	streams map[string]map[string]*stream // user -> stream id -> stream
+	closed  bool                          // set by CloseStreams
 
 	replayed func() // test hook: runs when a stream's replay goroutine ends
 }
@@ -114,9 +115,27 @@ func (s *Server) offerLocked(st *stream, b []byte) {
 	}
 }
 
+// CloseStreams ends every open stream, and any opened after it as soon as it
+// starts. Give it to http.Server.RegisterOnShutdown: streams never end on their
+// own, so Shutdown would otherwise hold them open, silent, until its deadline.
+// Each stream still runs its close work, and its client reconnects.
+func (s *Server) CloseStreams() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.closed = true
+	for _, user := range s.streams {
+		for _, st := range user {
+			st.stop()
+		}
+	}
+}
+
 func (s *Server) register(st *stream) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if s.closed {
+		st.stop()
+	}
 	if s.streams[st.user] == nil {
 		s.streams[st.user] = map[string]*stream{}
 	}

@@ -22,7 +22,8 @@ import (
 	"github.com/lierc/lierc-api/internal/stream"
 )
 
-// shutdownTimeout bounds the graceful drain; SSE streams never end on their own.
+// shutdownTimeout bounds the graceful drain: closing streams saves their
+// channels and last_login.
 const shutdownTimeout = 10 * time.Second
 
 func main() {
@@ -65,6 +66,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, stderr 
 	}()
 	// As in stream.psgi, every path but /stats is the event stream.
 	srv := &http.Server{Handler: proxy.Wrap(cfg.TrustedProxies, s)}
+	srv.RegisterOnShutdown(s.CloseStreams)
 
 	ln, err := net.Listen("tcp", cfg.Listen)
 	if err != nil {
@@ -97,7 +99,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, stderr 
 		if !errors.Is(err, context.DeadlineExceeded) {
 			logger.Printf("shutdown: %v", err)
 		}
-		srv.Close() // long-lived SSE streams outlast the grace period
+		srv.Close()
 	}
 	return code
 }

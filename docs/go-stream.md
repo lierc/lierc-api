@@ -21,6 +21,9 @@ See also `docs/lierc-api.md`, "Event stream":
 - Pings every 5 s; a stream whose write blocks for 3 minutes is dropped. On
   close it saves each connection's joined channels into its config and updates
   `last_login`.
+- On SIGTERM or SIGINT it stops accepting connections and ends every stream at
+  once (a stream that starts meanwhile ends straight after its handshake), so
+  clients reconnect; it then waits up to 10 s for their close work.
 
 ## Running it
 
