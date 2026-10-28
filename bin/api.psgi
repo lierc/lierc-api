@@ -18,9 +18,12 @@ builder {
     expires     => 3600 * 24 * 7,
     httponly    => 1,
     secure      => $api->secure,
+    samesite    => "Strict",
     session_key => "chats";
 
   enable "AccessLog";
+
+  enable "+API::SameOrigin", origins => $config->origins;
 
   sub {
     my $env = shift;

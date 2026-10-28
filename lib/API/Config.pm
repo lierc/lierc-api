@@ -47,6 +47,16 @@ sub smtp_opts {
 
 sub from_address { $ENV{FROM_ADDRESS} || $DEFAULT{from_address} }
 
+# The origins the UI is served from, which may make state-changing
+# requests (see API::SameOrigin), eg
+#   API_ORIGINS=https://relaychat.party http://localhost:8080
+# Defaults to API_URL alone.
+sub origins {
+  return [ split ' ', $ENV{API_ORIGINS} ] if defined $ENV{API_ORIGINS};
+  return [ $ENV{API_URL} ] if defined $ENV{API_URL};
+  return [];
+}
+
 sub dsn     {
   my $self = shift;
   sprintf "dbi:Pg:dbname=%s;host=%s", $self->dbname, $self->dbhost;

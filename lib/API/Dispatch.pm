@@ -24,8 +24,10 @@ sub dispatch {
 sub handle {
   my ($self, $name, $req) = @_;
 
+  # verify finds its user by the emailed token; its link usually comes from
+  # a webmail site, which the SameSite=Strict session cookie isn't sent from.
   return $self->unauthorized
-    unless ($name && $name =~ /^auth\.(?:login|register|logout)$/)
+    unless ($name && $name =~ /^auth\.(?:login|register|logout|verify)$/)
       or $self->logged_in($req->session);
 
   if ($req->captures->{id}) {
