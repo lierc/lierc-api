@@ -39,6 +39,8 @@ COPY --from=base /opt/perl-$PERL_VERSION /opt/perl-$PERL_VERSION
 ENV PATH="/opt/perl-${PERL_VERSION}/bin:${PATH}"
 EXPOSE 5004
 WORKDIR /opt/lierc-api
-# LISTEN sets the address, e.g. 127.0.0.1:5004; sh fills it in and exec
-# keeps plackup as PID 1, so it gets docker's stop signal.
-CMD ["sh", "-c", "exec perl -Ilocal/lib/perl5 local/bin/plackup --server Gazelle -Ilib --max-workers 4 --listen \"${LISTEN:-:5004}\" bin/api.psgi"]
+# The address to listen on; override it with docker run -e LISTEN=...
+ENV LISTEN=:5004
+# Shell form, so $LISTEN is filled in when the container starts; exec keeps
+# plackup as PID 1, so it gets docker's stop signal.
+CMD exec perl -Ilocal/lib/perl5 local/bin/plackup --server Gazelle -Ilib --max-workers 4 --listen "$LISTEN" bin/api.psgi
