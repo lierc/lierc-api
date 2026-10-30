@@ -1,0 +1,56 @@
+#!/usr/bin/env perl
+
+# Adds an irc.relaychat.party:6667 network to every user who logged in during the
+# last 48 hours, skipping users who already have one.
+
+use FindBin;
+use lib "$FindBin::Bin/../lib";
+
+use DBI;
+use JSON::XS;
+use LWP::UserAgent;
+use Util;
+
+my $dbh = DBI->connect("dbi:Pg:dbname=lierc", undef, undef, { RaiseError => 1 });
+my $sth = $dbh->prepare(q{
+  SELECT u.id, u.username
+  FROM "user" AS u
+  WHERE u.last_login > NOW() - INTERVAL '48 hours'
+    AND NOT EXISTS (
+      SELECT 1 FROM connection AS c
+      WHERE c.user = u.id
+        AND c.config->>'Host' IN ('irc.relaychat.party', '127.0.0.1')
+        AND c.config->>'Port' = '6667'
+    )
+});
+$sth->execute;
+
+my $ua = LWP::UserAgent->new;
+my $added = 0;
+
+while (my ($user, $username) = $sth->fetchrow_array) {
+  my $id = Util->uuid;
+  my $config = encode_json {
+    Host      => "irc.relaychat.party",
+    Port      => 6667,
+    Ssl       => JSON::XS::false,
+    Nick      => $username,
+    User      => $username,
+    Channels  => ["#relaychat"],
+    Highlight => [$username],
+  };
+
+  # Saved first, as the API does at signup. If liercd fails, the stream
+  # re-creates the connection from this row when the user next connects.
+  $dbh->do(q{INSERT INTO connection (id, "user", config) VALUES(?,?,?)},
+    undef, $id, $user, $config);
+  $added++;
+
+  my $create = $ua->post("http://127.0.0.1:5005/$id/create", Content => $config);
+  warn "$username: ", $create->status_line, "\n"
+    unless $create->code == 200;
+}
+
+$dbh->do("NOTIFY highlights") if $added;
+
+warn "added $added\n";
