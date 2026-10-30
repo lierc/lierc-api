@@ -58,15 +58,6 @@ create table seen (
   primary key ("user", connection, channel)
 );
 
-create table token (
-  id varchar(24) not null,
-  "user" varchar(24) not null,
-  created timestamp not null,
-  primary key (id)
-);
-
-create index on token ("user", id);
-
 create table private (
   connection varchar(24) not null,
   nick varchar(32) not null,

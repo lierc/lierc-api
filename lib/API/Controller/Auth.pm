@@ -194,13 +194,13 @@ sub verify {
   $app->redirect($app->site_url . "/app/");
 }
 
+# Sends no longer check lierc-token (see connection.send), so these are
+# never stored. Pages from before its removal still fetch them.
 sub token {
   my ($app, $req) = @_;
-  my $user = $req->session->{user};
-  my $token = $app->get_token($user);
   $app->json({
-    token => $token,
-    extra => [ map $app->get_token($user), (0 .. 5) ],
+    token => Util->uuid,
+    extra => [ map Util->uuid, (0 .. 5) ],
   });
 }
 

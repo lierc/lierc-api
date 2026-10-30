@@ -23,7 +23,6 @@ my %cmds = (
   reset  => \&cmd_reset,
   stats  => \&cmd_stats,
   users  => \&cmd_users,
-  prune_tokens => \&cmd_prune_tokens,
   prune_seen   => \&cmd_prune_seen,
   prune_logs   => \&cmd_prune_logs,
   prune_old    => \&cmd_prune_old_logs,
@@ -116,15 +115,6 @@ sub cmd_users {
       warn sprintf "%s - [%s] \"%s\"\n", $user, $time, $stream->{agent};
     }
   }
-}
-
-sub cmd_prune_tokens {
-  my $sth = $dbh->prepare(q{
-    DELETE FROM token
-    WHERE created < NOW() - INTERVAL '1 WEEK'
-  });
-  $sth->execute;
-  warn sprintf "deleted %d rows\n", $sth->rows;
 }
 
 sub cmd_stats {
