@@ -39,4 +39,6 @@ COPY --from=base /opt/perl-$PERL_VERSION /opt/perl-$PERL_VERSION
 ENV PATH="/opt/perl-${PERL_VERSION}/bin:${PATH}"
 EXPOSE 5004
 WORKDIR /opt/lierc-api
-CMD ["perl", "-Ilocal/lib/perl5", "local/bin/plackup", "--server", "Gazelle", "-Ilib", "--max-workers", "4", "--listen", ":5004", "bin/api.psgi"]
+# LISTEN sets the address, e.g. 127.0.0.1:5004; sh fills it in and exec
+# keeps plackup as PID 1, so it gets docker's stop signal.
+CMD ["sh", "-c", "exec perl -Ilocal/lib/perl5 local/bin/plackup --server Gazelle -Ilib --max-workers 4 --listen \"${LISTEN:-:5004}\" bin/api.psgi"]
