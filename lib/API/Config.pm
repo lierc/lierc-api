@@ -59,6 +59,22 @@ sub origins {
   return [];
 }
 
+# The network new signups start with, which needs at least a host, eg
+#   DEFAULT_NETWORK_HOST=irc.relaychat.party
+#   DEFAULT_NETWORK_PORT=6667
+#   DEFAULT_NETWORK_SSL=1
+#   DEFAULT_NETWORK_CHANNELS=#relaychat #help
+# Unset, signups get no network.
+sub default_network {
+  return undef unless $ENV{DEFAULT_NETWORK_HOST};
+  return {
+    Host     => $ENV{DEFAULT_NETWORK_HOST},
+    Port     => int($ENV{DEFAULT_NETWORK_PORT} || 6667),
+    Ssl      => $ENV{DEFAULT_NETWORK_SSL} ? JSON::XS::true : JSON::XS::false,
+    Channels => [ split ' ', $ENV{DEFAULT_NETWORK_CHANNELS} || "" ],
+  };
+}
+
 sub dsn     {
   my $self = shift;
   sprintf "dbi:Pg:dbname=%s;host=%s", $self->dbname, $self->dbhost;
@@ -68,7 +84,7 @@ sub as_hash {
   my $self = shift;
   return map {
     $_ => $self->$_
-  } qw(base site_url host dsn dbuser dbpass dbhost secret secure smtp_opts from_address);
+  } qw(base site_url host dsn dbuser dbpass dbhost secret secure smtp_opts from_address default_network);
 }
 
 1;

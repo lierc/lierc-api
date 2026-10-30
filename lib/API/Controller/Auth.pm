@@ -3,6 +3,7 @@ package API::Controller::Auth;
 use parent 'API::Controller';
 
 use Util;
+use JSON::XS;
 use Data::Validate::Email;
 use MIME::Lite;
 use Net::SMTP;
@@ -94,6 +95,10 @@ sub register {
   my ($id, $token) = $app->add_user($user, $email, $pass);
   $req->session->{user} = $id;
 
+  # A failed default network shouldn't fail the signup.
+  eval { add_default_network($app, $id, $user); 1 }
+    or warn "Unable to add default network for $user: $@";
+
   my $data = $tx->render_string(
     $auth_template,
     {
@@ -115,6 +120,31 @@ sub register {
   }
 
   return $app->handle("auth.show", $req);
+}
+
+# The configured default network (API::Config default_network), if any,
+# with the user's name as nick, username and highlight.
+sub add_default_network {
+  my ($app, $user_id, $username) = @_;
+
+  my $network = $app->default_network or return;
+
+  my $id = Util->uuid;
+  my $config = encode_json {
+    %$network,
+    Nick      => $username,
+    User      => $username,
+    Highlight => [$username],
+  };
+
+  # Saved before liercd connects, so the connection's first events can be
+  # routed to the user. If liercd fails, the stream re-creates the
+  # connection from this row when the user next connects.
+  $app->save_connection($id, $user_id, $config);
+  $app->dbh->do("NOTIFY highlights");
+
+  my $res = $app->request(POST => "$id/create", $config);
+  die $res->status_line . "\n" unless $res->code == 200;
 }
 
 # MIME::Lite's own SMTP support is broken over TLS: IO::Socket::SSL::start_SSL

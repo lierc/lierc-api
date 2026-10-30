@@ -3,7 +3,7 @@ package API;
 use strict;
 use warnings;
 
-use Class::Tiny qw(site_url host dsn dbhost dbuser dbpass secret base secure smtp_opts from_address);
+use Class::Tiny qw(site_url host dsn dbhost dbuser dbpass secret base secure smtp_opts from_address default_network);
 
 use Role::Tiny::With;
 
