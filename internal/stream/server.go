@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"regexp"
 	"strconv"
 	"sync"
 	"time"
@@ -60,29 +61,61 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ctx := r.Context()
-	user := session.User(r, s.cfg.Secret)
-	ok := false
-	if user != "" {
-		var err error
-		if ok, err = s.db.UserExists(ctx, user); err != nil {
-			log.Printf("stream: lookup user: %v", err)
-			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-			return
-		}
-	}
+	user, ok := s.user(w, r)
 	if !ok {
-		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	if m := pingPath.FindStringSubmatch(r.URL.Path); m != nil && r.Method == http.MethodPost {
+		s.servePing(w, user, m[1])
 		return
 	}
 
-	conns, err := s.db.Connections(ctx, user)
+	conns, err := s.db.Connections(r.Context(), user)
 	if err != nil {
 		log.Printf("stream: connections: %v", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
 	s.serveStream(w, r, user, conns)
+}
+
+// pingPath is a wake ping's path. nginx may forward it with extra leading
+// slashes.
+var pingPath = regexp.MustCompile(`^/+([^/]+)/ping$`)
+
+// user is the existing user logged in by r's "chats" cookie. Otherwise it
+// writes the error response and reports false.
+func (s *Server) user(w http.ResponseWriter, r *http.Request) (string, bool) {
+	user := session.User(r, s.cfg.Secret)
+	ok := false
+	if user != "" {
+		var err error
+		if ok, err = s.db.UserExists(r.Context(), user); err != nil {
+			log.Printf("stream: lookup user: %v", err)
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			return "", false
+		}
+	}
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+	}
+	return user, ok
+}
+
+// servePing pings user's stream id at once, so a client waking from sleep
+// learns whether its stream still works. Another user's stream is unknown.
+func (s *Server) servePing(w http.ResponseWriter, user, id string) {
+	s.mu.Lock()
+	st := s.streams[user][id]
+	if st != nil {
+		s.pingLocked(st)
+	}
+	s.mu.Unlock()
+	if st == nil {
+		writeError(w, http.StatusNotFound, "unknown stream")
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // Run pings every stream each PingInterval until ctx is done.

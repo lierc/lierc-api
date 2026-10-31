@@ -22,9 +22,12 @@ See also `docs/lierc-api.md`, "Event stream":
 - Pings every 5 s. Each ping's data is `{"time":…,"last_id":…}`, where
   `last_id` is the user's newest logged message id (0 if none), so a client
   can fetch what it missed. A stream whose write blocks for 3 minutes is
-  dropped. On
-  close it saves each connection's joined channels into its config and updates
-  `last_login`.
+  dropped. On close it saves each connection's joined channels into its
+  config and updates `last_login`.
+- `POST /<stream id>/ping` (leading slashes may repeat): 204, and a ping is
+  sent at once on that stream of the logged-in user, so a client waking
+  from sleep can check its stream. 404 `unknown stream` if the user has no
+  such stream, 401 without a valid session.
 - On SIGTERM or SIGINT it stops accepting connections and ends every stream at
   once (a stream that starts meanwhile ends straight after its handshake), so
   clients reconnect; it then waits up to 10 s for their close work.

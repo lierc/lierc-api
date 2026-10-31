@@ -116,6 +116,21 @@ func (e *env) get(path, user string, hdr ...string) *http.Response {
 	return res
 }
 
+// post sends an empty POST to path, logged in as user unless user is "".
+func (e *env) post(path, user string) *http.Response {
+	e.t.Helper()
+	req, _ := http.NewRequest("POST", e.srv.URL+path, nil)
+	if user != "" {
+		req.AddCookie(&http.Cookie{Name: "chats", Value: testenv.PerlCookie(user, testSecret)})
+	}
+	res, err := noKeepAlive().Do(req)
+	if err != nil {
+		e.t.Fatal(err)
+	}
+	res.Body.Close()
+	return res
+}
+
 // open starts a stream, checks the padding, and parses events in the
 // background. Every event must be well-formed or the client records an error.
 func (e *env) open(user string) *client {
@@ -760,6 +775,87 @@ func TestLatestDroppedWithLastStream(t *testing.T) {
 	}
 	c2.close()
 	poll(t, "latest to be dropped", func() bool { _, ok := latest(); return !ok })
+}
+
+func TestWakePing(t *testing.T) {
+	e := setup(t)
+	u := e.addUser("alice")
+	testenv.AddLog(t, e.db, 7, "ca", u)
+	c1, c2 := e.open(u), e.open(u)
+	lastID(t, c1.next())
+	lastID(t, c2.next())
+	e.waitReplay()
+	e.waitReplay()
+
+	if res := e.post("/"+c1.id+"/ping", u); res.StatusCode != 204 {
+		t.Fatalf("ping status %d, want 204", res.StatusCode)
+	}
+	if id := lastID(t, c1.next()); id != 7 {
+		t.Errorf("wake ping last_id = %d, want 7", id)
+	}
+	// Only c1 was pinged: c2's next ping is pingAll's, with nothing after it.
+	e.s.pingAll()
+	lastID(t, c1.next())
+	lastID(t, c2.next())
+	select {
+	case ev := <-c2.events:
+		t.Errorf("c2 got an extra %+v", ev)
+	case <-time.After(100 * time.Millisecond):
+	}
+}
+
+func TestWakePingDoubleSlash(t *testing.T) {
+	e := setup(t)
+	u := e.addUser("alice")
+	c := e.open(u)
+	if res := e.post("//"+c.id+"/ping", u); res.StatusCode != 204 {
+		t.Fatalf("ping status %d, want 204", res.StatusCode)
+	}
+}
+
+func TestWakePingUnknown(t *testing.T) {
+	e := setup(t)
+	a, b := e.addUser("alice"), e.addUser("bob")
+	c := e.open(a)
+
+	req, _ := http.NewRequest("POST", e.srv.URL+"/nope/ping", nil)
+	req.AddCookie(&http.Cookie{Name: "chats", Value: testenv.PerlCookie(a, testSecret)})
+	res, err := noKeepAlive().Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, _ := io.ReadAll(res.Body)
+	res.Body.Close()
+	if res.StatusCode != 404 || string(body) != `{"status":"error","error":"unknown stream"}` {
+		t.Errorf("unknown stream: %d %s", res.StatusCode, body)
+	}
+	if res := e.post("/"+c.id+"/ping", b); res.StatusCode != 404 {
+		t.Errorf("bob pinging alice's stream: %d, want 404", res.StatusCode)
+	}
+	c.close()
+	poll(t, "stream to close", func() bool { return e.s.count(a) == 0 })
+	if res := e.post("/"+c.id+"/ping", a); res.StatusCode != 404 {
+		t.Errorf("closed stream: %d, want 404", res.StatusCode)
+	}
+}
+
+func TestWakePingUnauthorized(t *testing.T) {
+	e := setup(t)
+	u := e.addUser("alice")
+	c := e.open(u)
+	if res := e.post("/"+c.id+"/ping", ""); res.StatusCode != 401 {
+		t.Errorf("no cookie: %d, want 401", res.StatusCode)
+	}
+}
+
+func TestStreamStillServedOnOtherPaths(t *testing.T) {
+	e := setup(t)
+	u := e.addUser("alice")
+	res := e.get("/x/ping", u)
+	defer res.Body.Close()
+	if res.StatusCode != 200 || res.Header.Get("Content-Type") != "text/event-stream;charset=utf-8" {
+		t.Errorf("GET /x/ping: %d %s, want a stream", res.StatusCode, res.Header.Get("Content-Type"))
+	}
 }
 
 // freeAddr returns a local TCP address that nothing listens on.
