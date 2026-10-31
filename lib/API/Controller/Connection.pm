@@ -81,11 +81,8 @@ sub send {
   my $id  = $req->captures->{id};
   my $res = $app->request(POST => "$id/raw", $req->content);
 
-  # API::SameOrigin and the SameSite cookie refuse cross-site sends, so the
-  # lierc-token header is no longer checked. Pages from before its removal
-  # still expect a fresh token back with each send.
   if ($res->code == 200) {
-    return $app->ok(token => Util->uuid);
+    return $app->ok;
   }
 
   die $res->decoded_content;

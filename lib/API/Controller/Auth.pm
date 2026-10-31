@@ -13,7 +13,6 @@ API->register("auth.show",     __PACKAGE__);
 API->register("auth.login",    __PACKAGE__);
 API->register("auth.register", __PACKAGE__);
 API->register("auth.logout",   __PACKAGE__);
-API->register("auth.token",    __PACKAGE__);
 API->register("auth.verify",   __PACKAGE__);
 API->register("auth.health",   __PACKAGE__);
 
@@ -192,16 +191,6 @@ sub verify {
 
   $app->dbh->do('UPDATE "user" SET verified=true WHERE id=?', {}, $row->[0]);
   $app->redirect($app->site_url . "/app/");
-}
-
-# Sends no longer check lierc-token (see connection.send), so these are
-# never stored. Pages from before its removal still fetch them.
-sub token {
-  my ($app, $req) = @_;
-  $app->json({
-    token => Util->uuid,
-    extra => [ map Util->uuid, (0 .. 5) ],
-  });
 }
 
 1;
