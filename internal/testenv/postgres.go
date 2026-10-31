@@ -33,7 +33,8 @@ var (
 )
 
 // Main is for TestMain: it runs the tests, then stops the embedded Postgres
-// (started lazily by the first Postgres call) and removes its files.
+// (started lazily by the first Postgres call) and removes its files and the
+// nsqd binary NSQD builds.
 func Main(m *testing.M) {
 	code := m.Run()
 	if pgServer != nil {
@@ -41,6 +42,9 @@ func Main(m *testing.M) {
 	}
 	if pgDir != "" {
 		os.RemoveAll(pgDir)
+	}
+	if nsqdDir != "" {
+		os.RemoveAll(nsqdDir)
 	}
 	os.Exit(code)
 }
