@@ -183,3 +183,13 @@ func AddConnection(t testing.TB, d *db.DB, id, user, config string) {
 		t.Fatal(err)
 	}
 }
+
+// AddLog inserts a log row with the given id for user's connection conn.
+func AddLog(t testing.TB, d *db.DB, id int64, conn, user string) {
+	t.Helper()
+	if _, err := d.Pool.Exec(context.Background(),
+		`INSERT INTO log (id, connection, "user", channel, time, message) VALUES ($1, $2, $3, '#a', now(), '{}')`,
+		id, conn, user); err != nil {
+		t.Fatal(err)
+	}
+}

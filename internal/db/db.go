@@ -101,6 +101,13 @@ func (d *DB) LookupOwner(ctx context.Context, id string) (string, bool, error) {
 	return user, true, nil
 }
 
+// LatestMessageID is the id of user's newest log row, or 0 if there is none.
+func (d *DB) LatestMessageID(ctx context.Context, user string) (int64, error) {
+	var id int64
+	err := d.Pool.QueryRow(ctx, `SELECT COALESCE(max(id), 0) FROM log WHERE "user"=$1`, user).Scan(&id)
+	return id, err
+}
+
 func (d *DB) UpdateConfig(ctx context.Context, id string, config []byte) error {
 	_, err := d.Pool.Exec(ctx, `UPDATE connection SET config=$1 WHERE id=$2`, config, id)
 	return err

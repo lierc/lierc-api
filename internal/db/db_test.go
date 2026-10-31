@@ -138,3 +138,18 @@ func TestPoolMaxConns(t *testing.T) {
 		d.Close()
 	}
 }
+
+func TestLatestMessageID(t *testing.T) {
+	d := testenv.Postgres(t)
+	if id, err := d.LatestMessageID(ctx, "alice"); err != nil || id != 0 {
+		t.Fatalf("no messages: LatestMessageID = %d %v", id, err)
+	}
+	testenv.AddLog(t, d, 5, "ca", "alice")
+	testenv.AddLog(t, d, 9, "ca", "alice")
+	testenv.AddLog(t, d, 12, "cb", "bob")
+	for user, want := range map[string]int64{"alice": 9, "bob": 12, "nobody": 0} {
+		if id, err := d.LatestMessageID(ctx, user); err != nil || id != want {
+			t.Errorf("LatestMessageID(%q) = %d %v, want %d", user, id, err, want)
+		}
+	}
+}
