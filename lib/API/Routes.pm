@@ -5,7 +5,6 @@ use Router::Boom::Method;
 
 my $router = Router::Boom::Method->new;
 
-$router->add( GET    => "/health",              "auth.health" );
 $router->add( GET    => "/auth",                "auth.show" );
 $router->add( POST   => "/auth",                "auth.login" );
 $router->add( POST   => "/register",            "auth.register" );
@@ -19,7 +18,6 @@ $router->add( GET    => "/highlight",           "message.highlight" );
 $router->add( GET    => "/highlight/:event",    "message.highlight" );
 
 $router->add( GET    => "/preference",          "pref.list" );
-$router->add( GET    => "/preference/:pref",    "pref.show" );
 $router->add( POST   => "/preference/:pref",    "pref.upsert" );
 $router->add( GET    => "/unsubscribe",         "pref.unsubscribe" );
 
@@ -41,12 +39,7 @@ $router->add( POST   => "/connection/:id/channel/:channel/seen",          "chann
 $router->add( GET    => "/connection/:id/channel/:channel/last",          "channel.last" );
 $router->add( GET    => "/connection/:id/channel",                        "channel.list" );
 
-$router->add( POST   => "/connection/:id/channel/:channel/ignore",        "ignore.create" );
-$router->add( DELETE => "/connection/:id/channel/:channel/ignore/:from",  "ignore.delete" );
-$router->add( GET    => "/ignore",                                        "ignore.list" );
-
 $router->add( GET    => "/notification/web_push_keys",          "webpush.keys" );
-$router->add( GET    => "/notification/web_push",               "webpush.list" );
 $router->add( POST   => "/notification/web_push",               "webpush.upsert" );
 $router->add( DELETE => "/notification/web_push/{endpoint:.+}", "webpush.delete" );
 

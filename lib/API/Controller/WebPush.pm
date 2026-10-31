@@ -4,7 +4,6 @@ use parent 'API::Controller';
 
 API->register("webpush.upsert", __PACKAGE__);
 API->register("webpush.delete", __PACKAGE__);
-API->register("webpush.list",   __PACKAGE__);
 API->register("webpush.keys",   __PACKAGE__);
 
 sub keys {
@@ -27,21 +26,6 @@ sub delete {
   $sth->execute($user, $endpoint);
   $sth->finish;
   $app->nocontent;
-}
-
-sub list {
-  my ($app, $req) = @_;
-  my $user = $req->session->{user};
-
-  my $sth = $app->dbh->prepare_cached(q{
-    SELECT key, auth, endpoint FROM web_push
-    WHERE "user"=?
-  });
-  $sth->execute($user);
-  my $rows = $sth->fetchall_arrayref({});
-  $sth->finish;
-
-  return $app->json($rows);
 }
 
 sub upsert {

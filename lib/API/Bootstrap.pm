@@ -7,6 +7,5 @@ use API::Controller::Connection;
 use API::Controller::Channel;
 use API::Controller::Private;
 use API::Controller::WebPush;
-use API::Controller::Ignore;
 
 1;

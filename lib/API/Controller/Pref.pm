@@ -4,7 +4,6 @@ use parent 'API::Controller';
 
 use Encode;
 
-API->register("pref.show",   __PACKAGE__);
 API->register("pref.list",   __PACKAGE__);
 API->register("pref.upsert", __PACKAGE__);
 API->register("pref.unsubscribe", __PACKAGE__);
@@ -41,23 +40,6 @@ sub list {
 
   return $app->not_found unless $rows;
   return $app->json($rows);
-}
-
-sub show {
-  my ($app, $req) = @_;
-  my $user = $req->session->{user};
-  my $pref = $req->captures->{pref};
-
-  my $sth = $app->dbh->prepare_cached(q{
-    SELECT name, value FROM pref
-    WHERE "user"=? AND name=?
-  });
-  $sth->execute($user, $pref);
-  my $row = $sth->fetchrow_hashref;
-  $sth->finish;
-
-  return $app->not_found unless $row;
-  return $app->json($row);
 }
 
 sub upsert {

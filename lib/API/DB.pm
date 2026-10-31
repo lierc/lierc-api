@@ -18,11 +18,6 @@ sub dbh {
   ))->dbh;
 }
 
-sub ping {
-  my $self = shift;
-  $self->dbh->ping;
-}
-
 sub verify_owner {
   my ($self, $id, $user) = @_;
 
