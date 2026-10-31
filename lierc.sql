@@ -38,8 +38,8 @@ create table log (
 create index on log (connection, channel, id DESC);
 create index log_message_text on log USING gin ( to_tsvector( 'english', message->'Params'->1 ));
 create index log_sender on log USING gin ((message->'Prefix'->'Name'));
-create index log_user_highlight ("user", highlight, id DESC);
-create index log_tag_msgid on log USING gin ((message->'Tags'->'msgid'))
+create index log_user_highlight on log ("user", highlight, id DESC);
+create index log_tag_msgid on log USING gin ((message->'Tags'->'msgid'));
 create index on log (time);
 
 create table pref (
@@ -71,11 +71,4 @@ create table web_push (
   auth varchar(255) not null,
   "user" varchar(24) not null,
   primary key ("user", endpoint)
-);
-
-create table ignore (
-  connection varchar(24) not null,
-  channel varchar(32) not null,
-  "from" varchar(128) not null,
-  primary key (connection, channel, "from")
 );

@@ -9,7 +9,6 @@ import (
 	"path/filepath"
 	"runtime"
 	"strconv"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -83,27 +82,7 @@ func adminConn(ctx context.Context) (*pgx.Conn, error) {
 func schema() (string, error) {
 	_, file, _, _ := runtime.Caller(0)
 	b, err := os.ReadFile(filepath.Join(filepath.Dir(file), "..", "..", "lierc.sql"))
-	if err != nil {
-		return "", err
-	}
-	return PatchSchema(string(b))
-}
-
-// PatchSchema fixes the two statements in lierc.sql that Postgres rejects:
-// log_user_highlight lacks "on log", and log_tag_msgid lacks a trailing ';'.
-// The file itself stays verbatim; callers patch it in memory (tests) or when
-// loading it into a database.
-func PatchSchema(s string) (string, error) {
-	for _, r := range [][2]string{
-		{"create index log_user_highlight (", "create index log_user_highlight on log ("},
-		{"->'msgid'))\ncreate index on log (time);", "->'msgid'));\ncreate index on log (time);"},
-	} {
-		if !strings.Contains(s, r[0]) {
-			return "", fmt.Errorf("lierc.sql no longer contains %q; update testenv patches", r[0])
-		}
-		s = strings.Replace(s, r[0], r[1], 1)
-	}
-	return s, nil
+	return string(b), err
 }
 
 func createTemplate() error {
