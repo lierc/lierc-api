@@ -754,6 +754,29 @@ func TestPingLastID(t *testing.T) {
 	}
 }
 
+// A user's second stream reuses the newest id Deliver keeps current, rather
+// than querying it again.
+func TestSeedSkippedWhileStreamOpen(t *testing.T) {
+	e := setup(t)
+	u := e.addUser("alice")
+	testenv.AddLog(t, e.db, 9, "ca", u)
+	c1 := e.open(u)
+	if id := lastID(t, c1.next()); id != 9 {
+		t.Fatalf("first stream last_id = %d, want 9", id)
+	}
+	testenv.AddLog(t, e.db, 30, "ca", u) // logged, but never delivered
+	c2 := e.open(u)
+	if id := lastID(t, c2.next()); id != 9 {
+		t.Errorf("second stream last_id = %d, want 9 (not queried again)", id)
+	}
+	c1.close()
+	c2.close()
+	poll(t, "streams to close", func() bool { return e.s.count(u) == 0 })
+	if id := lastID(t, e.open(u).next()); id != 30 {
+		t.Errorf("stream after the last closed: last_id = %d, want 30 (queried again)", id)
+	}
+}
+
 func TestLatestDroppedWithLastStream(t *testing.T) {
 	e := setup(t)
 	u := e.addUser("alice")

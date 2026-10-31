@@ -147,7 +147,13 @@ func TestLatestMessageID(t *testing.T) {
 	testenv.AddLog(t, d, 5, "ca", "alice")
 	testenv.AddLog(t, d, 9, "ca", "alice")
 	testenv.AddLog(t, d, 12, "cb", "bob")
-	for user, want := range map[string]int64{"alice": 9, "bob": 12, "nobody": 0} {
+	testenv.AddLog(t, d, 15, "cc", "carol")
+	testenv.AddLog(t, d, 20, "cc", "carol")
+	// carol's newest is a highlight, alice's highlight is older than her newest.
+	if _, err := d.Pool.Exec(ctx, `UPDATE log SET highlight = true WHERE id IN (5, 20)`); err != nil {
+		t.Fatal(err)
+	}
+	for user, want := range map[string]int64{"alice": 9, "bob": 12, "carol": 20, "nobody": 0} {
 		if id, err := d.LatestMessageID(ctx, user); err != nil || id != want {
 			t.Errorf("LatestMessageID(%q) = %d %v, want %d", user, id, err, want)
 		}

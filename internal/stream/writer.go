@@ -119,15 +119,24 @@ func (s *Server) serveStream(w http.ResponseWriter, r *http.Request, user string
 		}
 	}()
 
-	// Registered first, so a Deliver meanwhile raises the id too.
-	id, err := s.db.LatestMessageID(ctx, user)
-	if err != nil {
-		log.Printf("stream: latest message id: %v", err)
+	// The user's newest message id is queried only when no other stream of
+	// theirs has it already: while they have one, Deliver keeps it current.
+	// Registered first, so a Deliver during the query raises it too.
+	s.mu.Lock()
+	_, known := s.latest[user]
+	s.mu.Unlock()
+	if !known {
+		id, err := s.db.LatestMessageID(ctx, user)
+		if err != nil {
+			log.Printf("stream: latest message id: %v", err)
+		}
+		s.mu.Lock()
+		if len(s.streams[user]) > 0 { // not if the stream already ended
+			s.raiseLatestLocked(user, id)
+		}
+		s.mu.Unlock()
 	}
 	s.mu.Lock()
-	if len(s.streams[user]) > 0 { // not if the stream already ended
-		s.raiseLatestLocked(user, id)
-	}
 	latest := s.latest[user]
 	s.mu.Unlock()
 	handshake := append([]byte(padding), streamEvent(st.id)...)
