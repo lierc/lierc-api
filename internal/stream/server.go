@@ -35,6 +35,7 @@ type Server struct {
 
 	mu      sync.Mutex
 	streams map[string]map[string]*stream // user -> stream id -> stream
+	latest  map[string]int64              // user -> newest message id, while the user has streams
 	closed  bool                          // set by CloseStreams
 
 	replayed func() // test hook: runs when a stream's replay goroutine ends
@@ -49,6 +50,7 @@ func New(cfg config.Config, d *db.DB, lc *liercd.Client) *Server {
 		db:           d,
 		lc:           lc,
 		streams:      map[string]map[string]*stream{},
+		latest:       map[string]int64{},
 	}
 }
 
@@ -102,8 +104,22 @@ func (s *Server) pingAll() {
 	defer s.mu.Unlock()
 	for _, user := range s.streams {
 		for _, st := range user {
-			s.offerLocked(st, pingEvent())
+			s.pingLocked(st)
 		}
+	}
+}
+
+// pingLocked queues a ping carrying st's user's newest message id. s.mu must
+// be held.
+func (s *Server) pingLocked(st *stream) {
+	s.offerLocked(st, pingEvent(s.latest[st.user]))
+}
+
+// raiseLatestLocked records id as user's newest message id unless a newer one
+// is known. s.mu must be held.
+func (s *Server) raiseLatestLocked(user string, id int64) {
+	if id > s.latest[user] {
+		s.latest[user] = id
 	}
 }
 
@@ -152,6 +168,7 @@ func (s *Server) deregisterLocked(st *stream) {
 	delete(s.streams[st.user], st.id)
 	if len(s.streams[st.user]) == 0 {
 		delete(s.streams, st.user)
+		delete(s.latest, st.user)
 	}
 }
 
@@ -189,6 +206,9 @@ func (s *Server) Deliver(body []byte) {
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if n, err := strconv.ParseInt(id, 10, 64); err == nil && len(s.streams[owner]) > 0 {
+		s.raiseLatestLocked(owner, n)
+	}
 	for _, st := range s.streams[owner] {
 		s.offerLocked(st, ev)
 	}
@@ -209,7 +229,29 @@ func sseEvent(typ string, data []byte, id string) []byte {
 	return b.Bytes()
 }
 
-func pingEvent() []byte { return sseEvent("ping", []byte(hiresTime()), "") }
+// pingEvent carries the time and the user's newest message id, so a client
+// can tell it has missed messages.
+func pingEvent(lastID int64) []byte {
+	b, err := marshal(struct {
+		Time   json.Number `json:"time"`
+		LastID int64       `json:"last_id"`
+	}{json.Number(hiresTime()), lastID})
+	if err != nil {
+		panic(err) // hiresTime is always a valid number
+	}
+	return sseEvent("ping", b, "")
+}
+
+// streamEvent tells a client its stream's id, which it names in wake pings.
+func streamEvent(id string) []byte {
+	b, err := marshal(struct {
+		ID string `json:"id"`
+	}{id})
+	if err != nil {
+		panic(err)
+	}
+	return sseEvent("stream", b, "")
+}
 
 // hiresTime is Time::HiRes::time as Perl prints it (%.15g).
 func hiresTime() string {

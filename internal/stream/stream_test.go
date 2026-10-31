@@ -94,6 +94,7 @@ type event struct {
 
 type client struct {
 	t      *testing.T
+	id     string // from the stream's stream event
 	resp   *http.Response
 	events chan event
 	errc   chan error
@@ -132,7 +133,27 @@ func (e *env) open(user string) *client {
 		e.t.Fatalf("padding = %q, %v", pad, err)
 	}
 	go c.parse(br)
+	ev := c.next()
+	var hello struct {
+		Id string `json:"id"`
+	}
+	if ev.typ != "stream" || json.Unmarshal([]byte(ev.data), &hello) != nil || hello.Id == "" {
+		e.t.Fatalf("first event %+v, want stream with an id", ev)
+	}
+	c.id = hello.Id
 	return c
+}
+
+// lastID is the last_id of a ping event.
+func lastID(t *testing.T, ev event) int64 {
+	t.Helper()
+	var p struct {
+		LastID *int64 `json:"last_id"`
+	}
+	if ev.typ != "ping" || json.Unmarshal([]byte(ev.data), &p) != nil || p.LastID == nil {
+		t.Fatalf("event %+v, want ping with last_id", ev)
+	}
+	return *p.LastID
 }
 
 func (c *client) close() { c.resp.Body.Close() }
@@ -370,15 +391,21 @@ func TestHandshake(t *testing.T) {
 	if _, err := io.ReadFull(br, pad); err != nil || string(pad) != padding {
 		t.Fatalf("padding = %q %v", pad, err)
 	}
-	ping := make([]byte, 0, 64)
-	for !strings.HasSuffix(string(ping), "\n\n") {
-		b, err := br.ReadByte()
-		if err != nil {
-			t.Fatal(err)
+	readEvent := func() []byte {
+		ev := make([]byte, 0, 64)
+		for !strings.HasSuffix(string(ev), "\n\n") {
+			b, err := br.ReadByte()
+			if err != nil {
+				t.Fatal(err)
+			}
+			ev = append(ev, b)
 		}
-		ping = append(ping, b)
+		return ev
 	}
-	if !regexp.MustCompile(`^event: ping\ndata: \d{10}(\.\d+)?\n\n$`).Match(ping) {
+	if ev := readEvent(); !regexp.MustCompile(`^event: stream\ndata: \{"id":"[^"]+"\}\n\n$`).Match(ev) {
+		t.Errorf("stream event = %q", ev)
+	}
+	if ping := readEvent(); !regexp.MustCompile(`^event: ping\ndata: \{"time":\d{10}(\.\d+)?,"last_id":0\}\n\n$`).Match(ping) {
 		t.Errorf("ping = %q", ping)
 	}
 }
@@ -654,6 +681,85 @@ func TestLiveDelivery(t *testing.T) {
 	if ev := b1.nextIRC(); ev.data != `{"ConnectionId":"cb","MessageId":7}` || ev.id != "7" {
 		t.Errorf("bob got %+v", ev)
 	}
+}
+
+func TestPingLastID(t *testing.T) {
+	addr, publish := testenv.NSQD(t)
+	e := setup(t)
+	a, b := e.addUser("alice"), e.addUser("bob")
+	e.liveConn("ca", a)
+	e.liveConn("cb", b)
+	testenv.AddLog(t, e.db, 5, "ca", a)
+	testenv.AddLog(t, e.db, 9, "ca", a)
+	testenv.AddLog(t, e.db, 50, "cb", b)
+
+	ac, bc := e.open(a), e.open(b)
+	if id := lastID(t, ac.next()); id != 9 {
+		t.Errorf("alice handshake last_id = %d, want 9", id)
+	}
+	if id := lastID(t, bc.next()); id != 50 {
+		t.Errorf("bob handshake last_id = %d, want 50", id)
+	}
+	e.waitReplay()
+	e.waitReplay()
+	consume(t, e.s, addr)
+	awaitSubscribed(t, publish, "ca", ac)
+
+	// nextPing skips replay and probe events.
+	nextPing := func(c *client) int64 {
+		t.Helper()
+		for {
+			if ev := c.next(); ev.typ == "ping" {
+				return lastID(t, ev)
+			}
+		}
+	}
+	publish("logged", []byte(`{"ConnectionId":"ca","MessageId":20}`))
+	if ev := ac.nextIRC(); ev.id != "20" {
+		t.Fatalf("got %+v, want message 20", ev)
+	}
+	e.s.pingAll()
+	if id := nextPing(ac); id != 20 {
+		t.Errorf("alice last_id after 20 = %d", id)
+	}
+	if id := nextPing(bc); id != 50 {
+		t.Errorf("bob last_id = %d, want 50", id)
+	}
+
+	publish("logged", []byte(`{"ConnectionId":"ca","MessageId":15}`))
+	if ev := ac.nextIRC(); ev.id != "15" {
+		t.Fatalf("got %+v, want message 15", ev)
+	}
+	e.s.pingAll()
+	if id := nextPing(ac); id != 20 {
+		t.Errorf("alice last_id after 15 = %d, want 20", id)
+	}
+	if id := nextPing(bc); id != 50 {
+		t.Errorf("bob last_id = %d, want 50", id)
+	}
+}
+
+func TestLatestDroppedWithLastStream(t *testing.T) {
+	e := setup(t)
+	u := e.addUser("alice")
+	testenv.AddLog(t, e.db, 3, "ca", u)
+	c1, c2 := e.open(u), e.open(u)
+	latest := func() (int64, bool) {
+		e.s.mu.Lock()
+		defer e.s.mu.Unlock()
+		id, ok := e.s.latest[u]
+		return id, ok
+	}
+	if id, ok := latest(); !ok || id != 3 {
+		t.Fatalf("latest = %d %v, want 3", id, ok)
+	}
+	c1.close()
+	poll(t, "first stream to close", func() bool { return e.s.count(u) == 1 })
+	if _, ok := latest(); !ok {
+		t.Fatal("latest dropped while a stream is open")
+	}
+	c2.close()
+	poll(t, "latest to be dropped", func() bool { _, ok := latest(); return !ok })
 }
 
 // freeAddr returns a local TCP address that nothing listens on.

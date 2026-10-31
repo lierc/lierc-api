@@ -119,7 +119,19 @@ func (s *Server) serveStream(w http.ResponseWriter, r *http.Request, user string
 		}
 	}()
 
-	if !s.write(rc, w, append([]byte(padding), pingEvent()...)) {
+	// Registered first, so a Deliver meanwhile raises the id too.
+	id, err := s.db.LatestMessageID(ctx, user)
+	if err != nil {
+		log.Printf("stream: latest message id: %v", err)
+	}
+	s.mu.Lock()
+	if len(s.streams[user]) > 0 { // not if the stream already ended
+		s.raiseLatestLocked(user, id)
+	}
+	latest := s.latest[user]
+	s.mu.Unlock()
+	handshake := append([]byte(padding), streamEvent(st.id)...)
+	if !s.write(rc, w, append(handshake, pingEvent(latest)...)) {
 		return
 	}
 	if err := s.db.SaveLastLogin(ctx, user); err != nil {

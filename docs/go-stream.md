@@ -15,10 +15,14 @@ See also `docs/lierc-api.md`, "Event stream":
 - `GET /stats` with a matching `lierc-key` header: stream counts per user, or
   one user's streams with `?user=<id>`. Otherwise 400 `Invalid key`.
 - Any other path: 401 unless the `chats` cookie verifies and names an existing
-  user. Then 2 KB of comment padding, a `ping`, the replay of each
-  connection's state (recreating it in liercd if needed), and live messages
-  from NSQ topic `logged` for the user's connections.
-- Pings every 5 s; a stream whose write blocks for 3 minutes is dropped. On
+  user. Then 2 KB of comment padding, a `stream` event with the stream's
+  id (`{"id":"…"}`), a `ping`, the replay of each connection's state
+  (recreating it in liercd if needed), and live messages from NSQ topic
+  `logged` for the user's connections.
+- Pings every 5 s. Each ping's data is `{"time":…,"last_id":…}`, where
+  `last_id` is the user's newest logged message id (0 if none), so a client
+  can fetch what it missed. A stream whose write blocks for 3 minutes is
+  dropped. On
   close it saves each connection's joined channels into its config and updates
   `last_login`.
 - On SIGTERM or SIGINT it stops accepting connections and ends every stream at
