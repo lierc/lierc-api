@@ -9,6 +9,7 @@ requires "Math::BaseConvert";
 requires "DBIx::Connector";
 requires "Digest";
 requires "Digest::Bcrypt";
+requires "Crypt::Bcrypt";
 requires "Plack";
 requires "Router::Boom";
 requires "Plack::Middleware::Session";
