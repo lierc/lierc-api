@@ -196,10 +196,9 @@ sub cmd_reset {
   die "lctl reset EMAIL PASS"
     unless defined $email && defined $pass;
 
-  my $hash = Util->hash_password($pass, $config->secret);
-  warn $hash;
+  my $hash = Util->new_password_hash($pass);
   my $rows = $dbh->do(
-    q{UPDATE "user" SET password=? WHERE email=?},
+    q{UPDATE "user" SET password_hash=?, password=NULL WHERE email=?},
     {}, $hash, $email
   );
 

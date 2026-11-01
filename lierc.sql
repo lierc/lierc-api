@@ -1,7 +1,8 @@
 create table "user" (
   id       varchar(24) not null,
   email    varchar(256) not null,
-  password varchar(256) not null,
+  password varchar(256),
+  password_hash varchar(60),
   username varchar(256) not null,
   last_login timestamp not null default NOW(),
   verified bool default false not null,

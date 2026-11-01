@@ -88,17 +88,26 @@ sub lookup_user {
 
 sub add_user {
   my ($self, $user, $email, $pass) = @_;
-  my $hashed = Util->hash_password($pass, $self->secret);
+  my $hashed = Util->new_password_hash($pass);
   my $id = Util->uuid;
   my $token = Util->uuid;
 
   my $sth = $self->dbh->prepare_cached(
-    q{INSERT INTO "user" (id, username, email, password, verify_token) VALUES(?,?,?,?,?)},
+    q{INSERT INTO "user" (id, username, email, password_hash, verify_token) VALUES(?,?,?,?,?)},
   );
   $sth->execute($id, $user, $email, $hashed, $token);
   $sth->finish;
 
   return $id, $token;
+}
+
+# Stores a new-style hash and drops the legacy one, so it can't be used again.
+sub set_password_hash {
+  my ($self, $id, $hash) = @_;
+  $self->dbh->do(
+    q{UPDATE "user" SET password_hash=?, password=NULL WHERE id=?},
+    {}, $hash, $id
+  );
 }
 
 sub logged_in {

@@ -38,22 +38,34 @@ sub show {
   });
 }
 
+# Checked when no user matches, so the response takes as long as a real check.
+my $DUMMY_HASH = '$2b$12$iTKU3aaMiT3Vi52s2w3Xn.2gy1gF6/6pKUgHg/.dMCAsrp43MwrkG';
+
 sub login {
   my ($app, $req) = @_;
 
   my $pass  = $req->parameters->{pass};
   my $email = $req->parameters->{email};
-  my $hashed = Util->hash_password($pass, $app->secret);
 
-  my $sth = $app->dbh->prepare_cached(
-    q{SELECT id FROM "user" WHERE (email=? OR username=?) AND password=?}
+  # usually one row; more if one user's email is another's username
+  my $rows = $app->dbh->selectall_arrayref(
+    q{SELECT id, password, password_hash FROM "user" WHERE email=? OR username=?},
+    { Slice => {} }, $email, $email
   );
-  $sth->execute($email, $email, $hashed);
-  my $row = $sth->fetchrow_arrayref;
-  $sth->finish;
 
-  if ($row) {
-    $req->session->{user} = $row->[0];
+  Util->check_password_hash($pass, $DUMMY_HASH) unless @$rows;
+
+  for my $row (@$rows) {
+    if (defined $row->{password_hash}) {
+      next unless Util->check_password_hash($pass, $row->{password_hash});
+    }
+    else {
+      my $legacy = Util->hash_password($pass, $app->secret);
+      next unless Util->secure_eq($legacy, $row->{password});
+      $app->set_password_hash($row->{id}, Util->new_password_hash($pass));
+    }
+
+    $req->session->{user} = $row->{id};
     return $app->handle("auth.show", $req);
   }
 
