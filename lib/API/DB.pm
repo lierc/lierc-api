@@ -90,15 +90,14 @@ sub add_user {
   my ($self, $user, $email, $pass) = @_;
   my $hashed = Util->new_password_hash($pass);
   my $id = Util->uuid;
-  my $token = Util->uuid;
 
   my $sth = $self->dbh->prepare_cached(
-    q{INSERT INTO "user" (id, username, email, password_hash, verify_token) VALUES(?,?,?,?,?)},
+    q{INSERT INTO "user" (id, username, email, password_hash) VALUES(?,?,?,?)},
   );
-  $sth->execute($id, $user, $email, $hashed, $token);
+  $sth->execute($id, $user, $email, $hashed);
   $sth->finish;
 
-  return $id, $token;
+  return $id;
 }
 
 # Stores a new-style hash and drops the legacy one, so it can't be used again.

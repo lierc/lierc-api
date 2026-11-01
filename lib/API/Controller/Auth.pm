@@ -19,17 +19,15 @@ API->register("auth.reset",    __PACKAGE__);
 API->register("auth.reset_confirm", __PACKAGE__);
 
 my $tx = Text::Xslate->new;
-my $auth_template = q{Hello <: $name :>,
+my $verify_template = q{Hello <: $name :>,
 
-Thank you for signing up with relaychat.party!
-
-Please click the following link to validate your email address:
+Thanks for signing up with relaychat.party! Please confirm your email
+address by opening this link:
 <: $link :>
 
-You must visit this link in the next day, or your account will
-be deleted from the system.
-
 Happy chatting!};
+
+my $verify_invalid = "This confirmation link has expired or isn't valid.";
 
 my $reset_template = q{Hello <: $name :>,
 
@@ -109,34 +107,52 @@ sub register {
   die "Invalid email address"
     unless Data::Validate::Email::is_email($email);
 
-  my ($id, $token) = $app->add_user($user, $email, $pass);
+  my $id = $app->add_user($user, $email, $pass);
   $req->session->{user} = $id;
 
   # A failed default network shouldn't fail the signup.
   eval { add_default_network($app, $id, $user); 1 }
     or warn "Unable to add default network for $user: $@";
 
-  my $data = $tx->render_string(
-    $auth_template,
-    {
-      name => $user,
-      link => $app->site_url . "/api/verify?$token",
-    }
+  # a streaming response: the server writes it in full when it's passed to
+  # $respond, so the email (and any SMTP failure) can't hold up or fail
+  # the signup
+  my $res = $app->handle("auth.show", $req);
+  return sub {
+    my $respond = shift;
+    $respond->($res);
+    send_verify_email($app, $id, $user, $email);
+  };
+}
+
+sub send_verify_email {
+  my ($app, $id, $name, $email) = @_;
+
+  my $token = API::SignedToken->make(
+    purpose     => "verify",
+    secret      => $app->secret,
+    user        => $id,
+    fingerprint => $email,
+    expires     => time + API::SignedToken::VERIFY_LIFETIME,
   );
 
-  if (!$ENV{LIERC_NO_SMTP}) {
-    my $msg = MIME::Lite->new(
-      From     => $app->from_address,
-      To       => $email,
-      Subject  => 'Please verify your relaychat.party account',
-      Type     => 'TEXT',
-      Encoding => 'quoted-printable',
-      Data     => $data,
-    );
-    send_smtp($app, $msg, $email);
-  }
+  my $data = $tx->render_string($verify_template, {
+    name => $name,
+    link => $app->site_url . "/verify/#$token",
+  });
 
-  return $app->handle("auth.show", $req);
+  return if $ENV{LIERC_NO_SMTP};
+
+  my $msg = MIME::Lite->new(
+    From     => $app->from_address,
+    To       => $email,
+    Subject  => 'Confirm your relaychat.party email address',
+    Type     => 'TEXT',
+    Encoding => 'quoted-printable',
+    Data     => $data,
+  );
+  eval { send_smtp($app, $msg, $email); 1 }
+    or warn "Unable to send verification email for $name: $@";
 }
 
 # The configured default network (API::Config default_network), if any,
@@ -199,16 +215,28 @@ sub send_smtp {
   $smtp->quit;
 }
 
+# Confirms the email address in a verification link's token. Doesn't log
+# anyone in: links get forwarded.
 sub verify {
-  my ( $app, $req ) = @_;
-  my $query = $req->query_string;
+  my ($app, $req) = @_;
+  my $token = $req->parameters->{token};
 
-  my $row = $app->dbh->selectcol_arrayref('SELECT id FROM "user" WHERE verify_token=?', {}, $query);
+  my $id = API::SignedToken->user($token);
+  my $user = defined $id && $app->dbh->selectrow_hashref(
+    q{SELECT id, email FROM "user" WHERE id=?}, {}, $id
+  );
 
-  return $app->unauthorized unless @$row;
+  return $app->error($verify_invalid)
+    unless $user && API::SignedToken->valid(
+      purpose     => "verify",
+      secret      => $app->secret,
+      token       => $token,
+      fingerprint => $user->{email},
+      now         => time,
+    );
 
-  $app->dbh->do('UPDATE "user" SET verified=true WHERE id=?', {}, $row->[0]);
-  $app->redirect($app->site_url . "/app/");
+  $app->dbh->do(q{UPDATE "user" SET verified=true WHERE id=?}, {}, $user->{id});
+  return $app->ok;
 }
 
 # Emails a reset link to the account with this address, if there is one.

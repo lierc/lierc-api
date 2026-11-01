@@ -6,7 +6,6 @@ create table "user" (
   username varchar(256) not null,
   last_login timestamp not null default NOW(),
   verified bool default false not null,
-  verify_token varchar(32),
   unique (username),
   primary  key (id)
 );

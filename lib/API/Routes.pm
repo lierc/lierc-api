@@ -9,7 +9,7 @@ $router->add( GET    => "/auth",                "auth.show" );
 $router->add( POST   => "/auth",                "auth.login" );
 $router->add( POST   => "/register",            "auth.register" );
 $router->add( undef  ,  "/logout",              "auth.logout" );
-$router->add( GET    => "/verify",              "auth.verify" );
+$router->add( POST   => "/verify",              "auth.verify" );
 $router->add( POST   => "/reset",               "auth.reset" );
 $router->add( POST   => "/reset/confirm",       "auth.reset_confirm" );
 
