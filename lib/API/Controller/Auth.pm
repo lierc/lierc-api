@@ -3,7 +3,7 @@ package API::Controller::Auth;
 use parent 'API::Controller';
 
 use Util;
-use API::ResetToken;
+use API::SignedToken;
 use JSON::XS;
 use Data::Validate::Email;
 use MIME::Lite;
@@ -241,11 +241,12 @@ sub reset {
 sub send_reset_email {
   my ($app, $user) = @_;
 
-  my $token = API::ResetToken->make(
+  my $token = API::SignedToken->make(
+    purpose     => "reset",
     secret      => $app->secret,
     user        => $user->{id},
     fingerprint => $user->{password_hash} // $user->{password},
-    expires     => time + API::ResetToken::LIFETIME,
+    expires     => time + API::SignedToken::RESET_LIFETIME,
   );
 
   my $data = $tx->render_string($reset_template, {
@@ -276,13 +277,14 @@ sub reset_confirm {
   return $app->error("A new password is required")
     unless defined $pass && $pass =~ /\S/;
 
-  my $id = API::ResetToken->user($token);
+  my $id = API::SignedToken->user($token);
   my $user = defined $id && $app->dbh->selectrow_hashref(
     q{SELECT id, password, password_hash FROM "user" WHERE id=?}, {}, $id
   );
 
   return $app->error($reset_expired)
-    unless $user && API::ResetToken->valid(
+    unless $user && API::SignedToken->valid(
+      purpose     => "reset",
       secret      => $app->secret,
       token       => $token,
       fingerprint => $user->{password_hash} // $user->{password},
