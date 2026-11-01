@@ -6,12 +6,12 @@ create table "user" (
   username varchar(256) not null,
   last_login timestamp not null default NOW(),
   verified bool default false not null,
-  unique (username),
   primary  key (id)
 );
 
--- emails are unique regardless of case
+-- emails and usernames are unique regardless of case
 create unique index user_email_lower_key on "user" (lower(email));
+create unique index user_username_lower_key on "user" (lower(username));
 
 create table connection (
   id      varchar(24) not null,

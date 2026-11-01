@@ -61,7 +61,7 @@ sub login {
 
   # usually one row; more if one user's email is another's username
   my $rows = $app->dbh->selectall_arrayref(
-    q{SELECT id, password, password_hash FROM "user" WHERE lower(email) = lower(?) OR username=?},
+    q{SELECT id, password, password_hash FROM "user" WHERE lower(email) = lower(?) OR lower(username) = lower(?)},
     { Slice => {} }, $email, $email
   );
 
@@ -98,6 +98,10 @@ sub register {
       unless defined $req->parameters->{$_}
         && $req->parameters->{$_} =~ /\S/;
   }
+
+  # stored as typed; unique and looked up regardless of case
+  die "Usernames can only use letters, digits, _ and ., up to 32 characters\n"
+    unless $req->parameters->{username} =~ /\A[a-zA-Z0-9_.]{1,32}\z/;
 
   # stored lowercase; unique and looked up regardless of case
   my $email = lc $req->parameters->{email};
@@ -163,11 +167,12 @@ sub add_default_network {
   my $network = $app->default_network or return;
 
   my $id = Util->uuid;
+  my $nick = Util->irc_nick($username);
   my $config = encode_json {
     %$network,
-    Nick      => $username,
-    User      => $username,
-    Highlight => [$username],
+    Nick      => $nick,
+    User      => $nick,
+    Highlight => [$nick],
   };
 
   # Saved before liercd connects, so the connection's first events can be
