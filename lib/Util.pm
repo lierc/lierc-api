@@ -60,11 +60,13 @@ sub random_bytes {
   return $bytes;
 }
 
-# A nick for the default network from a username ([a-zA-Z0-9_.]): nicks
-# can't contain "." or start with a digit, and our Ergo allows 32 characters.
+# A nick for the default network from a username: nicks can't contain "."
+# (allowed in usernames) or start with a digit, and our Ergo allows 32
+# characters. Usernames from before the rules can hold anything, so every
+# character outside [A-Za-z0-9_] becomes "_".
 sub irc_nick {
   my ($class, $username) = @_;
-  (my $nick = $username) =~ tr/./_/;
+  (my $nick = $username) =~ tr/A-Za-z0-9_/_/c;
   $nick = "_$nick" if $nick =~ /^[0-9]/;
   return substr $nick, 0, 32;
 }

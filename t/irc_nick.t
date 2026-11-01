@@ -11,6 +11,11 @@ is(Util->irc_nick("."), "_", "only a .");
 is(Util->irc_nick("Lee_A1"), "Lee_A1", "an already-safe name is unchanged");
 is(Util->irc_nick("a" x 40), "a" x 32, "cut to 32");
 
+# grandfathered usernames from before the rules
+is(Util->irc_nick("old user"), "old_user", "a space becomes _");
+is(Util->irc_nick('bob@x.com'), "bob_x_com", "@ and . become _");
+is(Util->irc_nick("a-b[c]"), "a_b_c_", "anything outside [A-Za-z0-9_] becomes _");
+
 my $digit32 = "1" . ("a" x 31);
 my $nick = Util->irc_nick($digit32);
 is($nick, "_1" . ("a" x 30), "32 characters starting with a digit stays within 32");

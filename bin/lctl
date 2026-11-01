@@ -94,7 +94,7 @@ sub cmd_users {
   }
 
   for my $user (@users) {
-    my $sth = $dbh->prepare(q{ SELECT id FROM "user" WHERE username=? });
+    my $sth = $dbh->prepare(q{ SELECT id FROM "user" WHERE lower(username) = lower(?) });
     $sth->execute($user);
     my ($id) = $sth->fetchrow_array;
     die "unknown user '$user'" unless $id;

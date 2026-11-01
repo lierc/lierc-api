@@ -34,10 +34,10 @@ while (my ($user, $username) = $sth->fetchrow_array) {
     Host      => "irc.relaychat.party",
     Port      => 6667,
     Ssl       => JSON::XS::false,
-    Nick      => $username,
-    User      => $username,
+    Nick      => Util->irc_nick($username),
+    User      => Util->irc_nick($username),
     Channels  => ["#relaychat"],
-    Highlight => [$username],
+    Highlight => [Util->irc_nick($username)],
   };
 
   # Saved first, as the API does at signup. If liercd fails, the stream
