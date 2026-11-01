@@ -6,7 +6,9 @@ create table "user" (
   username varchar(256) not null,
   last_login timestamp not null default NOW(),
   verified bool default false not null,
-  primary  key (id)
+  primary  key (id),
+  -- the API's signup rule, enforced for every writer
+  constraint user_username_valid check (username ~ '^[a-zA-Z0-9_.]{1,32}$')
 );
 
 -- emails and usernames are unique regardless of case
