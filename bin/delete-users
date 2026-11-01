@@ -55,7 +55,7 @@ my $dbh = $api->dbh;
 
 # what each table holds for a user; "conns" is the user's connection ids
 my @tables = (
-  [ log      => q{"user" = ? OR connection = ANY(?)}, "user_conns" ],
+  [ log      => q{connection = ANY(?)},               "conns" ],
   [ seen     => q{"user" = ? OR connection = ANY(?)}, "user_conns" ],
   [ private  => q{connection = ANY(?)},               "conns" ],
   [ pref     => q{"user" = ?},                        "user" ],
@@ -153,9 +153,7 @@ for (@ready) {
 # anything the logger still wrote after the deletes
 for (@deleted) {
   my ($user, $conns) = @$_;
-  my $late = $dbh->do(
-    q{DELETE FROM log WHERE "user" = ? OR connection = ANY(?)}, {}, $user->{id}, $conns
-  );
+  my $late = $dbh->do(q{DELETE FROM log WHERE connection = ANY(?)}, {}, $conns);
   print "$user->{id}: removed $late late log row(s)\n" if $late > 0;
 }
 
