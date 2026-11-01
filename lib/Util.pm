@@ -60,6 +60,15 @@ sub random_bytes {
   return $bytes;
 }
 
+# A nick for the default network from a username ([a-zA-Z0-9_.]): nicks
+# can't contain "." or start with a digit, and our Ergo allows 32 characters.
+sub irc_nick {
+  my ($class, $username) = @_;
+  (my $nick = $username) =~ tr/./_/;
+  $nick = "_$nick" if $nick =~ /^[0-9]/;
+  return substr $nick, 0, 32;
+}
+
 sub uuid {
   return cnv(Data::UUID->new->create_hex, 16, 62);
 }
