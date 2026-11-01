@@ -193,6 +193,10 @@ sub send_smtp {
   my $user = delete $opts{AuthUser};
   my $pass = delete $opts{AuthPass};
 
+  # Net::SMTP's default is 120s; the API has only a few workers, so a dead
+  # mail server would tie them all up. SMTP_OPTS can still set its own.
+  $opts{Timeout} //= 10;
+
   my $smtp = Net::SMTP->new((defined $host ? $host : ()), %opts)
     or die "SMTP connect failed: " . ($@ || $!) . "\n";
 
