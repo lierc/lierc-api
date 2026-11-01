@@ -7,12 +7,12 @@ create table "user" (
   last_login timestamp not null default NOW(),
   verified bool default false not null,
   verify_token varchar(32),
-  unique (email),
   unique (username),
   primary  key (id)
 );
 
-create unique index on "user" (email);
+-- emails are unique regardless of case
+create unique index user_email_lower_key on "user" (lower(email));
 
 create table connection (
   id      varchar(24) not null,

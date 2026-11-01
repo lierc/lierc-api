@@ -198,7 +198,7 @@ sub cmd_reset {
 
   my $hash = Util->new_password_hash($pass);
   my $rows = $dbh->do(
-    q{UPDATE "user" SET password_hash=?, password=NULL WHERE email=?},
+    q{UPDATE "user" SET password_hash=?, password=NULL WHERE lower(email) = lower(?)},
     {}, $hash, $email
   );
 

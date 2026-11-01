@@ -63,7 +63,7 @@ sub login {
 
   # usually one row; more if one user's email is another's username
   my $rows = $app->dbh->selectall_arrayref(
-    q{SELECT id, password, password_hash FROM "user" WHERE email=? OR username=?},
+    q{SELECT id, password, password_hash FROM "user" WHERE lower(email) = lower(?) OR username=?},
     { Slice => {} }, $email, $email
   );
 
@@ -101,7 +101,8 @@ sub register {
         && $req->parameters->{$_} =~ /\S/;
   }
 
-  my $email = $req->parameters->{email};
+  # stored lowercase; unique and looked up regardless of case
+  my $email = lc $req->parameters->{email};
   my $pass = $req->parameters->{pass};
   my $user = $req->parameters->{username};
 
