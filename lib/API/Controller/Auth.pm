@@ -289,20 +289,26 @@ sub reset_confirm {
     );
 
   # the new password and verified (the link proves they own the address)
-  # change together or not at all
+  # change together or not at all. The password only changes if it's still
+  # the one the token was checked against, so of two confirms with the same
+  # link at once, one wins and the other gets the expired error.
   my $hash = Util->new_password_hash($pass);
   my $dbh = $app->dbh;
   $dbh->begin_work;
-  eval {
-    $app->set_password_hash($user->{id}, $hash);
-    $dbh->do(q{UPDATE "user" SET verified=true WHERE id=?}, {}, $user->{id});
+  my $changed = eval {
+    my $rows = $app->replace_password_hash(
+      $user->{id}, $hash, $user->{password_hash}, $user->{password}
+    );
+    $dbh->do(q{UPDATE "user" SET verified=true WHERE id=?}, {}, $user->{id})
+      if $rows;
     $dbh->commit;
-    1;
-  } or do {
-    my $err = $@;
+    $rows;
+  };
+  if (my $err = $@) {
     $dbh->rollback;
     die $err;
-  };
+  }
+  return $app->error($reset_expired) unless $changed;
 
   $req->session->{user} = $user->{id};
   return $app->handle("auth.show", $req);

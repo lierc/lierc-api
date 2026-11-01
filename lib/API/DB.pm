@@ -110,6 +110,17 @@ sub set_password_hash {
   );
 }
 
+# set_password_hash, but only if the stored hashes are still the given ones;
+# returns how many rows changed (0 if someone else changed them first)
+sub replace_password_hash {
+  my ($self, $id, $hash, $old_hash, $old_password) = @_;
+  return 0 + $self->dbh->do(
+    q{UPDATE "user" SET password_hash=?, password=NULL
+      WHERE id=? AND password_hash IS NOT DISTINCT FROM ? AND password IS NOT DISTINCT FROM ?},
+    {}, $hash, $id, $old_hash, $old_password
+  );
+}
+
 sub logged_in {
   my ($self, $session) = @_;
 
