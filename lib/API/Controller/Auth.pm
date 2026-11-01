@@ -211,7 +211,8 @@ sub verify {
 }
 
 # Emails a reset link to the account with this address, if there is one.
-# The response is the same either way.
+# The response is the same either way, and is sent before any email, so the
+# time it takes doesn't reveal whether the address has an account.
 sub reset {
   my ($app, $req) = @_;
   my $email = $req->parameters->{email};
@@ -224,34 +225,45 @@ sub reset {
     {}, $email
   );
 
-  if ($user) {
-    my $token = API::ResetToken->make(
-      secret      => $app->secret,
-      user        => $user->{id},
-      fingerprint => $user->{password_hash} // $user->{password},
-      expires     => time + API::ResetToken::LIFETIME,
-    );
+  my $res = $app->ok;
+  return $res unless $user;
 
-    my $data = $tx->render_string($reset_template, {
-      name => $user->{username},
-      link => $app->site_url . "/reset/#$token",
-    });
+  # a streaming response: the server writes it in full when it's passed to
+  # $respond, and the email goes out after that
+  return sub {
+    my $respond = shift;
+    $respond->($res);
+    send_reset_email($app, $user);
+  };
+}
 
-    if (!$ENV{LIERC_NO_SMTP}) {
-      my $msg = MIME::Lite->new(
-        From     => $app->from_address,
-        To       => $user->{email},
-        Subject  => 'Reset your relaychat.party password',
-        Type     => 'TEXT',
-        Encoding => 'quoted-printable',
-        Data     => $data,
-      );
-      eval { send_smtp($app, $msg, $user->{email}); 1 }
-        or warn "Unable to send reset email for $user->{username}: $@";
-    }
-  }
+sub send_reset_email {
+  my ($app, $user) = @_;
 
-  return $app->ok;
+  my $token = API::ResetToken->make(
+    secret      => $app->secret,
+    user        => $user->{id},
+    fingerprint => $user->{password_hash} // $user->{password},
+    expires     => time + API::ResetToken::LIFETIME,
+  );
+
+  my $data = $tx->render_string($reset_template, {
+    name => $user->{username},
+    link => $app->site_url . "/reset/#$token",
+  });
+
+  return if $ENV{LIERC_NO_SMTP};
+
+  my $msg = MIME::Lite->new(
+    From     => $app->from_address,
+    To       => $user->{email},
+    Subject  => 'Reset your relaychat.party password',
+    Type     => 'TEXT',
+    Encoding => 'quoted-printable',
+    Data     => $data,
+  );
+  eval { send_smtp($app, $msg, $user->{email}); 1 }
+    or warn "Unable to send reset email for $user->{username}: $@";
 }
 
 # Sets a new password from a reset link's token, and logs the user in.
