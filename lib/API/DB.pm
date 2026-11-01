@@ -21,7 +21,7 @@ sub dbh {
 sub verify_owner {
   my ($self, $id, $user) = @_;
 
-  my $sth = $self->dbh->prepare_cached(
+  my $sth = $self->dbh->prepare(
     q{SELECT COUNT(id) FROM connection WHERE "user"=? AND id=?},
   );
   $sth->execute($user, $id);
@@ -34,7 +34,7 @@ sub verify_owner {
 sub connections {
   my ($self, $user) = @_;
 
-  my $sth = $self->dbh->prepare_cached(
+  my $sth = $self->dbh->prepare(
     q{SELECT id, config FROM connection WHERE "user"=?},
   );
   $sth->execute($user);
@@ -50,7 +50,7 @@ sub lookup_config {
   my ($self, $id) = @_;
   return () unless defined $id;
 
-  my $sth = $self->dbh->prepare_cached(
+  my $sth = $self->dbh->prepare(
     q{SELECT config FROM connection WHERE id=?}
   );
   $sth->execute($id);
@@ -64,7 +64,7 @@ sub lookup_owner {
   my ($self, $id) = @_;
   return () unless defined $id;
 
-  my $sth = $self->dbh->prepare_cached(
+  my $sth = $self->dbh->prepare(
     q{SELECT "user" FROM connection WHERE id=?},
   );
   $sth->execute($id);
@@ -78,7 +78,9 @@ sub lookup_user {
   my ($self, $id) = @_;
   return () unless defined $id;
 
-  my $sth = $self->dbh->prepare_cached(q{SELECT * FROM "user" WHERE id=?});
+  # named columns: callers use only these, and SELECT * changes shape with
+  # every schema change
+  my $sth = $self->dbh->prepare(q{SELECT id, username, email FROM "user" WHERE id=?});
   $sth->execute($id);
   my $user = $sth->fetchrow_hashref;
   $sth->finish;
@@ -91,7 +93,7 @@ sub add_user {
   my $hashed = Util->new_password_hash($pass);
   my $id = Util->uuid;
 
-  my $sth = $self->dbh->prepare_cached(
+  my $sth = $self->dbh->prepare(
     q{INSERT INTO "user" (id, username, email, password_hash) VALUES(?,?,?,?)},
   );
   $sth->execute($id, $user, $email, $hashed);
@@ -131,7 +133,7 @@ sub logged_in {
 sub save_connection {
   my ($self, $id, $user, $config) = @_;
 
-  my $sth = $self->dbh->prepare_cached(
+  my $sth = $self->dbh->prepare(
     q{INSERT INTO connection (id, "user", config) VALUES(?,?,?)},
   );
   $sth->execute($id, $user, $config);
@@ -140,7 +142,7 @@ sub save_connection {
 
 sub delete_connection {
   my ($self, $id) = @_;
-  my $sth = $self->dbh->prepare_cached(q{DELETE FROM connection WHERE id=?});
+  my $sth = $self->dbh->prepare(q{DELETE FROM connection WHERE id=?});
   $sth->execute($id);
   $sth->finish;
 }
@@ -148,7 +150,7 @@ sub delete_connection {
 sub last_login {
   my ($self, $user) = @_;
 
-  my $sth = $self->dbh->prepare_cached(q{
+  my $sth = $self->dbh->prepare(q{
     SELECT last_login FROM "user" WHERE id=?
   });
   $sth->execute($user);

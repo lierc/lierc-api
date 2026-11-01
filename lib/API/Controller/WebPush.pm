@@ -18,7 +18,7 @@ sub delete {
   my $user     = $req->session->{user};
   my $endpoint = $req->captures->{endpoint};
 
-  my $sth = $app->dbh->prepare_cached(q{
+  my $sth = $app->dbh->prepare(q{
     DELETE FROM web_push
     WHERE "user"=? AND endpoint=?
   });
@@ -36,7 +36,7 @@ sub upsert {
   my $auth      = $req->parameters->{auth};
   my $key       = $req->parameters->{key};
 
-  my $sth = $app->dbh->prepare_cached(q{
+  my $sth = $app->dbh->prepare(q{
     INSERT INTO web_push (endpoint, auth, key, "user")
       VALUES (?,?,?,?)
     ON CONFLICT ("user", endpoint)

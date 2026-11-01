@@ -14,7 +14,7 @@ sub unsubscribe {
   my $pref  = 'email';
   my $value = 'false';
 
-  my $sth = $app->dbh->prepare_cached(q{
+  my $sth = $app->dbh->prepare(q{
     INSERT INTO pref ("user",name,value) VALUES(?,?,?)
     ON CONFLICT ("user", name)
     DO UPDATE SET value=? WHERE pref."user"=? AND pref.name=?
@@ -30,7 +30,7 @@ sub list {
   my $user = $req->session->{user};
   my $pref = $req->captures->{pref};
 
-  my $sth = $app->dbh->prepare_cached(q{
+  my $sth = $app->dbh->prepare(q{
     SELECT name, value FROM pref
     WHERE "user"=?
   });
@@ -48,7 +48,7 @@ sub upsert {
   my $pref  = $req->captures->{pref};
   my $value = decode utf8 => $req->content;
 
-  my $sth = $app->dbh->prepare_cached(q{
+  my $sth = $app->dbh->prepare(q{
     INSERT INTO pref ("user",name,value) VALUES(?,?,?)
     ON CONFLICT ("user", name)
     DO UPDATE SET value=? WHERE pref."user"=? AND pref.name=?

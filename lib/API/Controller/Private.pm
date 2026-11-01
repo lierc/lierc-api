@@ -14,7 +14,7 @@ sub create {
   my $conn = $req->captures->{id};
   my $nick = decode utf8 => $req->captures->{nick};
 
-  my $sth = $app->dbh->prepare_cached(q{
+  my $sth = $app->dbh->prepare(q{
     INSERT INTO private (connection, nick, time)
     VALUES($1,$2,NOW())
     ON CONFLICT (connection, nick)
@@ -29,7 +29,7 @@ sub list {
   my ($app, $req) = @_;
   my $user = $req->session->{user};
 
-  my $sth = $app->dbh->prepare_cached(q{
+  my $sth = $app->dbh->prepare(q{
     SELECT p.nick, p.connection, p.time
     FROM private AS p
     JOIN connection AS c
@@ -51,7 +51,7 @@ sub delete {
   my $conn = $req->captures->{id};
   my $nick = decode utf8 => $req->captures->{nick};
 
-  my $sth = $app->dbh->prepare_cached(q{
+  my $sth = $app->dbh->prepare(q{
     DELETE FROM private AS p
     WHERE p.connection=?
       AND p.nick=?

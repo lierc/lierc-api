@@ -29,7 +29,7 @@ sub highlight {
   $sql .= ' ORDER BY l.id DESC LIMIT ?';
   push @bind, $limit;
 
-  my $sth = $app->dbh->prepare_cached($sql);
+  my $sth = $app->dbh->prepare($sql);
   $sth->execute(@bind);
 
   my $json = JSON::XS->new;
@@ -163,7 +163,7 @@ sub seen {
   my ($app, $req) = @_;
   my $user = $req->session->{user};
 
-  my $sth = $app->dbh->prepare_cached(q{
+  my $sth = $app->dbh->prepare(q{
     SELECT s.connection, s.channel, s.message_id
     FROM seen AS s
     JOIN connection AS c

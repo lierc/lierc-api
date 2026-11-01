@@ -82,7 +82,7 @@ sub date {
       push @bind, ($id, $chan, $from, $to);
     }
 
-    my $sth = $app->dbh->prepare_cached($sql, {
+    my $sth = $app->dbh->prepare($sql, {
       pg_placeholder_dollaronly => 1
     });
 
@@ -116,7 +116,7 @@ sub last {
   my $limit = min($req->parameters->{limit} || 5, 20);
   my $query = decode utf8 => $req->parameters->{query};
 
-  my $sth = $app->dbh->prepare_cached(qq!
+  my $sth = $app->dbh->prepare(qq!
     SELECT id,
       jsonb_set(
         message, '{Params,1}', ts_headline(
@@ -155,7 +155,7 @@ sub logs {
   my $chan = lc decode utf8 => $req->captures->{channel};
   my $limit = min($req->parameters->{limit} || 50, 150);
 
-  my $sth = $app->dbh->prepare_cached(q{
+  my $sth = $app->dbh->prepare(q{
     SELECT id, message, connection, highlight FROM log
       WHERE channel=? AND connection=?
       ORDER BY id DESC LIMIT ?
@@ -185,7 +185,7 @@ sub logs_id {
   my $limit = min($req->parameters->{limit} || 50, 150);
   my $event = $req->captures->{event};
 
-  my $sth = $app->dbh->prepare_cached(q{
+  my $sth = $app->dbh->prepare(q{
     SELECT id, message, connection, highlight FROM log
       WHERE channel=? AND connection=? AND id < ?
       ORDER BY id DESC LIMIT ?
@@ -217,7 +217,7 @@ sub set_seen {
   my $connection = $req->captures->{id};
   my $position = $req->content;
 
-  my $sth = $app->dbh->prepare_cached(q{
+  my $sth = $app->dbh->prepare(q{
     INSERT into seen ("user", connection, channel, message_id)
     VALUES(?,?,?,?)
     ON CONFLICT ("user", connection, channel)

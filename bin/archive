@@ -53,7 +53,7 @@ walk_connections(sub {
 
 sub insert_archive {
   my $archive = shift;
-  my $sth = $dbh->prepare_cached(q{
+  my $sth = $dbh->prepare(q{
     INSERT INTO archive (connection, panel, start_time, end_time, first_id, last_id, content)
     VALUES(?,?,?,?,?,?,?)
   });
@@ -77,7 +77,7 @@ sub insert_archive {
 sub archive_position {
   my $connection = shift;
 
-  my $sth = $dbh->prepare_cached(q{
+  my $sth = $dbh->prepare(q{
     SELECT a.connection, a.panel, a.last_id
     FROM archive AS a
     LEFT OUTER JOIN archive AS b
@@ -113,7 +113,7 @@ sub walk_logs {
   my ($connection, $start, $sub) = @_;
   
   warn "Selecting logs\n";
-  my $sth = $dbh->prepare_cached(q{
+  my $sth = $dbh->prepare(q{
     SELECT id, connection, channel, command, highlight, time, message, self
     FROM log
     WHERE connection=?
@@ -141,7 +141,7 @@ sub walk_logs {
 sub walk_connections {
   my $sub = shift;
 
-  my $sth = $dbh->prepare_cached(q{SELECT id,user FROM connection WHERE "user"=?});
+  my $sth = $dbh->prepare(q{SELECT id,user FROM connection WHERE "user"=?});
   $sth->execute('2R3yRINe1P1KdAaoc3WGFv');
 
   my $row;
