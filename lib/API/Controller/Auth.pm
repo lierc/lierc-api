@@ -288,8 +288,21 @@ sub reset_confirm {
       now         => time,
     );
 
-  $app->set_password_hash($user->{id}, Util->new_password_hash($pass));
-  $app->dbh->do(q{UPDATE "user" SET verified=true WHERE id=?}, {}, $user->{id});
+  # the new password and verified (the link proves they own the address)
+  # change together or not at all
+  my $hash = Util->new_password_hash($pass);
+  my $dbh = $app->dbh;
+  $dbh->begin_work;
+  eval {
+    $app->set_password_hash($user->{id}, $hash);
+    $dbh->do(q{UPDATE "user" SET verified=true WHERE id=?}, {}, $user->{id});
+    $dbh->commit;
+    1;
+  } or do {
+    my $err = $@;
+    $dbh->rollback;
+    die $err;
+  };
 
   $req->session->{user} = $user->{id};
   return $app->handle("auth.show", $req);
