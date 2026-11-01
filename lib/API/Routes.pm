@@ -10,6 +10,8 @@ $router->add( POST   => "/auth",                "auth.login" );
 $router->add( POST   => "/register",            "auth.register" );
 $router->add( undef  ,  "/logout",              "auth.logout" );
 $router->add( GET    => "/verify",              "auth.verify" );
+$router->add( POST   => "/reset",               "auth.reset" );
+$router->add( POST   => "/reset/confirm",       "auth.reset_confirm" );
 
 $router->add( GET    => "/log/:event",          "message.log" );
 $router->add( GET    => "/missed",              "message.missed");

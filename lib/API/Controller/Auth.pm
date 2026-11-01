@@ -3,6 +3,7 @@ package API::Controller::Auth;
 use parent 'API::Controller';
 
 use Util;
+use API::ResetToken;
 use JSON::XS;
 use Data::Validate::Email;
 use MIME::Lite;
@@ -14,6 +15,8 @@ API->register("auth.login",    __PACKAGE__);
 API->register("auth.register", __PACKAGE__);
 API->register("auth.logout",   __PACKAGE__);
 API->register("auth.verify",   __PACKAGE__);
+API->register("auth.reset",    __PACKAGE__);
+API->register("auth.reset_confirm", __PACKAGE__);
 
 my $tx = Text::Xslate->new;
 my $auth_template = q{Hello <: $name :>,
@@ -27,6 +30,17 @@ You must visit this link in the next day, or your account will
 be deleted from the system.
 
 Happy chatting!};
+
+my $reset_template = q{Hello <: $name :>,
+
+Someone asked to reset the password for your relaychat.party account.
+To choose a new password, open this link within the next hour:
+<: $link :>
+
+If you didn't ask for this, you can ignore this email; your password
+hasn't changed.};
+
+my $reset_expired = "This reset link has expired or was already used. Request a new one.";
 
 sub show {
   my ($app, $req) = @_;
@@ -194,6 +208,79 @@ sub verify {
 
   $app->dbh->do('UPDATE "user" SET verified=true WHERE id=?', {}, $row->[0]);
   $app->redirect($app->site_url . "/app/");
+}
+
+# Emails a reset link to the account with this address, if there is one.
+# The response is the same either way.
+sub reset {
+  my ($app, $req) = @_;
+  my $email = $req->parameters->{email};
+
+  die "Invalid email address"
+    unless defined $email && Data::Validate::Email::is_email($email);
+
+  my $user = $app->dbh->selectrow_hashref(
+    q{SELECT id, username, email, password, password_hash FROM "user" WHERE lower(email) = lower(?)},
+    {}, $email
+  );
+
+  if ($user) {
+    my $token = API::ResetToken->make(
+      secret      => $app->secret,
+      user        => $user->{id},
+      fingerprint => $user->{password_hash} // $user->{password},
+      expires     => time + API::ResetToken::LIFETIME,
+    );
+
+    my $data = $tx->render_string($reset_template, {
+      name => $user->{username},
+      link => $app->site_url . "/reset/#$token",
+    });
+
+    if (!$ENV{LIERC_NO_SMTP}) {
+      my $msg = MIME::Lite->new(
+        From     => $app->from_address,
+        To       => $user->{email},
+        Subject  => 'Reset your relaychat.party password',
+        Type     => 'TEXT',
+        Encoding => 'quoted-printable',
+        Data     => $data,
+      );
+      eval { send_smtp($app, $msg, $user->{email}); 1 }
+        or warn "Unable to send reset email for $user->{username}: $@";
+    }
+  }
+
+  return $app->ok;
+}
+
+# Sets a new password from a reset link's token, and logs the user in.
+sub reset_confirm {
+  my ($app, $req) = @_;
+  my $token = $req->parameters->{token};
+  my $pass  = $req->parameters->{pass};
+
+  return $app->error("A new password is required")
+    unless defined $pass && $pass =~ /\S/;
+
+  my $id = API::ResetToken->user($token);
+  my $user = defined $id && $app->dbh->selectrow_hashref(
+    q{SELECT id, password, password_hash FROM "user" WHERE id=?}, {}, $id
+  );
+
+  return $app->error($reset_expired)
+    unless $user && API::ResetToken->valid(
+      secret      => $app->secret,
+      token       => $token,
+      fingerprint => $user->{password_hash} // $user->{password},
+      now         => time,
+    );
+
+  $app->set_password_hash($user->{id}, Util->new_password_hash($pass));
+  $app->dbh->do(q{UPDATE "user" SET verified=true WHERE id=?}, {}, $user->{id});
+
+  $req->session->{user} = $user->{id};
+  return $app->handle("auth.show", $req);
 }
 
 1;

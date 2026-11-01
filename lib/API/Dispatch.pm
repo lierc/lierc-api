@@ -27,7 +27,7 @@ sub handle {
   # verify finds its user by the emailed token; its link usually comes from
   # a webmail site, which the SameSite=Strict session cookie isn't sent from.
   return $self->unauthorized
-    unless ($name && $name =~ /^auth\.(?:login|register|logout|verify)$/)
+    unless ($name && $name =~ /^auth\.(?:login|register|logout|verify|reset|reset_confirm)$/)
       or $self->logged_in($req->session);
 
   if ($req->captures->{id}) {
