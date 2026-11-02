@@ -6,6 +6,7 @@ require (
 	github.com/fergusstrange/embedded-postgres v1.32.0
 	github.com/jackc/pgx/v5 v5.7.6
 	github.com/nsqio/go-nsq v1.1.0
+	golang.org/x/crypto v0.40.0
 	golang.org/x/term v0.33.0
 )
 
@@ -24,7 +25,6 @@ require (
 	github.com/nsqio/go-diskqueue v1.1.0 // indirect
 	github.com/nsqio/nsq v1.3.0 // indirect
 	github.com/xi2/xz v0.0.0-20171230120015-48954b6210f8 // indirect
-	golang.org/x/crypto v0.40.0 // indirect
 	golang.org/x/sync v0.16.0 // indirect
 	golang.org/x/sys v0.34.0 // indirect
 	golang.org/x/text v0.27.0 // indirect
