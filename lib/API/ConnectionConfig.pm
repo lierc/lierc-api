@@ -113,8 +113,10 @@ sub valid_host {
   return 1;
 }
 
-# Addresses liercd must not connect to. The same list is in
-# lierc/pkg/lierc/dialguard.go; keep the two in step.
+# Addresses liercd must not connect to. The same list is in lierc's
+# pkg/lierc/dialguard.go and lierc-api's internal/connconfig (Go, used by
+# lctl); keep the three in step. The rule cases in
+# testdata/connection-config-cases.json are shared with internal/connconfig.
 my @BLOCKED_V4 = qw(
   0.0.0.0/8 10.0.0.0/8 100.64.0.0/10 127.0.0.0/8 169.254.0.0/16
   172.16.0.0/12 192.0.0.0/24 192.168.0.0/16 198.18.0.0/15 224.0.0.0/4
