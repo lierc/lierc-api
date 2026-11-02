@@ -11,7 +11,10 @@ use JSON::XS;
 use Socket qw(AF_INET AF_INET6 SOCK_STREAM getaddrinfo inet_pton inet_ntop
               unpack_sockaddr_in unpack_sockaddr_in6);
 
-my $NICK_CHARS = q{A-Za-z0-9\[\]\\\\`_^{|}-};   # for User
+# A username may use any characters but space, NUL, CR and LF (RFC 1459's
+# <nonwhite>), except @, which would end it inside a nick!user@host prefix,
+# and a leading :, which would start USER's trailing parameter.
+my $USER_RE = qr/^[^ \x00\r\n\@:][^ \x00\r\n\@]{0,31}\z/;
 
 # A nick may use any characters (servers decide what they allow) except
 # whitespace, control characters and , * ? ! @, and can't start with a
@@ -47,8 +50,8 @@ sub clean {
 
   my $user = text($params->{User});
   if (defined $params->{User} && !(defined $user && $user eq "")) {
-    die 'Username must be up to 32 letters, digits, - . ~ or [ ] \ ` _ ^ { | }' . "\n"
-      unless defined $user && $user =~ /^[.~${NICK_CHARS}]{1,32}$/;
+    die "Username must be up to 32 characters, without spaces or \@, and can't start with :\n"
+      unless defined $user && $user =~ $USER_RE;
     $config{User} = $user;
   }
 

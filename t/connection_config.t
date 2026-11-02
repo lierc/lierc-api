@@ -88,6 +88,14 @@ for my $case (@{ $cases->{check_host} }) {
   is(($run->($_))[1], $alias_err, "alias $_ refused") for "a_b", "a,b", "a/b", "l\x{e9}e", "a\tb", "a" x 33;
 }
 
+# The username rule, written out
+{
+  my $user_err = "Username must be up to 32 characters, without spaces or \@, and can't start with :";
+  my $run = sub { my $u = shift; my $c = eval { $C->clean({ Host => "a.com", Port => 6667, Nick => "lee", User => $u }) }; (my $e = $@) =~ s/\n\z//; ($c && $c->{User}, $e) };
+  is(($run->($_))[0], $_, "username $_ accepted") for "lee/libera", "lee/libera/2", "/", "~lee.a", "a:b", "a!b", "a#b", "l\x{e9}e", "\x{540d}\x{524d}", "a\tb", "a\x07b", "a\x7fb", "a\x{85}b", "a\x{a0}b", "a\x{3000}b", "a" x 32, "\x{e9}" x 32;
+  is(($run->($_))[1], $user_err, "username $_ refused") for "a b", "a\@b", ":a", "a\x00b", "a\rb", "a\nb", "a" x 33, "\x{e9}" x 33;
+}
+
 # Perl only: the real resolver
 {
   local $ENV{DEFAULT_NETWORK_HOST};

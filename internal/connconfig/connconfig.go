@@ -31,7 +31,6 @@ import (
 const perlSpace = `\t\n\v\f\r \x{85}\x{a0}\x{1680}\x{2000}-\x{200a}\x{2028}\x{2029}\x{202f}\x{205f}\x{3000}`
 
 // Perl's `$` (end, or before a final newline) is written `\n?$` below.
-const nickChars = "A-Za-z0-9\\[\\]\\\\`_^{|}-"
 
 // A nick may use any characters except whitespace, control characters and
 // , * ? ! @, and can't start with # & $ or : (lib/API/ConnectionConfig.pm
@@ -39,8 +38,9 @@ const nickChars = "A-Za-z0-9\\[\\]\\\\`_^{|}-"
 const nickNot = perlSpace + `\x00-\x1f\x7f-\x{9f},*?!@`
 
 var (
-	nickRe    = regexp.MustCompile(`^[^` + nickNot + `#&$:][^` + nickNot + `]{0,31}$`)
-	userRe    = regexp.MustCompile(`^[.~` + nickChars + `]{1,32}\n?$`)
+	nickRe = regexp.MustCompile(`^[^` + nickNot + `#&$:][^` + nickNot + `]{0,31}$`)
+	// any characters but space, NUL, CR, LF and @, not starting with :
+	userRe    = regexp.MustCompile(`^[^ \x00\r\n@:][^ \x00\r\n@]{0,31}$`)
 	channelRe = regexp.MustCompile(`^[#&+!][^` + perlSpace + `,\x00-\x1f\x7f]{1,199}\n?$`)
 	aliasRe   = regexp.MustCompile(`^[A-Za-z0-9 .-]{1,32}\n?$`)
 	portRe    = regexp.MustCompile(`^[ \t\n\r\f\v]*([0-9]{1,5})[ \t\n\r\f\v]*\n?$`)
@@ -52,7 +52,7 @@ var (
 
 const (
 	errNick  = "Nick must be 1 to 32 characters, without spaces or , * ? ! @, and can't start with # & $ or :"
-	errUser  = "Username must be up to 32 letters, digits, - . ~ or [ ] \\ ` _ ^ { | }"
+	errUser  = "Username must be up to 32 characters, without spaces or @, and can't start with :"
 	errAlias = "Network alias can only use letters, digits, spaces, dots and hyphens, up to 32 characters"
 )
 

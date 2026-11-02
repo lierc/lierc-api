@@ -49,7 +49,7 @@ my @clean = (
      '"a!b"', '"a@b"', '"#a"', '"&a"', '"$a"', '":a"', '"a#b"', qq{"a\x{3000}b"}, '"a\u0085b"', '"a\u009fb"', '"a\u007fb"',
      '"' . ("\x{e9}" x 32) . '"', '"' . ("\x{e9}" x 33) . '"'),
   ["missing Nick", q({"Host":"a.com","Port":1})],
-  (map { ["User $_", with(qq{"User":$_})] } '" ~lee.a "', '"2cool"', '"a b"', '"a@b"', '"' . ("a" x 33) . '"',
+  (map { ["User $_", with(qq{"User":$_})] } '" ~lee.a "', '"2cool"', '"lee/libera"', '"a b"', '"a:b"', '":a"', '"a\\tb"', '"a\\u0000b"', '"a\\u0007b"', qq{"l\x{e9}e"}, qq{"a\x{a0}b"}, '"a@b"', '"' . ("a" x 33) . '"',
      "12", "true", "null", '[]', '""'),
   (map { ["Pass $_", with(qq{"Pass":$_})] } '"a\r\nQUIT"', '"a\nb"', '"a\rb"', '"a\u0000b"', '"a b"', '" pw "',
      '["a"]', "true", "false", "12", "1.5", "0", "null", '""', '{}'),

@@ -1122,17 +1122,111 @@
          }
       },
       {
-         "error" : "Username must be up to 32 letters, digits, - . ~ or [ ] \\ ` _ ^ { | }",
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"User\":\"lee/libera\"}",
+         "name" : "User \"lee/libera\"",
+         "want" : {
+            "Channels" : [],
+            "Highlight" : [],
+            "Host" : "irc.libera.chat",
+            "Nick" : "lee",
+            "Port" : 6697,
+            "SASL" : false,
+            "Ssl" : false,
+            "User" : "lee/libera"
+         }
+      },
+      {
+         "error" : "Username must be up to 32 characters, without spaces or @, and can't start with :",
          "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"User\":\"a b\"}",
          "name" : "User \"a b\""
       },
       {
-         "error" : "Username must be up to 32 letters, digits, - . ~ or [ ] \\ ` _ ^ { | }",
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"User\":\"a:b\"}",
+         "name" : "User \"a:b\"",
+         "want" : {
+            "Channels" : [],
+            "Highlight" : [],
+            "Host" : "irc.libera.chat",
+            "Nick" : "lee",
+            "Port" : 6697,
+            "SASL" : false,
+            "Ssl" : false,
+            "User" : "a:b"
+         }
+      },
+      {
+         "error" : "Username must be up to 32 characters, without spaces or @, and can't start with :",
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"User\":\":a\"}",
+         "name" : "User \":a\""
+      },
+      {
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"User\":\"a\\tb\"}",
+         "name" : "User \"a\\tb\"",
+         "want" : {
+            "Channels" : [],
+            "Highlight" : [],
+            "Host" : "irc.libera.chat",
+            "Nick" : "lee",
+            "Port" : 6697,
+            "SASL" : false,
+            "Ssl" : false,
+            "User" : "a\tb"
+         }
+      },
+      {
+         "error" : "Username must be up to 32 characters, without spaces or @, and can't start with :",
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"User\":\"a\\u0000b\"}",
+         "name" : "User \"a\\u0000b\""
+      },
+      {
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"User\":\"a\\u0007b\"}",
+         "name" : "User \"a\\u0007b\"",
+         "want" : {
+            "Channels" : [],
+            "Highlight" : [],
+            "Host" : "irc.libera.chat",
+            "Nick" : "lee",
+            "Port" : 6697,
+            "SASL" : false,
+            "Ssl" : false,
+            "User" : "a\u0007b"
+         }
+      },
+      {
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"User\":\"lée\"}",
+         "name" : "User \"lée\"",
+         "want" : {
+            "Channels" : [],
+            "Highlight" : [],
+            "Host" : "irc.libera.chat",
+            "Nick" : "lee",
+            "Port" : 6697,
+            "SASL" : false,
+            "Ssl" : false,
+            "User" : "lée"
+         }
+      },
+      {
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"User\":\"a b\"}",
+         "name" : "User \"a b\"",
+         "want" : {
+            "Channels" : [],
+            "Highlight" : [],
+            "Host" : "irc.libera.chat",
+            "Nick" : "lee",
+            "Port" : 6697,
+            "SASL" : false,
+            "Ssl" : false,
+            "User" : "a b"
+         }
+      },
+      {
+         "error" : "Username must be up to 32 characters, without spaces or @, and can't start with :",
          "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"User\":\"a@b\"}",
          "name" : "User \"a@b\""
       },
       {
-         "error" : "Username must be up to 32 letters, digits, - . ~ or [ ] \\ ` _ ^ { | }",
+         "error" : "Username must be up to 32 characters, without spaces or @, and can't start with :",
          "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"User\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}",
          "name" : "User \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\""
       },
@@ -1151,7 +1245,7 @@
          }
       },
       {
-         "error" : "Username must be up to 32 letters, digits, - . ~ or [ ] \\ ` _ ^ { | }",
+         "error" : "Username must be up to 32 characters, without spaces or @, and can't start with :",
          "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"User\":true}",
          "name" : "User true"
       },
@@ -1169,7 +1263,7 @@
          }
       },
       {
-         "error" : "Username must be up to 32 letters, digits, - . ~ or [ ] \\ ` _ ^ { | }",
+         "error" : "Username must be up to 32 characters, without spaces or @, and can't start with :",
          "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"User\":[]}",
          "name" : "User []"
       },
