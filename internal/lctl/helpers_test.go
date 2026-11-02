@@ -3,6 +3,7 @@ package lctl
 import (
 	"bytes"
 	"context"
+	"errors"
 	"net/http"
 	"strings"
 	"testing"
@@ -117,3 +118,5 @@ func (h *harness) calls(method, suffix string) []string {
 	}
 	return ids
 }
+
+func asUsage(err error, target **UsageError) bool { return errors.As(err, target) }

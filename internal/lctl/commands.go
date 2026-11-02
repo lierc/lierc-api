@@ -2,6 +2,7 @@ package lctl
 
 // Commands are lctl's subcommands, in the order help lists them.
 var Commands = []Command{
+	{Name: "user-info", Summary: "Show a user: email, last login, password storage, connections", Run: userInfo},
 	{Name: "check-connections", Summary: "Check saved connections against the connection rules; --delete removes invalid ones", Run: checkConnections},
 	{Name: "delete-users", Summary: "Delete users and all their data; dry run unless --delete", Run: deleteUsers},
 	{Name: "delete-connections", Summary: "Delete connections and their data, keeping the users; dry run unless --delete", Run: deleteConnections},
