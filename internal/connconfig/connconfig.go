@@ -187,10 +187,8 @@ func validHost(host string) bool {
 // body or saved config), returning only the known keys, or the first
 // problem as an error whose message is the API's.
 func Clean(raw []byte) (map[string]any, error) {
-	dec := json.NewDecoder(bytes.NewReader(raw))
-	dec.UseNumber()
-	var v any
-	if err := dec.Decode(&v); err != nil {
+	v, err := Decode(raw)
+	if err != nil {
 		return nil, errors.New("Invalid connection settings")
 	}
 	params, ok := v.(map[string]any)
@@ -386,4 +384,21 @@ func CheckHost(ctx context.Context, getenv func(string) string, resolve Resolver
 		}
 	}
 	return nil
+}
+
+// Decode decodes a JSON config keeping numbers as json.Number, as Clean
+// sees them.
+func Decode(raw []byte) (any, error) {
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	dec.UseNumber()
+	var v any
+	err := dec.Decode(&v)
+	return v, err
+}
+
+// PerlText is a decoded JSON value as Perl prints it, with ok false when
+// Perl would see undef or a reference (null, booleans, arrays, objects).
+func PerlText(v any) (string, bool) {
+	k, s := perlValue(v)
+	return s, k == scalar
 }
