@@ -27,6 +27,7 @@ $router->add( GET    => "/connection",          "connection.list" );
 $router->add( POST   => "/connection",          "connection.create" );
 $router->add( GET    => "/connection/:id",      "connection.show" );
 $router->add( PUT    => "/connection/:id",      "connection.edit" );
+$router->add( PUT    => "/connection/:id/config", "connection.save" );
 $router->add( DELETE => "/connection/:id",      "connection.delete" );
 $router->add( POST   => "/connection/:id",      "connection.send" );
 

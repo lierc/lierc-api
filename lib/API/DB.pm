@@ -140,6 +140,13 @@ sub save_connection {
   $sth->finish;
 }
 
+sub update_connection {
+  my ($self, $id, $config) = @_;
+  my $sth = $self->dbh->prepare(q{UPDATE connection SET config=? WHERE id=?});
+  $sth->execute($config, $id);
+  $sth->finish;
+}
+
 sub delete_connection {
   my ($self, $id) = @_;
   my $sth = $self->dbh->prepare(q{DELETE FROM connection WHERE id=?});

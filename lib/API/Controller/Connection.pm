@@ -12,6 +12,7 @@ API->register("connection.show",   __PACKAGE__);
 API->register("connection.delete", __PACKAGE__);
 API->register("connection.send",   __PACKAGE__);
 API->register("connection.edit",   __PACKAGE__);
+API->register("connection.save",   __PACKAGE__);
 
 sub list {
   my ($app, $req) = @_;
@@ -45,6 +46,37 @@ sub valid_config {
   my $req = shift;
   my $params = eval { decode_json $req->content };
   die "Invalid connection settings\n" unless ref $params eq "HASH";
+  return valid_config_from($params);
+}
+
+# The settings for an existing connection: the request's, but with the
+# saved channel list and nick. Both are only set when a connection is
+# created; after that, joining and leaving channels and /nick change them
+# (liercd reports the change and the logger saves it). The saved values are
+# kept as they are, so an old one that today's rules refuse can't block an
+# edit.
+sub edited_config {
+  my ($app, $req) = @_;
+  my $params = eval { decode_json $req->content };
+  die "Invalid connection settings\n" unless ref $params eq "HASH";
+  my $saved = eval { decode_json($app->lookup_config($req->captures->{id})) };
+  $saved = {} unless ref $saved eq "HASH";
+  my $nick = $saved->{Nick};
+  $nick = undef if ref $nick || !defined $nick || $nick eq "";
+
+  delete $params->{Channels};
+  # the request's nick is ignored; it's only checked if there's no saved
+  # nick to keep
+  $params->{Nick} = "placeholder" if defined $nick;
+  my $config = valid_config_from($params);
+
+  $config->{Nick} = $nick if defined $nick;
+  $config->{Channels} = ref $saved->{Channels} eq "ARRAY" ? $saved->{Channels} : [];
+  return $config;
+}
+
+sub valid_config_from {
+  my $params = shift;
   my $config = API::ConnectionConfig->clean($params);
   API::ConnectionConfig->check_host($config->{Host}, $config->{Port});
   return $config;
@@ -78,12 +110,27 @@ sub edit {
 
   # check everything before touching the running connection, so a rejected
   # edit leaves it as it was
-  my $config = valid_config($req);
+  my $config = edited_config($app, $req);
   my $id  = $req->captures->{id};
   my $res = $app->request(POST => "$id/destroy");
   die $res->decoded_content unless $res->code == 200 || $res->code == 404;
   $app->delete_connection($id);
   start($app, $id, $req->session->{user}, $config);
+
+  return $app->ok;
+}
+
+# Saves a connection's settings without restarting it: liercd keeps running
+# it with the settings it was started with (also when it reconnects by
+# itself) until the next edit that reconnects, lctl reconnect, or a liercd
+# restart and lctl revive. Highlights apply at once. The channel list and
+# nick aren't changed (see edited_config).
+sub save {
+  my ($app, $req) = @_;
+
+  my $config = edited_config($app, $req);
+  $app->update_connection($req->captures->{id}, encode_json $config);
+  $app->dbh->do("NOTIFY highlights");
 
   return $app->ok;
 }
