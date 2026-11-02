@@ -60,6 +60,15 @@ type Env struct {
 	Resolve connconfig.Resolver
 	// Sleep waits d, returning ctx.Err() if ctx ends first.
 	Sleep func(ctx context.Context, d time.Duration) error
+	// Now is the time; nil means time.Now.
+	Now func() time.Time
+}
+
+func (e *Env) now() time.Time {
+	if e.Now != nil {
+		return e.Now()
+	}
+	return time.Now()
 }
 
 // Command is one lctl subcommand.
