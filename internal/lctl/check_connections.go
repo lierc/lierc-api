@@ -287,7 +287,7 @@ func hostPort(raw string) string {
 		return "?"
 	}
 	part := func(k string) string {
-		if s, ok := connconfig.PerlText(params[k]); ok {
+		if s, ok := connconfig.Display(params[k]); ok {
 			return s
 		}
 		return "?"

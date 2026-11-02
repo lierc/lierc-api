@@ -1,14 +1,14 @@
 // Package connconfig is the Go copy of lib/API/ConnectionConfig.pm: the rules
 // the API applies to an IRC connection's settings, and the check that refuses
-// hosts pointing at loopback or private addresses. lctl uses it to judge saved
-// connections exactly as the API judged them, so it reproduces Perl's
-// behaviour, quirks included: Ssl/SASL use Perl truthiness, `\s` is Unicode
-// whitespace and `$` also matches before a final newline. One deliberate
-// difference: text fields must be JSON strings (Perl also takes numbers);
-// only Port may be a number, and it's read the way Perl prints it.
-// testdata/connection-config-cases.json is run by both test suites (Go's own
-// result is under "go" where it's stricter); a rule changed here must change
-// there too.
+// hosts pointing at loopback or private addresses. lctl uses it to judge
+// saved connections as the API judged them, with one deliberate difference:
+// it doesn't follow Perl's type conversions. Text fields must be JSON
+// strings, Port a JSON number, Ssl/SASL JSON booleans, Channels/Highlight
+// lists of strings (null counts as missing). Otherwise it reproduces Perl's
+// behaviour, quirks included: `\s` is Unicode whitespace and `$` also matches
+// before a final newline. testdata/connection-config-cases.json is run by
+// both test suites: Go must match every case with proper JSON types and
+// refuse the rest. A rule changed here must change there too.
 package connconfig
 
 import (
@@ -52,83 +52,23 @@ const (
 	errAlias = "Network alias can only use letters, digits and spaces, up to 32 characters"
 )
 
-// kind is how Perl sees a decoded JSON value.
-type kind int
-
-const (
-	undef  kind = iota // missing or null
-	ref                // true/false (JSON::XS booleans are objects), array, object
-	scalar             // string or number
-)
-
-// perlValue returns how Perl sees v and, for a scalar, its text as Perl
-// prints it.
-func perlValue(v any) (kind, string) {
-	switch x := v.(type) {
-	case nil:
-		return undef, ""
-	case string:
-		return scalar, x
-	case json.Number:
-		return scalar, perlNumber(string(x))
-	default:
-		return ref, ""
-	}
-}
-
-var intLiteral = regexp.MustCompile(`^-?[0-9]+$`)
-
-// perlNumber is how Perl prints a number JSON::XS decoded: an integer
-// literal as an integer (one too big for 64 bits is kept as its literal
-// text), anything else as a double with %.15g, overflow as Inf or -Inf.
-func perlNumber(lit string) string {
-	if intLiteral.MatchString(lit) {
-		if i, err := strconv.ParseInt(lit, 10, 64); err == nil {
-			return strconv.FormatInt(i, 10)
-		}
-		if u, err := strconv.ParseUint(lit, 10, 64); err == nil {
-			return strconv.FormatUint(u, 10)
-		}
-		return lit
-	}
-	f, err := strconv.ParseFloat(lit, 64)
-	if err != nil && !errors.Is(err, strconv.ErrRange) {
-		return lit
-	}
-	switch {
-	case math.IsInf(f, 1):
-		return "Inf"
-	case math.IsInf(f, -1):
-		return "-Inf"
-	case f == 0:
-		return "0"
-	}
-	return strconv.FormatFloat(f, 'g', 15, 64)
-}
-
 func trim(s string) string { return strings.TrimFunc(s, unicode.IsSpace) }
 
-// textKind is how a text field sees v: unlike Perl, lctl requires a real
-// JSON string there, so a number counts as a reference (like a boolean).
-// Only Port takes a number.
-func textKind(v any) (kind, string) {
-	if _, ok := v.(json.Number); ok {
-		return ref, ""
+// str is an optional text field: present false for missing or null, an
+// error naming label if it isn't a string; the value is trimmed.
+func str(v any, label string) (s string, present bool, err error) {
+	if v == nil {
+		return "", false, nil
 	}
-	return perlValue(v)
+	x, ok := v.(string)
+	if !ok {
+		return "", false, errors.New(label + " must be a string")
+	}
+	return x, true, nil
 }
 
-// text is Perl's text(): the trimmed string of a string, ok false otherwise.
-func text(v any) (string, bool) {
-	k, s := textKind(v)
-	if k != scalar {
-		return "", false
-	}
-	return trim(s), true
-}
-
-// list is Perl's list(): the trimmed, non-blank strings of an optional list.
-// Every element is checked before any is used, as Perl's map runs first.
+// list is Perl's list() for a list of strings: the trimmed, non-blank
+// items.
 func list(v any, name string) ([]string, error) {
 	out := []string{}
 	if v == nil {
@@ -136,43 +76,30 @@ func list(v any, name string) ([]string, error) {
 	}
 	items, ok := v.([]any)
 	if !ok {
-		return nil, errors.New(name + " must be a list")
+		return nil, errors.New(name + " must be a list of strings")
 	}
-	var all []string
 	for _, item := range items {
-		k, _ := textKind(item)
-		if k != scalar {
-			return nil, errors.New(name + " must be a list")
+		s, ok := item.(string)
+		if !ok {
+			return nil, errors.New(name + " must be a list of strings")
 		}
-		s, _ := text(item)
-		all = append(all, s)
-	}
-	for _, s := range all {
-		if s != "" {
+		if s = trim(s); s != "" {
 			out = append(out, s)
 		}
 	}
 	return out, nil
 }
 
-// truthy is Perl truthiness for a decoded JSON value.
-func truthy(v any) bool {
-	switch x := v.(type) {
-	case nil:
-		return false
-	case bool:
-		return x
-	case string:
-		return x != "" && x != "0"
-	case json.Number:
-		f, err := strconv.ParseFloat(string(x), 64)
-		if err != nil && !errors.Is(err, strconv.ErrRange) {
-			return true
-		}
-		return f != 0
-	default:
-		return true
+// boolean is an optional JSON boolean; missing or null is false.
+func boolean(v any, name string) (bool, error) {
+	if v == nil {
+		return false, nil
 	}
+	b, ok := v.(bool)
+	if !ok {
+		return false, errors.New(name + " must be true or false")
+	}
+	return b, nil
 }
 
 func ipv4Literal(host string) bool {
@@ -221,29 +148,39 @@ func Clean(raw []byte) (map[string]any, error) {
 	}
 	config := map[string]any{}
 
-	rawHost, present := params["Host"]
-	host, isText := text(rawHost)
-	if !present || rawHost == nil || (isText && host == "") {
+	host, ok, err := str(params["Host"], "Host")
+	if err != nil {
+		return nil, err
+	}
+	if host = trim(host); !ok || host == "" {
 		return nil, errors.New("Host is required")
 	}
-	if !isText || !validHost(host) {
+	if !validHost(host) {
 		return nil, errors.New("Host must be an IPv4 address or a domain name")
 	}
 	config["Host"] = host
 
-	portKind, portText := perlValue(params["Port"])
-	m := portRe.FindStringSubmatch(portText)
 	port := 0
-	if m != nil {
-		port, _ = strconv.Atoi(m[1])
+	switch p := params["Port"].(type) {
+	case nil:
+	case json.Number:
+		f, err := strconv.ParseFloat(string(p), 64)
+		if err == nil && f == math.Trunc(f) && f >= 1 && f <= 65535 {
+			port = int(f)
+		}
+	default:
+		return nil, errors.New("Port must be a number")
 	}
-	if portKind != scalar || m == nil || port < 1 || port > 65535 {
+	if port == 0 {
 		return nil, errors.New("Port must be a number from 1 to 65535")
 	}
 	config["Port"] = port
 
-	nick, ok := text(params["Nick"])
-	if !ok || nick == "" {
+	nick, _, err := str(params["Nick"], "Nick")
+	if err != nil {
+		return nil, err
+	}
+	if nick = trim(nick); nick == "" {
 		return nil, errors.New("Nick is required")
 	}
 	if !nickRe.MatchString(nick) {
@@ -251,27 +188,26 @@ func Clean(raw []byte) (map[string]any, error) {
 	}
 	config["Nick"] = nick
 
-	if rawUser := params["User"]; rawUser != nil {
-		user, ok := text(rawUser)
-		if !(ok && user == "") {
-			if !ok || !userRe.MatchString(user) {
-				return nil, errors.New(errUser)
-			}
-			config["User"] = user
+	user, _, err := str(params["User"], "Username")
+	if err != nil {
+		return nil, err
+	}
+	if user = trim(user); user != "" {
+		if !userRe.MatchString(user) {
+			return nil, errors.New(errUser)
 		}
+		config["User"] = user
 	}
 
-	if rawPass := params["Pass"]; rawPass != nil {
-		k, pass := textKind(rawPass)
-		if k == ref {
-			return nil, errors.New("Password must be text")
-		}
-		if strings.ContainsAny(pass, "\r\n\x00") {
-			return nil, errors.New("Password can't contain line breaks")
-		}
-		if pass != "" {
-			config["Pass"] = pass
-		}
+	pass, _, err := str(params["Pass"], "Password")
+	if err != nil {
+		return nil, err
+	}
+	if strings.ContainsAny(pass, "\r\n\x00") {
+		return nil, errors.New("Password can't contain line breaks")
+	}
+	if pass != "" {
+		config["Pass"] = pass
 	}
 
 	channels, err := list(params["Channels"], "Channels")
@@ -296,18 +232,24 @@ func Clean(raw []byte) (map[string]any, error) {
 	}
 	config["Highlight"] = highlight
 
-	if rawAlias := params["Alias"]; rawAlias != nil {
-		alias, ok := text(rawAlias)
-		if !(ok && alias == "") {
-			if !ok || !aliasRe.MatchString(alias) {
-				return nil, errors.New(errAlias)
-			}
-			config["Alias"] = alias
+	alias, _, err := str(params["Alias"], "Network alias")
+	if err != nil {
+		return nil, err
+	}
+	if alias = trim(alias); alias != "" {
+		if !aliasRe.MatchString(alias) {
+			return nil, errors.New(errAlias)
 		}
+		config["Alias"] = alias
 	}
 
-	config["Ssl"] = truthy(params["Ssl"])
-	config["SASL"] = truthy(params["SASL"])
+	for _, k := range []string{"Ssl", "SASL"} {
+		b, err := boolean(params[k], k)
+		if err != nil {
+			return nil, err
+		}
+		config[k] = b
+	}
 	return config, nil
 }
 
@@ -420,9 +362,14 @@ func Decode(raw []byte) (any, error) {
 	return v, err
 }
 
-// PerlText is a decoded JSON value as Perl prints it, with ok false when
-// Perl would see undef or a reference (null, booleans, arrays, objects).
-func PerlText(v any) (string, bool) {
-	k, s := perlValue(v)
-	return s, k == scalar
+// Display is a decoded JSON scalar as text for messages (a string as is,
+// a number as written), ok false for anything else.
+func Display(v any) (string, bool) {
+	switch x := v.(type) {
+	case string:
+		return x, true
+	case json.Number:
+		return string(x), true
+	}
+	return "", false
 }

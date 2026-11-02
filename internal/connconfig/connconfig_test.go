@@ -18,12 +18,6 @@ type cases struct {
 		Input string          `json:"input"`
 		Want  json.RawMessage `json:"want"`
 		Error *string         `json:"error"`
-		// Go's own result where it's stricter than Perl (JSON strings
-		// required in text fields)
-		Go *struct {
-			Want  json.RawMessage `json:"want"`
-			Error *string         `json:"error"`
-		} `json:"go"`
 	} `json:"clean"`
 	Blocked []struct {
 		IP      string `json:"ip"`
@@ -90,11 +84,15 @@ func normal(t *testing.T, v any) any {
 
 func TestSharedCleanCases(t *testing.T) {
 	for _, c := range load(t).Clean {
-		if c.Go != nil {
-			c.Want, c.Error = c.Go.Want, c.Go.Error
-		}
 		t.Run(c.Name, func(t *testing.T) {
 			got, err := Clean([]byte(c.Input))
+			if field := looseField(t, c.Input); field != "" {
+				// Perl converts types here; lctl refuses them
+				if err == nil {
+					t.Fatalf("%s has the wrong JSON type but was accepted as %v", field, normal(t, got))
+				}
+				return
+			}
 			if c.Error != nil {
 				if err == nil {
 					t.Fatalf("accepted as %s, want error %q", normal(t, got), *c.Error)
@@ -189,7 +187,106 @@ func TestNumbersInTextFieldsRefused(t *testing.T) {
 			t.Errorf("%s 1e-400 accepted", f)
 		}
 	}
-	if _, err := Clean([]byte(`{"Host":"irc.libera.chat","Port":"6697","Nick":"lee"}`)); err != nil {
-		t.Errorf("Port as a string refused: %v", err)
+}
+
+// lctl doesn't follow Perl's type conversions: text fields must be JSON
+// strings, Port a JSON number, Ssl/SASL JSON booleans, lists lists of
+// strings. null counts as missing.
+func TestStrictTypes(t *testing.T) {
+	base := `"Host":"irc.libera.chat","Port":6697,"Nick":"lee"`
+	refused := map[string]string{
+		`{"Host":123,"Port":6697,"Nick":"lee"}`:       "Host must be a string",
+		`{"Host":"a.com","Port":"6697","Nick":"lee"}`: "Port must be a number",
+		`{"Host":"a.com","Port":true,"Nick":"lee"}`:   "Port must be a number",
+		`{` + base + `,"Nick":12}`:                    "Nick must be a string",
+		`{` + base + `,"User":12}`:                    "Username must be a string",
+		`{` + base + `,"Pass":12}`:                    "Password must be a string",
+		`{` + base + `,"Pass":true}`:                  "Password must be a string",
+		`{` + base + `,"Alias":12}`:                   "Network alias must be a string",
+		`{` + base + `,"Channels":["#a",1]}`:          "Channels must be a list of strings",
+		`{` + base + `,"Channels":"#a"}`:              "Channels must be a list of strings",
+		`{` + base + `,"Highlight":[true]}`:           "Highlight must be a list of strings",
+		`{` + base + `,"Ssl":1}`:                      "Ssl must be true or false",
+		`{` + base + `,"Ssl":"true"}`:                 "Ssl must be true or false",
+		`{` + base + `,"SASL":"0"}`:                   "SASL must be true or false",
+		`{` + base + `,"SASL":[]}`:                    "SASL must be true or false",
 	}
+	for in, want := range refused {
+		if _, err := Clean([]byte(in)); err == nil || err.Error() != want {
+			t.Errorf("%s: got %v, want %q", in, err, want)
+		}
+	}
+	accepted := map[string]map[string]any{
+		`{` + base + `,"Ssl":true,"SASL":false}`:      {"Ssl": true, "SASL": false, "Port": 6697},
+		`{` + base + `,"Ssl":null,"User":null}`:       {"Ssl": false, "SASL": false},
+		`{"Host":"a.com","Port":6667.0,"Nick":"lee"}`: {"Port": 6667},
+		`{"Host":"a.com","Port":1e3,"Nick":"lee"}`:    {"Port": 1000},
+		`{` + base + `,"Channels":null,"Pass":null}`:  {"Channels": []string{}},
+	}
+	for in, want := range accepted {
+		got, err := Clean([]byte(in))
+		if err != nil {
+			t.Errorf("%s: refused: %v", in, err)
+			continue
+		}
+		for k, v := range want {
+			if !reflect.DeepEqual(got[k], v) {
+				t.Errorf("%s: %s = %#v, want %#v", in, k, got[k], v)
+			}
+		}
+	}
+	for _, in := range []string{`{"Host":"a.com","Port":6.5,"Nick":"lee"}`, `{"Host":"a.com","Port":0,"Nick":"lee"}`, `{"Host":"a.com","Port":1E400,"Nick":"lee"}`} {
+		if _, err := Clean([]byte(in)); err == nil || err.Error() != "Port must be a number from 1 to 65535" {
+			t.Errorf("%s: got %v", in, err)
+		}
+	}
+}
+
+// looseField names the first field of input whose JSON type Perl would
+// convert but lctl refuses, or "" if every field has its proper type.
+func looseField(t *testing.T, input string) string {
+	t.Helper()
+	v, err := Decode([]byte(input))
+	if err != nil {
+		t.Fatalf("bad case input %s: %v", input, err)
+	}
+	params, ok := v.(map[string]any)
+	if !ok {
+		return ""
+	}
+	for _, k := range []string{"Host", "Nick", "User", "Pass", "Alias"} {
+		if x, ok := params[k]; ok && x != nil {
+			if _, ok := x.(string); !ok {
+				return k
+			}
+		}
+	}
+	if x, ok := params["Port"]; ok && x != nil {
+		if _, ok := x.(json.Number); !ok {
+			return "Port"
+		}
+	}
+	for _, k := range []string{"Ssl", "SASL"} {
+		if x, ok := params[k]; ok && x != nil {
+			if _, ok := x.(bool); !ok {
+				return k
+			}
+		}
+	}
+	for _, k := range []string{"Channels", "Highlight"} {
+		x, ok := params[k]
+		if !ok || x == nil {
+			continue
+		}
+		items, ok := x.([]any)
+		if !ok {
+			return k
+		}
+		for _, item := range items {
+			if _, ok := item.(string); !ok {
+				return k
+			}
+		}
+	}
+	return ""
 }

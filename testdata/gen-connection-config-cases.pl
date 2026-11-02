@@ -1,7 +1,7 @@
 #!/usr/bin/env perl
 # Writes testdata/connection-config-cases.json from what Perl's
-# API::ConnectionConfig actually returns (and, under "go", what the stricter
-# Go copy must return). Add inputs here, then regenerate in the API image:
+# API::ConnectionConfig actually returns. Go (internal/connconfig) must match
+# every case whose fields have their proper JSON types, and refuse the rest. Add inputs here, then regenerate in the API image:
 #
 #   docker build -q -t lierc-api-test . >/dev/null
 #   docker run --rm lierc-api-test perl -Ilocal/lib/perl5 -Ilib \
@@ -75,34 +75,6 @@ my @clean = (
   ["input empty object", q({})],
 );
 
-# Go (lctl) requires real JSON strings in text fields: a number there is
-# treated like a boolean. Its expected result is Perl's with those numbers
-# replaced by true, recorded under "go" where it differs.
-# Which values were JSON numbers is read from a JSON::PP decode with
-# allow_bignum (JSON::XS keeps huge integers as strings, losing that).
-use JSON::PP ();
-use B ();
-use Scalar::Util qw(blessed);
-sub is_num {
-  my $v = shift;
-  return 1 if blessed $v && $v->isa("Math::BigInt") || blessed $v && $v->isa("Math::BigFloat");
-  return 0 if !defined $v || ref $v;
-  my $f = B::svref_2object(\$v)->FLAGS;
-  return ($f & (B::SVf_IOK | B::SVf_NOK)) && !($f & B::SVf_POK);
-}
-sub strict_params {
-  my ($p, $json) = @_;
-  return $p unless ref $p eq "HASH";
-  my $pp = JSON::PP->new->allow_nonref->allow_bignum->decode($json);
-  my %q = %$p;
-  for (qw(Host Nick User Pass Alias)) { $q{$_} = JSON::XS::true if exists $pp->{$_} && is_num($pp->{$_}) }
-  for my $f (qw(Channels Highlight)) {
-    next unless ref $q{$f} eq "ARRAY" && ref $pp->{$f} eq "ARRAY";
-    my @pp = @{ $pp->{$f} };
-    $q{$f} = [ map { is_num($pp[$_]) ? JSON::XS::true : $q{$f}[$_] } 0 .. $#pp ];
-  }
-  return \%q;
-}
 sub result {
   my $config = eval { $C->clean(shift) };
   return { want => $config } if $config;
@@ -114,11 +86,7 @@ my @clean_out = map {
   my ($name, $json) = @$_;
   my $params = eval { JSON::XS->new->allow_nonref->decode($json) };
   die "bad input JSON for $name: $@" if $@;
-  my $perl = result($params);
-  my $go = result(strict_params($params, $json));
-  my $case = { name => $name, input => $json, %$perl };
-  $case->{go} = $go if $J->encode($go) ne $J->encode($perl);
-  $case;
+  +{ name => $name, input => $json, %{ result($params) } };
 } @clean;
 
 my @blocked_out = map { +{ ip => $_, blocked => $C->blocked_ip($_) ? JSON::XS::true : JSON::XS::false } } qw(
@@ -186,6 +154,6 @@ my @check_out = map {
 
 binmode STDOUT;
 print JSON::XS->new->utf8->canonical->pretty->encode({
-  _comment => "Shared by t/connection_config.t and internal/connconfig. Expected values are what lib/API/ConnectionConfig.pm returns; 'input' is the raw request JSON. Where Go is stricter (it requires JSON strings in text fields; only Port may be a number), its result is under 'go'. Keep Perl and Go in step: a rule changed in one must pass here in both.",
+  _comment => "Shared by t/connection_config.t and internal/connconfig. Expected values are what lib/API/ConnectionConfig.pm returns; 'input' is the raw request JSON. Go must match every case whose fields have their proper JSON types (strings, a number for Port, booleans for Ssl/SASL) and refuse the rest; it doesn't follow Perl's type conversions. Keep Perl and Go in step: a rule changed in one must pass here in both.",
   clean => \@clean_out, blocked => \@blocked_out, exempt => \@exempt_out, check_host => \@check_out,
 });

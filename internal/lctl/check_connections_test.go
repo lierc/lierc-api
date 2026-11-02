@@ -114,7 +114,7 @@ func TestCheckDisplaysRawHostPort(t *testing.T) {
 	if err := h.run("check-connections", "--no-dns"); err != nil {
 		t.Fatal(err)
 	}
-	h.has("c1 (user "+u+", cc, a b:66): ", "c2 (user "+u+", cc, ?:?): ", "c3 (user "+u+", cc, a.com:6667): ")
+	h.has("c1 (user "+u+", cc, a b:66): ", "c2 (user "+u+", cc, ?:?): ", "c3 (user "+u+", cc, a.com:6667.0): ")
 }
 
 func TestCheckDeleteKeepsUnresolved(t *testing.T) {
