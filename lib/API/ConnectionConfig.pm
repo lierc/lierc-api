@@ -46,8 +46,10 @@ sub clean {
   }
 
   if (defined(my $pass = $params->{Pass})) {
-    die "Password can't contain line breaks\n" if ref $pass || $pass =~ /[\r\n\0]/;
-    $config{Pass} = $pass if $pass ne "";
+    die "Password must be text\n" if ref $pass;
+    die "Password can't contain line breaks\n" if $pass =~ /[\r\n\0]/;
+    # a JSON number becomes a string; liercd's Pass is a string
+    $config{Pass} = "$pass" if $pass ne "";
   }
 
   $config{Channels} = [ map {

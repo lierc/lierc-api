@@ -88,6 +88,8 @@ fails({ base(User => $_) }, $user_err, "User '$_'") for "a b", 'a@b', "a" x 33;
 my $pass_err = "Password can't contain line breaks";
 fails({ base(Pass => $_) }, $pass_err, "Pass with control") for "a\r\nQUIT", "a\nb", "a\rb", "a\0b";
 is(ok_clean({ base(Pass => "a b") }, "Pass with a space")->{Pass}, "a b", "Pass kept");
+fails({ base(Pass => $_) }, "Password must be text", "Pass non-string") for ["a"], JSON::XS::true;
+like(JSON::XS->new->encode(ok_clean({ base(Pass => $_) }, "numeric Pass $_")), qr/"Pass":"\Q$_\E"/, "numeric Pass $_ stored as a string") for 12, 1.5;
 
 # Channels
 ok_clean({ base(Channels => [$_]) }, "Channel $_") for "#Foo-Bar", "&local", "##java", "+x", "!12345x", "#\x{e9}", "#" . ("a" x 199);
