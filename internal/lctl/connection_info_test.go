@@ -11,7 +11,7 @@ const liveStatus = `{"Id":"c1","Nick":"ann_","Registered":true,
  "Status":{"Connected":true,"Message":"Connected","Id":"c1","Host":"irc.libera.chat"},
  "Isupport":["CHANTYPES=#","NETWORK=Libera.Chat","NICKLEN=16"],
  "Caps":{"sasl":"PLAIN","server-time":""},"CapsAcked":["server-time","sasl"],
- "Channels":[{"Name":"#b","Nicks":["@x","ann_","y"],"Topic":"welcome to b","Mode":"+nt"},{"Name":"#a","Nicks":["ann_"],"Topic":"","Mode":"+"}]}`
+ "Channels":[{"Name":"#b","Nicks":["@x","ann_","y"],"Topic":{"Topic":"welcome to b","User":"x","Time":1793367009},"Mode":"+nt"},{"Name":"#a","Nicks":["ann_"],"Topic":null,"Mode":"+"}]}`
 
 func TestConnectionInfo(t *testing.T) {
 	h := newHarness(t)

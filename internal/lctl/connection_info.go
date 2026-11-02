@@ -49,7 +49,7 @@ type liercdData struct {
 	Channels  []struct {
 		Name  string
 		Nicks []string
-		Topic string
+		Topic *struct{ Topic, User string } // lierc's IRCTopic; null before one is set
 		Mode  string
 	}
 }
@@ -233,8 +233,8 @@ func printLive(out io.Writer, d *liercdData, saved map[string]any) {
 	sort.Slice(d.Channels, func(i, j int) bool { return d.Channels[i].Name < d.Channels[j].Name })
 	for _, c := range d.Channels {
 		line := fmt.Sprintf("    %s  %s  %d nicks", c.Name, c.Mode, len(c.Nicks))
-		if c.Topic != "" {
-			topic := []rune(c.Topic)
+		if c.Topic != nil && c.Topic.Topic != "" {
+			topic := []rune(c.Topic.Topic)
 			if len(topic) > 80 {
 				topic = append(topic[:79], '…')
 			}
