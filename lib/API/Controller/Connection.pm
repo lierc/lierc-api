@@ -3,6 +3,7 @@ package API::Controller::Connection;
 use parent 'API::Controller';
 
 use Util;
+use API::ConnectionConfig;
 use JSON::XS;
 
 API->register("connection.list",   __PACKAGE__);
@@ -32,24 +33,30 @@ sub show {
 sub create {
   my ($app, $req) = @_;
 
-  my $params = decode_json $req->content;
-  for (qw(Host Port Nick)) {
-    die "$_ is required"
-      unless defined $params->{$_}
-        && $params->{$_} =~ /\S/;
-  }
+  my $config = valid_config($req);
+  my $id = Util->uuid;
+  start($app, $id, $req->session->{user}, $config);
+  return $app->json({success => "ok", "id" => $id});
+}
 
-  my $id  = $req->captures->{id} || Util->uuid;
-  my $res = $app->request(POST => "$id/create", $req->content);
+# The request's connection settings, cleaned; dies with a message for the
+# user if they're invalid or the host is private.
+sub valid_config {
+  my $req = shift;
+  my $params = eval { decode_json $req->content };
+  die "Invalid connection settings\n" unless ref $params eq "HASH";
+  my $config = API::ConnectionConfig->clean($params);
+  API::ConnectionConfig->check_host($config->{Host}, $config->{Port});
+  return $config;
+}
 
-  if ($res->code == 200) {
-    my $user = $req->session->{user};
-    $app->save_connection($id, $user, $req->content);
-    $app->dbh->do("NOTIFY highlights");
-    return $app->json({success => "ok", "id" => $id});
-  }
-
-  die $res->decoded_content;
+sub start {
+  my ($app, $id, $user, $config) = @_;
+  my $json = encode_json $config;
+  my $res  = $app->request(POST => "$id/create", $json);
+  die $res->decoded_content unless $res->code == 200;
+  $app->save_connection($id, $user, $json);
+  $app->dbh->do("NOTIFY highlights");
 }
 
 sub delete {
@@ -69,8 +76,14 @@ sub delete {
 sub edit {
   my ($app, $req) = @_;
 
-  $app->run("connection.delete", $req);
-  $app->run("connection.create", $req);
+  # check everything before touching the running connection, so a rejected
+  # edit leaves it as it was
+  my $config = valid_config($req);
+  my $id  = $req->captures->{id};
+  my $res = $app->request(POST => "$id/destroy");
+  die $res->decoded_content unless $res->code == 200 || $res->code == 404;
+  $app->delete_connection($id);
+  start($app, $id, $req->session->{user}, $config);
 
   return $app->ok;
 }
