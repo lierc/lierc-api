@@ -2,6 +2,7 @@ package lctl
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -59,7 +60,10 @@ func deleteUsers(ctx context.Context, env *Env, args []string) error {
 	if *settle < 0 {
 		return &UsageError{Msg: "--settle needs a number of seconds"}
 	}
-	ids := ReadIDs(env, fs.Args())
+	ids, err := ReadIDs(env, fs.Args())
+	if err != nil && !errors.Is(err, ErrNoIDsOnStdin) {
+		return err
+	}
 	if len(ids) == 0 {
 		return &UsageError{Msg: "give user ids as arguments or on stdin"}
 	}

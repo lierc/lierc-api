@@ -2,6 +2,7 @@ package lctl
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -44,7 +45,15 @@ func checkConnections(ctx context.Context, env *Env, args []string) error {
 	if err := Parse(fs, args); err != nil {
 		return err
 	}
-	ids := ReadIDs(env, fs.Args())
+	ids, err := ReadIDs(env, fs.Args())
+	if errors.Is(err, ErrNoIDsOnStdin) {
+		// e.g. `grep … | lctl check-connections --delete` that matched nothing:
+		// never fall back to checking every connection
+		return &UsageError{Msg: "no ids on stdin; to check every connection, run it on a terminal (over ssh: ssh -t)"}
+	}
+	if err != nil {
+		return err
+	}
 	switch {
 	case *settle < 0:
 		return &UsageError{Msg: "--settle needs a number of seconds"}

@@ -35,12 +35,15 @@ type System struct {
 	StdinFd         int
 }
 
-// OSSystem is the real process's System.
+// OSSystem is the real process's System. The host wrapper sets
+// LCTL_STDIN_TTY=1 when the operator's stdin is a terminal but it can't give
+// the container one (stdout piped or redirected); lctl then treats stdin as
+// a terminal and doesn't wait for ids on it.
 func OSSystem() System {
 	fd := int(os.Stdin.Fd())
 	return System{
 		Getenv: os.Getenv, Stdin: os.Stdin, Stdout: os.Stdout, Stderr: os.Stderr,
-		StdinIsTerminal: term.IsTerminal(fd), StdinFd: fd,
+		StdinIsTerminal: term.IsTerminal(fd) || os.Getenv("LCTL_STDIN_TTY") == "1", StdinFd: fd,
 	}
 }
 
@@ -133,6 +136,7 @@ func mainWith(ctx context.Context, args []string, sys System, cmds []Command, op
 
 func help(w io.Writer, cmds []Command) {
 	fmt.Fprintln(w, "usage: lctl COMMAND [options] [args]   (lctl COMMAND -h for a command's usage)")
+	fmt.Fprintln(w, "over ssh, use ssh -t unless you pipe ids in: ssh -t relaychat sudo lctl COMMAND")
 	fmt.Fprintln(w)
 	width := 0
 	for _, c := range cmds {
@@ -168,6 +172,9 @@ func OpenEnv(ctx context.Context, sys System) (*Env, func(), error) {
 		Stdin: sys.Stdin, Stdout: sys.Stdout, Stderr: sys.Stderr, StdinIsTerminal: sys.StdinIsTerminal,
 		Resolve: connconfig.SystemResolver, Sleep: sleepCtx,
 		ReadPassword: func() (string, error) {
+			if !term.IsTerminal(sys.StdinFd) {
+				return "", errors.New("can't prompt for a password without a terminal (over ssh, use ssh -t); or give it as one line on stdin")
+			}
 			fmt.Fprint(sys.Stderr, "New password: ")
 			b, err := term.ReadPassword(sys.StdinFd)
 			fmt.Fprintln(sys.Stderr)
@@ -215,14 +222,18 @@ func Parse(fs *flag.FlagSet, args []string) error {
 	return &UsageError{}
 }
 
+// ErrNoIDsOnStdin is ReadIDs reading stdin and finding no ids.
+var ErrNoIDsOnStdin = errors.New("no ids on stdin")
+
 // ReadIDs returns args if there are any, otherwise (when stdin isn't a
-// terminal) the trimmed, non-blank lines of stdin.
-func ReadIDs(env *Env, args []string) []string {
+// terminal) the trimmed, non-blank lines of stdin; ErrNoIDsOnStdin if
+// that gave none.
+func ReadIDs(env *Env, args []string) ([]string, error) {
 	if len(args) > 0 {
-		return args
+		return args, nil
 	}
 	if env.StdinIsTerminal || env.Stdin == nil {
-		return nil
+		return nil, nil
 	}
 	var ids []string
 	sc := bufio.NewScanner(env.Stdin)
@@ -231,7 +242,13 @@ func ReadIDs(env *Env, args []string) []string {
 			ids = append(ids, line)
 		}
 	}
-	return ids
+	if err := sc.Err(); err != nil {
+		return nil, fmt.Errorf("reading ids from stdin: %w", err)
+	}
+	if len(ids) == 0 {
+		return nil, ErrNoIDsOnStdin
+	}
+	return ids, nil
 }
 
 // sorted returns the keys of m in order.

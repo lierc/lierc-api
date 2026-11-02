@@ -233,3 +233,22 @@ func TestCheckFlagErrors(t *testing.T) {
 		t.Errorf("--delete --no-dns with ids: %v", err)
 	}
 }
+
+// `grep … | lctl check-connections --delete` with no matches must not check
+// (and delete) every connection.
+func TestCheckEmptyStdinRefuses(t *testing.T) {
+	h := newHarness(t)
+	seedConnections(h)
+	h.env.StdinIsTerminal = false
+	h.env.Stdin = strings.NewReader("")
+	var ue *UsageError
+	if err := h.run("check-connections", "--delete"); !errors.As(err, &ue) || !strings.Contains(ue.Msg, "no ids on stdin") {
+		t.Fatalf("got %v", err)
+	}
+	if n := h.count(`SELECT count(*) FROM connection`); n != 6 {
+		t.Errorf("%d connections left, want 6", n)
+	}
+	if len(h.liercd.Calls()) != 0 {
+		t.Error("called liercd")
+	}
+}

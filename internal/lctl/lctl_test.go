@@ -162,14 +162,14 @@ func TestFlags(t *testing.T) {
 
 func TestReadIDs(t *testing.T) {
 	env := &Env{Stdin: strings.NewReader(" a \n\nb\n"), StdinIsTerminal: false}
-	if got := ReadIDs(env, []string{"x", "y"}); strings.Join(got, ",") != "x,y" {
+	if got, _ := ReadIDs(env, []string{"x", "y"}); strings.Join(got, ",") != "x,y" {
 		t.Errorf("args: %v", got)
 	}
-	if got := ReadIDs(env, nil); strings.Join(got, ",") != "a,b" {
+	if got, _ := ReadIDs(env, nil); strings.Join(got, ",") != "a,b" {
 		t.Errorf("stdin: %v", got)
 	}
 	env = &Env{Stdin: strings.NewReader("a\n"), StdinIsTerminal: true}
-	if got := ReadIDs(env, nil); len(got) != 0 {
+	if got, _ := ReadIDs(env, nil); len(got) != 0 {
 		t.Errorf("terminal: %v", got)
 	}
 }
@@ -227,5 +227,22 @@ func TestPoolBegin(t *testing.T) {
 	d.Pool.QueryRow(context.Background(), `SELECT count(*) FROM pref`).Scan(&n)
 	if n != 0 {
 		t.Fatalf("rolled back insert is visible: %d rows", n)
+	}
+}
+
+// The wrapper sets LCTL_STDIN_TTY=1 when the operator's stdin is a terminal
+// but the container's isn't (stdout piped or redirected), so lctl doesn't
+// wait for ids on it.
+func TestOSSystemHonoursWrapperTTY(t *testing.T) {
+	t.Setenv("LCTL_STDIN_TTY", "1")
+	if !OSSystem().StdinIsTerminal {
+		t.Fatal("LCTL_STDIN_TTY=1 not treated as a terminal")
+	}
+}
+
+func TestReadIDsEmptyStdin(t *testing.T) {
+	env := &Env{Stdin: strings.NewReader("\n \n"), StdinIsTerminal: false}
+	if ids, err := ReadIDs(env, nil); !errors.Is(err, ErrNoIDsOnStdin) || len(ids) != 0 {
+		t.Fatalf("got %v %v", ids, err)
 	}
 }
