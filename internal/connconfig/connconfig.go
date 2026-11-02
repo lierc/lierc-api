@@ -42,7 +42,7 @@ var (
 	nickRe    = regexp.MustCompile(`^[^` + nickNot + `#&$:][^` + nickNot + `]{0,31}$`)
 	userRe    = regexp.MustCompile(`^[.~` + nickChars + `]{1,32}\n?$`)
 	channelRe = regexp.MustCompile(`^[#&+!][^` + perlSpace + `,\x00-\x1f\x7f]{1,199}\n?$`)
-	aliasRe   = regexp.MustCompile(`^[A-Za-z0-9 ]{1,32}\n?$`)
+	aliasRe   = regexp.MustCompile(`^[A-Za-z0-9 .-]{1,32}\n?$`)
 	portRe    = regexp.MustCompile(`^[ \t\n\r\f\v]*([0-9]{1,5})[ \t\n\r\f\v]*\n?$`)
 	ipv4Re    = regexp.MustCompile(`^([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3})\n?$`)
 	labelRe   = regexp.MustCompile(`^[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\n?$`)
@@ -53,7 +53,7 @@ var (
 const (
 	errNick  = "Nick must be 1 to 32 characters, without spaces or , * ? ! @, and can't start with # & $ or :"
 	errUser  = "Username must be up to 32 letters, digits, - . ~ or [ ] \\ ` _ ^ { | }"
-	errAlias = "Network alias can only use letters, digits and spaces, up to 32 characters"
+	errAlias = "Network alias can only use letters, digits, spaces, dots and hyphens, up to 32 characters"
 )
 
 func trim(s string) string { return strings.TrimFunc(s, unicode.IsSpace) }

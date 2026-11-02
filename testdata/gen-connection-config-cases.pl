@@ -59,7 +59,7 @@ my @clean = (
      qq{["#a\x{a0}b"]}, qq{["#\x{3000}"]}, '["#a\u0085b"]', '[]', 'null', '{}', '["", " "]'),
   (map { ["Highlight $_", with(qq{"Highlight":$_})] } '"lee"', '["a\nb"]', '["lee", ""]', '[1]', '[null]',
      qq{["\x{a0}"]}, '["a\u007fb"]'),
-  (map { ["Alias $_", with(qq{"Alias":$_})] } '"Libera Chat 2"', '"libera.chat"', '"a-b"', '"' . ("a" x 33) . '"',
+  (map { ["Alias $_", with(qq{"Alias":$_})] } '"Libera Chat 2"', '"libera.chat"', '"my.net 2"', '"."', '"a-b"', '"irc-net.org 2"', '"a_b"', '"a/b"', '"' . ("a" x 33) . '"',
      '"  "', "12", "true", "null", qq{"\x{a0}net"}),
   (map { ["Ssl $_", with(qq{"Ssl":$_,"SASL":$_})] } "true", "false", "1", "0", "0.0", '"0"', '"false"', '""',
      '"0.0"', '"00"', '[]', '{}', "null", '" "'),

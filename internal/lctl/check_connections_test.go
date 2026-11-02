@@ -19,7 +19,7 @@ func seedConnections(h *harness) string {
 	h.conn("bh", u, `{"Host":"127.0.0.1","Port":5005,"Nick":"x"}`)
 	h.conn("bu", u, `{"Host":"nosuch.invalid","Port":6667,"Nick":"x"}`)
 	h.conn("bj", u, `"not an object"`)
-	h.conn("ba", u, `{"Host":"ergo","Port":6667,"Nick":"cca","Alias":"a.b"}`)
+	h.conn("ba", u, `{"Host":"ergo","Port":6667,"Nick":"cca","Alias":"a_b"}`)
 	return u
 }
 
@@ -34,7 +34,7 @@ func TestCheckDryRun(t *testing.T) {
 		"bh (user "+u+", cc, 127.0.0.1:5005): Host 127.0.0.1 points to a private address\n",
 		"bu (user "+u+", cc, nosuch.invalid:6667): Couldn't find host nosuch.invalid\n",
 		"bj (user "+u+", cc, ?): config isn't a JSON object\n",
-		"ba (user "+u+", cc, ergo:6667): Network alias can only use letters, digits and spaces, up to 32 characters\n",
+		"ba (user "+u+", cc, ergo:6667): Network alias can only use letters, digits, spaces, dots and hyphens, up to 32 characters\n",
 		"6 connection(s) checked: 1 valid, 5 invalid\n",
 		"dry run: nothing deleted; run with --delete to delete the invalid ones\n",
 	)

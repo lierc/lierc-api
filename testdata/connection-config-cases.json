@@ -1619,17 +1619,87 @@
          }
       },
       {
-         "error" : "Network alias can only use letters, digits and spaces, up to 32 characters",
          "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Alias\":\"libera.chat\"}",
-         "name" : "Alias \"libera.chat\""
+         "name" : "Alias \"libera.chat\"",
+         "want" : {
+            "Alias" : "libera.chat",
+            "Channels" : [],
+            "Highlight" : [],
+            "Host" : "irc.libera.chat",
+            "Nick" : "lee",
+            "Port" : 6697,
+            "SASL" : false,
+            "Ssl" : false
+         }
       },
       {
-         "error" : "Network alias can only use letters, digits and spaces, up to 32 characters",
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Alias\":\"my.net 2\"}",
+         "name" : "Alias \"my.net 2\"",
+         "want" : {
+            "Alias" : "my.net 2",
+            "Channels" : [],
+            "Highlight" : [],
+            "Host" : "irc.libera.chat",
+            "Nick" : "lee",
+            "Port" : 6697,
+            "SASL" : false,
+            "Ssl" : false
+         }
+      },
+      {
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Alias\":\".\"}",
+         "name" : "Alias \".\"",
+         "want" : {
+            "Alias" : ".",
+            "Channels" : [],
+            "Highlight" : [],
+            "Host" : "irc.libera.chat",
+            "Nick" : "lee",
+            "Port" : 6697,
+            "SASL" : false,
+            "Ssl" : false
+         }
+      },
+      {
          "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Alias\":\"a-b\"}",
-         "name" : "Alias \"a-b\""
+         "name" : "Alias \"a-b\"",
+         "want" : {
+            "Alias" : "a-b",
+            "Channels" : [],
+            "Highlight" : [],
+            "Host" : "irc.libera.chat",
+            "Nick" : "lee",
+            "Port" : 6697,
+            "SASL" : false,
+            "Ssl" : false
+         }
       },
       {
-         "error" : "Network alias can only use letters, digits and spaces, up to 32 characters",
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Alias\":\"irc-net.org 2\"}",
+         "name" : "Alias \"irc-net.org 2\"",
+         "want" : {
+            "Alias" : "irc-net.org 2",
+            "Channels" : [],
+            "Highlight" : [],
+            "Host" : "irc.libera.chat",
+            "Nick" : "lee",
+            "Port" : 6697,
+            "SASL" : false,
+            "Ssl" : false
+         }
+      },
+      {
+         "error" : "Network alias can only use letters, digits, spaces, dots and hyphens, up to 32 characters",
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Alias\":\"a_b\"}",
+         "name" : "Alias \"a_b\""
+      },
+      {
+         "error" : "Network alias can only use letters, digits, spaces, dots and hyphens, up to 32 characters",
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Alias\":\"a/b\"}",
+         "name" : "Alias \"a/b\""
+      },
+      {
+         "error" : "Network alias can only use letters, digits, spaces, dots and hyphens, up to 32 characters",
          "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Alias\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}",
          "name" : "Alias \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\""
       },
@@ -1661,7 +1731,7 @@
          }
       },
       {
-         "error" : "Network alias can only use letters, digits and spaces, up to 32 characters",
+         "error" : "Network alias can only use letters, digits, spaces, dots and hyphens, up to 32 characters",
          "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Alias\":true}",
          "name" : "Alias true"
       },
@@ -1987,9 +2057,18 @@
          }
       },
       {
-         "error" : "Network alias can only use letters, digits and spaces, up to 32 characters",
          "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Alias\":-12345678901234567890}",
-         "name" : "big number Alias -12345678901234567890"
+         "name" : "big number Alias -12345678901234567890",
+         "want" : {
+            "Alias" : "-12345678901234567890",
+            "Channels" : [],
+            "Highlight" : [],
+            "Host" : "irc.libera.chat",
+            "Nick" : "lee",
+            "Port" : 6697,
+            "SASL" : false,
+            "Ssl" : false
+         }
       },
       {
          "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Alias\":18446744073709551616}",
@@ -2048,9 +2127,18 @@
          }
       },
       {
-         "error" : "Network alias can only use letters, digits and spaces, up to 32 characters",
          "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Alias\":-1E400}",
-         "name" : "big number Alias -1E400"
+         "name" : "big number Alias -1E400",
+         "want" : {
+            "Alias" : "-Inf",
+            "Channels" : [],
+            "Highlight" : [],
+            "Host" : "irc.libera.chat",
+            "Nick" : "lee",
+            "Port" : 6697,
+            "SASL" : false,
+            "Ssl" : false
+         }
       },
       {
          "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Nick\":12345678901234567890123}",

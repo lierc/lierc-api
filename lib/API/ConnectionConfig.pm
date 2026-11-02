@@ -72,8 +72,8 @@ sub clean {
 
   my $alias = text($params->{Alias});
   if (defined $params->{Alias} && !(defined $alias && $alias eq "")) {
-    die "Network alias can only use letters, digits and spaces, up to 32 characters\n"
-      unless defined $alias && $alias =~ /^[A-Za-z0-9 ]{1,32}$/;
+    die "Network alias can only use letters, digits, spaces, dots and hyphens, up to 32 characters\n"
+      unless defined $alias && $alias =~ /^[A-Za-z0-9 .-]{1,32}$/;
     $config{Alias} = $alias;
   }
 

@@ -80,6 +80,14 @@ for my $case (@{ $cases->{check_host} }) {
   is($ok->("a#b"), "a#b", "# allowed after the first character");
 }
 
+# The alias rule, written out
+{
+  my $alias_err = "Network alias can only use letters, digits, spaces, dots and hyphens, up to 32 characters";
+  my $run = sub { my $a = shift; my $c = eval { $C->clean({ Host => "a.com", Port => 6667, Nick => "lee", Alias => $a }) }; (my $e = $@) =~ s/\n\z//; ($c && $c->{Alias}, $e) };
+  is(($run->($_))[0], $_, "alias $_ accepted") for "libera.chat", "Libera Chat 2", "my.net 2", ".", "a-b", "-", "irc-net.org 2", "a" x 32;
+  is(($run->($_))[1], $alias_err, "alias $_ refused") for "a_b", "a,b", "a/b", "l\x{e9}e", "a\tb", "a" x 33;
+}
+
 # Perl only: the real resolver
 {
   local $ENV{DEFAULT_NETWORK_HOST};
