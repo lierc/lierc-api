@@ -11,8 +11,15 @@ use JSON::XS;
 use Socket qw(AF_INET AF_INET6 SOCK_STREAM getaddrinfo inet_pton inet_ntop
               unpack_sockaddr_in unpack_sockaddr_in6);
 
-my $NICK_CHARS = q{A-Za-z0-9\[\]\\\\`_^{|}-};
-my $NICK_FIRST = q{A-Za-z\[\]\\\\`_^{|}};
+my $NICK_CHARS = q{A-Za-z0-9\[\]\\\\`_^{|}-};   # for User
+
+# A nick may use any characters (servers decide what they allow) except
+# whitespace, control characters and , * ? ! @, and can't start with a
+# channel prefix (# &) or $ or :. Whitespace is listed rather than \s so it
+# matches internal/connconfig exactly.
+my $SPACE = q{\t\n\x0b\f\r \x{85}\x{a0}\x{1680}\x{2000}-\x{200a}\x{2028}\x{2029}\x{202f}\x{205f}\x{3000}};
+my $NICK_NOT = qq{${SPACE}\\x00-\\x1f\\x7f-\\x9f,*?!\@};
+my $NICK_RE = qr/^[^${NICK_NOT}#&\$:][^${NICK_NOT}]{0,31}\z/;
 
 # Returns a new hashref with only the known keys, trimmed (except Pass) and
 # normalised; dies on the first invalid field.
@@ -34,8 +41,8 @@ sub clean {
 
   my $nick = text($params->{Nick});
   die "Nick is required\n" if !defined $nick || $nick eq "";
-  die 'Nick must be up to 32 letters, digits, - or [ ] \ ` _ ^ { | }, not starting with a digit or -' . "\n"
-    unless $nick =~ /^[$NICK_FIRST][$NICK_CHARS]{0,31}$/;
+  die "Nick must be 1 to 32 characters, without spaces or , * ? ! \@, and can't start with # & \$ or :\n"
+    unless $nick =~ $NICK_RE;
   $config{Nick} = $nick;
 
   my $user = text($params->{User});

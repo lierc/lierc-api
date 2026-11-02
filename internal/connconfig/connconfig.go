@@ -32,10 +32,14 @@ const perlSpace = `\t\n\v\f\r \x{85}\x{a0}\x{1680}\x{2000}-\x{200a}\x{2028}\x{20
 
 // Perl's `$` (end, or before a final newline) is written `\n?$` below.
 const nickChars = "A-Za-z0-9\\[\\]\\\\`_^{|}-"
-const nickFirst = "A-Za-z\\[\\]\\\\`_^{|}"
+
+// A nick may use any characters except whitespace, control characters and
+// , * ? ! @, and can't start with # & $ or : (lib/API/ConnectionConfig.pm
+// lists the same characters).
+const nickNot = perlSpace + `\x00-\x1f\x7f-\x{9f},*?!@`
 
 var (
-	nickRe    = regexp.MustCompile(`^[` + nickFirst + `][` + nickChars + `]{0,31}\n?$`)
+	nickRe    = regexp.MustCompile(`^[^` + nickNot + `#&$:][^` + nickNot + `]{0,31}$`)
 	userRe    = regexp.MustCompile(`^[.~` + nickChars + `]{1,32}\n?$`)
 	channelRe = regexp.MustCompile(`^[#&+!][^` + perlSpace + `,\x00-\x1f\x7f]{1,199}\n?$`)
 	aliasRe   = regexp.MustCompile(`^[A-Za-z0-9 ]{1,32}\n?$`)
@@ -47,7 +51,7 @@ var (
 )
 
 const (
-	errNick  = "Nick must be up to 32 letters, digits, - or [ ] \\ ` _ ^ { | }, not starting with a digit or -"
+	errNick  = "Nick must be 1 to 32 characters, without spaces or , * ? ! @, and can't start with # & $ or :"
 	errUser  = "Username must be up to 32 letters, digits, - . ~ or [ ] \\ ` _ ^ { | }"
 	errAlias = "Network alias can only use letters, digits and spaces, up to 32 characters"
 )

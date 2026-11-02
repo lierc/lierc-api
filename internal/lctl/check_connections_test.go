@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-const nickErr = "Nick must be up to 32 letters, digits, - or [ ] \\ ` _ ^ { | }, not starting with a digit or -"
+const nickErr = "Nick must be 1 to 32 characters, without spaces or , * ? ! @, and can't start with # & $ or :"
 
 // seedConnections adds the dev-stack e2e's six connections for one user.
 func seedConnections(h *harness) string {
@@ -15,7 +15,7 @@ func seedConnections(h *harness) string {
 	h.hosts["ergo"] = []string{"172.18.0.2"}
 	u := h.user("cc")
 	h.conn("good", u, `{"Host":"ergo","Port":6667,"Nick":"cc"}`)
-	h.conn("bn", u, `{"Host":"ergo","Port":6667,"Nick":"2cool"}`)
+	h.conn("bn", u, `{"Host":"ergo","Port":6667,"Nick":"two cool"}`)
 	h.conn("bh", u, `{"Host":"127.0.0.1","Port":5005,"Nick":"x"}`)
 	h.conn("bu", u, `{"Host":"nosuch.invalid","Port":6667,"Nick":"x"}`)
 	h.conn("bj", u, `"not an object"`)
@@ -94,7 +94,7 @@ func TestCheckAllValid(t *testing.T) {
 
 func TestCheckUserMissing(t *testing.T) {
 	h := newHarness(t)
-	testenv_conn(h, "orphan", "nobody", `{"Host":"ergo","Port":6667,"Nick":"2x"}`)
+	testenv_conn(h, "orphan", "nobody", `{"Host":"ergo","Port":6667,"Nick":"#x"}`)
 	if err := h.run("check-connections", "--no-dns"); err != nil {
 		t.Fatal(err)
 	}
@@ -110,7 +110,7 @@ func TestCheckDisplaysRawHostPort(t *testing.T) {
 	u := h.user("cc")
 	testenv_conn(h, "c1", u, `{"Host":"a b","Port":"66","Nick":"x"}`)
 	testenv_conn(h, "c2", u, `{"Host":["x"],"Nick":"x"}`)
-	testenv_conn(h, "c3", u, `{"Host":"a.com","Port":6667.0,"Nick":"2"}`)
+	testenv_conn(h, "c3", u, `{"Host":"a.com","Port":6667.0,"Nick":"#2"}`)
 	if err := h.run("check-connections", "--no-dns"); err != nil {
 		t.Fatal(err)
 	}

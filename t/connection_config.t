@@ -69,6 +69,17 @@ for my $case (@{ $cases->{check_host} }) {
   is(!!$called, !!$case->{resolved}, "$name: resolver " . ($case->{resolved} ? "called" : "not called"));
 }
 
+# The nick rule, written out (the shared cases above come from running it)
+{
+  my $nick_err = "Nick must be 1 to 32 characters, without spaces or , * ? ! @, and can't start with # & \$ or :";
+  my $ok = sub { my $n = shift; my $c = eval { $C->clean({ Host => "a.com", Port => 6667, Nick => $n }) }; $c && $c->{Nick} };
+  my $err = sub { my $n = shift; eval { $C->clean({ Host => "a.com", Port => 6667, Nick => $n }) }; (my $e = $@) =~ s/\n\z//; $e };
+  is($ok->($_), $_, "nick $_ accepted") for "l\x{e9}e", "\x{540d}\x{524d}", "ann\x{1f9d9}", "2cool", "-dash", "a.b", "[away]", "a" x 32, "\x{e9}" x 32;
+  is($err->($_), $nick_err, "nick refused") for "a b", "a,b", "a*", "a?", "a!b", "a\@b", "#a", "&a", "\$a", ":a",
+    "a\x{a0}b", "a\x{3000}b", "a\x07b", "a\x7fb", "a\x{85}b", "a\x{9f}b", "a" x 33, "\x{e9}" x 33;
+  is($ok->("a#b"), "a#b", "# allowed after the first character");
+}
+
 # Perl only: the real resolver
 {
   local $ENV{DEFAULT_NETWORK_HOST};
