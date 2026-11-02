@@ -171,3 +171,15 @@ func deref(s *string) string {
 	}
 	return *s
 }
+
+// Perl accepts a User or Alias of 1e-400 (it prints as "0") but saves it as
+// the number 0, an encoder quirk the shared cases can't compare; only the
+// verdict matters to lctl.
+func TestTinyNumberTextFieldsAccepted(t *testing.T) {
+	for _, f := range []string{"User", "Alias"} {
+		got, err := Clean([]byte(`{"Host":"irc.libera.chat","Port":6697,"Nick":"lee","` + f + `":1e-400}`))
+		if err != nil || got[f] != "0" {
+			t.Errorf("%s 1e-400: %v %v", f, got[f], err)
+		}
+	}
+}

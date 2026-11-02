@@ -1692,6 +1692,476 @@
          }
       },
       {
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"User\":12345678901234567890123}",
+         "name" : "big number User 12345678901234567890123",
+         "want" : {
+            "Channels" : [],
+            "Highlight" : [],
+            "Host" : "irc.libera.chat",
+            "Nick" : "lee",
+            "Port" : 6697,
+            "SASL" : false,
+            "Ssl" : false,
+            "User" : "12345678901234567890123"
+         }
+      },
+      {
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"User\":-12345678901234567890}",
+         "name" : "big number User -12345678901234567890",
+         "want" : {
+            "Channels" : [],
+            "Highlight" : [],
+            "Host" : "irc.libera.chat",
+            "Nick" : "lee",
+            "Port" : 6697,
+            "SASL" : false,
+            "Ssl" : false,
+            "User" : "-12345678901234567890"
+         }
+      },
+      {
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"User\":18446744073709551616}",
+         "name" : "big number User 18446744073709551616",
+         "want" : {
+            "Channels" : [],
+            "Highlight" : [],
+            "Host" : "irc.libera.chat",
+            "Nick" : "lee",
+            "Port" : 6697,
+            "SASL" : false,
+            "Ssl" : false,
+            "User" : "18446744073709551616"
+         }
+      },
+      {
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"User\":100000000000000000000}",
+         "name" : "big number User 100000000000000000000",
+         "want" : {
+            "Channels" : [],
+            "Highlight" : [],
+            "Host" : "irc.libera.chat",
+            "Nick" : "lee",
+            "Port" : 6697,
+            "SASL" : false,
+            "Ssl" : false,
+            "User" : "100000000000000000000"
+         }
+      },
+      {
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"User\":9223372036854775808}",
+         "name" : "big number User 9223372036854775808",
+         "want" : {
+            "Channels" : [],
+            "Highlight" : [],
+            "Host" : "irc.libera.chat",
+            "Nick" : "lee",
+            "Port" : 6697,
+            "SASL" : false,
+            "Ssl" : false,
+            "User" : "9223372036854775808"
+         }
+      },
+      {
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"User\":1E400}",
+         "name" : "big number User 1E400",
+         "want" : {
+            "Channels" : [],
+            "Highlight" : [],
+            "Host" : "irc.libera.chat",
+            "Nick" : "lee",
+            "Port" : 6697,
+            "SASL" : false,
+            "Ssl" : false,
+            "User" : "Inf"
+         }
+      },
+      {
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"User\":-1E400}",
+         "name" : "big number User -1E400",
+         "want" : {
+            "Channels" : [],
+            "Highlight" : [],
+            "Host" : "irc.libera.chat",
+            "Nick" : "lee",
+            "Port" : 6697,
+            "SASL" : false,
+            "Ssl" : false,
+            "User" : "-Inf"
+         }
+      },
+      {
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Alias\":12345678901234567890123}",
+         "name" : "big number Alias 12345678901234567890123",
+         "want" : {
+            "Alias" : "12345678901234567890123",
+            "Channels" : [],
+            "Highlight" : [],
+            "Host" : "irc.libera.chat",
+            "Nick" : "lee",
+            "Port" : 6697,
+            "SASL" : false,
+            "Ssl" : false
+         }
+      },
+      {
+         "error" : "Network alias can only use letters, digits and spaces, up to 32 characters",
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Alias\":-12345678901234567890}",
+         "name" : "big number Alias -12345678901234567890"
+      },
+      {
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Alias\":18446744073709551616}",
+         "name" : "big number Alias 18446744073709551616",
+         "want" : {
+            "Alias" : "18446744073709551616",
+            "Channels" : [],
+            "Highlight" : [],
+            "Host" : "irc.libera.chat",
+            "Nick" : "lee",
+            "Port" : 6697,
+            "SASL" : false,
+            "Ssl" : false
+         }
+      },
+      {
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Alias\":100000000000000000000}",
+         "name" : "big number Alias 100000000000000000000",
+         "want" : {
+            "Alias" : "100000000000000000000",
+            "Channels" : [],
+            "Highlight" : [],
+            "Host" : "irc.libera.chat",
+            "Nick" : "lee",
+            "Port" : 6697,
+            "SASL" : false,
+            "Ssl" : false
+         }
+      },
+      {
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Alias\":9223372036854775808}",
+         "name" : "big number Alias 9223372036854775808",
+         "want" : {
+            "Alias" : "9223372036854775808",
+            "Channels" : [],
+            "Highlight" : [],
+            "Host" : "irc.libera.chat",
+            "Nick" : "lee",
+            "Port" : 6697,
+            "SASL" : false,
+            "Ssl" : false
+         }
+      },
+      {
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Alias\":1E400}",
+         "name" : "big number Alias 1E400",
+         "want" : {
+            "Alias" : "Inf",
+            "Channels" : [],
+            "Highlight" : [],
+            "Host" : "irc.libera.chat",
+            "Nick" : "lee",
+            "Port" : 6697,
+            "SASL" : false,
+            "Ssl" : false
+         }
+      },
+      {
+         "error" : "Network alias can only use letters, digits and spaces, up to 32 characters",
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Alias\":-1E400}",
+         "name" : "big number Alias -1E400"
+      },
+      {
+         "error" : "Nick must be up to 32 letters, digits, - or [ ] \\ ` _ ^ { | }, not starting with a digit or -",
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Nick\":12345678901234567890123}",
+         "name" : "big number Nick 12345678901234567890123"
+      },
+      {
+         "error" : "Nick must be up to 32 letters, digits, - or [ ] \\ ` _ ^ { | }, not starting with a digit or -",
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Nick\":-12345678901234567890}",
+         "name" : "big number Nick -12345678901234567890"
+      },
+      {
+         "error" : "Nick must be up to 32 letters, digits, - or [ ] \\ ` _ ^ { | }, not starting with a digit or -",
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Nick\":18446744073709551616}",
+         "name" : "big number Nick 18446744073709551616"
+      },
+      {
+         "error" : "Nick must be up to 32 letters, digits, - or [ ] \\ ` _ ^ { | }, not starting with a digit or -",
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Nick\":100000000000000000000}",
+         "name" : "big number Nick 100000000000000000000"
+      },
+      {
+         "error" : "Nick must be up to 32 letters, digits, - or [ ] \\ ` _ ^ { | }, not starting with a digit or -",
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Nick\":9223372036854775808}",
+         "name" : "big number Nick 9223372036854775808"
+      },
+      {
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Nick\":1E400}",
+         "name" : "big number Nick 1E400",
+         "want" : {
+            "Channels" : [],
+            "Highlight" : [],
+            "Host" : "irc.libera.chat",
+            "Nick" : "Inf",
+            "Port" : 6697,
+            "SASL" : false,
+            "Ssl" : false
+         }
+      },
+      {
+         "error" : "Nick must be up to 32 letters, digits, - or [ ] \\ ` _ ^ { | }, not starting with a digit or -",
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Nick\":-1E400}",
+         "name" : "big number Nick -1E400"
+      },
+      {
+         "error" : "Host must be an IPv4 address or a domain name",
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Host\":12345678901234567890123}",
+         "name" : "big number Host 12345678901234567890123"
+      },
+      {
+         "error" : "Host must be an IPv4 address or a domain name",
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Host\":-12345678901234567890}",
+         "name" : "big number Host -12345678901234567890"
+      },
+      {
+         "error" : "Host must be an IPv4 address or a domain name",
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Host\":18446744073709551616}",
+         "name" : "big number Host 18446744073709551616"
+      },
+      {
+         "error" : "Host must be an IPv4 address or a domain name",
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Host\":100000000000000000000}",
+         "name" : "big number Host 100000000000000000000"
+      },
+      {
+         "error" : "Host must be an IPv4 address or a domain name",
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Host\":9223372036854775808}",
+         "name" : "big number Host 9223372036854775808"
+      },
+      {
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Host\":1E400}",
+         "name" : "big number Host 1E400",
+         "want" : {
+            "Channels" : [],
+            "Highlight" : [],
+            "Host" : "Inf",
+            "Nick" : "lee",
+            "Port" : 6697,
+            "SASL" : false,
+            "Ssl" : false
+         }
+      },
+      {
+         "error" : "Host must be an IPv4 address or a domain name",
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Host\":-1E400}",
+         "name" : "big number Host -1E400"
+      },
+      {
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Pass\":12345678901234567890123}",
+         "name" : "big number Pass 12345678901234567890123",
+         "want" : {
+            "Channels" : [],
+            "Highlight" : [],
+            "Host" : "irc.libera.chat",
+            "Nick" : "lee",
+            "Pass" : "12345678901234567890123",
+            "Port" : 6697,
+            "SASL" : false,
+            "Ssl" : false
+         }
+      },
+      {
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Pass\":-12345678901234567890}",
+         "name" : "big number Pass -12345678901234567890",
+         "want" : {
+            "Channels" : [],
+            "Highlight" : [],
+            "Host" : "irc.libera.chat",
+            "Nick" : "lee",
+            "Pass" : "-12345678901234567890",
+            "Port" : 6697,
+            "SASL" : false,
+            "Ssl" : false
+         }
+      },
+      {
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Pass\":18446744073709551616}",
+         "name" : "big number Pass 18446744073709551616",
+         "want" : {
+            "Channels" : [],
+            "Highlight" : [],
+            "Host" : "irc.libera.chat",
+            "Nick" : "lee",
+            "Pass" : "18446744073709551616",
+            "Port" : 6697,
+            "SASL" : false,
+            "Ssl" : false
+         }
+      },
+      {
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Pass\":100000000000000000000}",
+         "name" : "big number Pass 100000000000000000000",
+         "want" : {
+            "Channels" : [],
+            "Highlight" : [],
+            "Host" : "irc.libera.chat",
+            "Nick" : "lee",
+            "Pass" : "100000000000000000000",
+            "Port" : 6697,
+            "SASL" : false,
+            "Ssl" : false
+         }
+      },
+      {
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Pass\":9223372036854775808}",
+         "name" : "big number Pass 9223372036854775808",
+         "want" : {
+            "Channels" : [],
+            "Highlight" : [],
+            "Host" : "irc.libera.chat",
+            "Nick" : "lee",
+            "Pass" : "9223372036854775808",
+            "Port" : 6697,
+            "SASL" : false,
+            "Ssl" : false
+         }
+      },
+      {
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Pass\":1E400}",
+         "name" : "big number Pass 1E400",
+         "want" : {
+            "Channels" : [],
+            "Highlight" : [],
+            "Host" : "irc.libera.chat",
+            "Nick" : "lee",
+            "Pass" : "Inf",
+            "Port" : 6697,
+            "SASL" : false,
+            "Ssl" : false
+         }
+      },
+      {
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Pass\":-1E400}",
+         "name" : "big number Pass -1E400",
+         "want" : {
+            "Channels" : [],
+            "Highlight" : [],
+            "Host" : "irc.libera.chat",
+            "Nick" : "lee",
+            "Pass" : "-Inf",
+            "Port" : 6697,
+            "SASL" : false,
+            "Ssl" : false
+         }
+      },
+      {
+         "error" : "Nick must be up to 32 letters, digits, - or [ ] \\ ` _ ^ { | }, not starting with a digit or -",
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Nick\":1e-400}",
+         "name" : "big number Nick 1e-400"
+      },
+      {
+         "error" : "Host must be an IPv4 address or a domain name",
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Host\":1e-400}",
+         "name" : "big number Host 1e-400"
+      },
+      {
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Pass\":1e-400}",
+         "name" : "big number Pass 1e-400",
+         "want" : {
+            "Channels" : [],
+            "Highlight" : [],
+            "Host" : "irc.libera.chat",
+            "Nick" : "lee",
+            "Pass" : "0",
+            "Port" : 6697,
+            "SASL" : false,
+            "Ssl" : false
+         }
+      },
+      {
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Highlight\":[12345678901234567890123]}",
+         "name" : "big number Highlight 12345678901234567890123",
+         "want" : {
+            "Channels" : [],
+            "Highlight" : [
+               "12345678901234567890123"
+            ],
+            "Host" : "irc.libera.chat",
+            "Nick" : "lee",
+            "Port" : 6697,
+            "SASL" : false,
+            "Ssl" : false
+         }
+      },
+      {
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Highlight\":[1E400]}",
+         "name" : "big number Highlight 1E400",
+         "want" : {
+            "Channels" : [],
+            "Highlight" : [
+               "Inf"
+            ],
+            "Host" : "irc.libera.chat",
+            "Nick" : "lee",
+            "Port" : 6697,
+            "SASL" : false,
+            "Ssl" : false
+         }
+      },
+      {
+         "error" : "12345678901234567890123 isn't a valid channel name",
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Channels\":[12345678901234567890123]}",
+         "name" : "big number Channels 12345678901234567890123"
+      },
+      {
+         "error" : "Port must be a number from 1 to 65535",
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Port\":12345678901234567890123}",
+         "name" : "big number Port 12345678901234567890123"
+      },
+      {
+         "error" : "Port must be a number from 1 to 65535",
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Port\":1E400}",
+         "name" : "big number Port 1E400"
+      },
+      {
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Ssl\":12345678901234567890123}",
+         "name" : "big number Ssl 12345678901234567890123",
+         "want" : {
+            "Channels" : [],
+            "Highlight" : [],
+            "Host" : "irc.libera.chat",
+            "Nick" : "lee",
+            "Port" : 6697,
+            "SASL" : false,
+            "Ssl" : true
+         }
+      },
+      {
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Ssl\":1E400}",
+         "name" : "big number Ssl 1E400",
+         "want" : {
+            "Channels" : [],
+            "Highlight" : [],
+            "Host" : "irc.libera.chat",
+            "Nick" : "lee",
+            "Port" : 6697,
+            "SASL" : false,
+            "Ssl" : true
+         }
+      },
+      {
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Ssl\":-1E400}",
+         "name" : "big number Ssl -1E400",
+         "want" : {
+            "Channels" : [],
+            "Highlight" : [],
+            "Host" : "irc.libera.chat",
+            "Nick" : "lee",
+            "Port" : 6697,
+            "SASL" : false,
+            "Ssl" : true
+         }
+      },
+      {
          "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Foo\":1,\"Id\":\"x\"}",
          "name" : "unknown keys dropped",
          "want" : {

@@ -73,20 +73,31 @@ func perlValue(v any) (kind, string) {
 	}
 }
 
+var intLiteral = regexp.MustCompile(`^-?[0-9]+$`)
+
 // perlNumber is how Perl prints a number JSON::XS decoded: an integer
-// literal as an integer, anything else as a double with %.15g.
+// literal as an integer (one too big for 64 bits is kept as its literal
+// text), anything else as a double with %.15g, overflow as Inf or -Inf.
 func perlNumber(lit string) string {
-	if i, err := strconv.ParseInt(lit, 10, 64); err == nil {
-		return strconv.FormatInt(i, 10)
-	}
-	if u, err := strconv.ParseUint(lit, 10, 64); err == nil {
-		return strconv.FormatUint(u, 10)
+	if intLiteral.MatchString(lit) {
+		if i, err := strconv.ParseInt(lit, 10, 64); err == nil {
+			return strconv.FormatInt(i, 10)
+		}
+		if u, err := strconv.ParseUint(lit, 10, 64); err == nil {
+			return strconv.FormatUint(u, 10)
+		}
+		return lit
 	}
 	f, err := strconv.ParseFloat(lit, 64)
 	if err != nil && !errors.Is(err, strconv.ErrRange) {
 		return lit
 	}
-	if f == 0 {
+	switch {
+	case math.IsInf(f, 1):
+		return "Inf"
+	case math.IsInf(f, -1):
+		return "-Inf"
+	case f == 0:
 		return "0"
 	}
 	return strconv.FormatFloat(f, 'g', 15, 64)
