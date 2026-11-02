@@ -1,0 +1,1795 @@
+{
+   "_comment" : "Shared by t/connection_config.t and internal/connconfig. Expected values are what lib/API/ConnectionConfig.pm returns; 'input' is the raw request JSON. Keep Perl and Go in step: a rule changed in one must pass here in both.",
+   "blocked" : [
+      {
+         "blocked" : true,
+         "ip" : "127.0.0.1"
+      },
+      {
+         "blocked" : true,
+         "ip" : "10.0.0.1"
+      },
+      {
+         "blocked" : true,
+         "ip" : "100.64.0.1"
+      },
+      {
+         "blocked" : true,
+         "ip" : "100.127.255.255"
+      },
+      {
+         "blocked" : true,
+         "ip" : "169.254.1.1"
+      },
+      {
+         "blocked" : true,
+         "ip" : "172.16.0.1"
+      },
+      {
+         "blocked" : true,
+         "ip" : "172.31.255.255"
+      },
+      {
+         "blocked" : true,
+         "ip" : "192.168.1.1"
+      },
+      {
+         "blocked" : true,
+         "ip" : "192.0.0.1"
+      },
+      {
+         "blocked" : true,
+         "ip" : "198.18.0.1"
+      },
+      {
+         "blocked" : true,
+         "ip" : "198.19.255.255"
+      },
+      {
+         "blocked" : true,
+         "ip" : "0.0.0.0"
+      },
+      {
+         "blocked" : true,
+         "ip" : "224.0.0.1"
+      },
+      {
+         "blocked" : true,
+         "ip" : "255.255.255.255"
+      },
+      {
+         "blocked" : true,
+         "ip" : "::"
+      },
+      {
+         "blocked" : true,
+         "ip" : "::1"
+      },
+      {
+         "blocked" : true,
+         "ip" : "fd00::1"
+      },
+      {
+         "blocked" : true,
+         "ip" : "fe80::1"
+      },
+      {
+         "blocked" : true,
+         "ip" : "ff02::1"
+      },
+      {
+         "blocked" : true,
+         "ip" : "64:ff9b::1"
+      },
+      {
+         "blocked" : true,
+         "ip" : "::ffff:127.0.0.1"
+      },
+      {
+         "blocked" : true,
+         "ip" : "::ffff:10.1.2.3"
+      },
+      {
+         "blocked" : false,
+         "ip" : "8.8.8.8"
+      },
+      {
+         "blocked" : false,
+         "ip" : "100.63.255.255"
+      },
+      {
+         "blocked" : false,
+         "ip" : "100.128.0.0"
+      },
+      {
+         "blocked" : false,
+         "ip" : "172.15.255.255"
+      },
+      {
+         "blocked" : false,
+         "ip" : "172.32.0.0"
+      },
+      {
+         "blocked" : false,
+         "ip" : "198.17.255.255"
+      },
+      {
+         "blocked" : false,
+         "ip" : "198.20.0.0"
+      },
+      {
+         "blocked" : false,
+         "ip" : "192.0.1.1"
+      },
+      {
+         "blocked" : false,
+         "ip" : "2001:4860::8888"
+      },
+      {
+         "blocked" : false,
+         "ip" : "::ffff:8.8.8.8"
+      },
+      {
+         "blocked" : true,
+         "ip" : "fc00::1"
+      },
+      {
+         "blocked" : false,
+         "ip" : "fbff::1"
+      },
+      {
+         "blocked" : false,
+         "ip" : "fe7f::1"
+      },
+      {
+         "blocked" : true,
+         "ip" : "febf::1"
+      },
+      {
+         "blocked" : false,
+         "ip" : "fec0::1"
+      },
+      {
+         "blocked" : true,
+         "ip" : "64:ff9b::1:1"
+      },
+      {
+         "blocked" : true,
+         "ip" : "not-an-ip"
+      },
+      {
+         "blocked" : true,
+         "ip" : "1.2.3"
+      },
+      {
+         "blocked" : true,
+         "ip" : "::ffff:0:0"
+      }
+   ],
+   "check_host" : [
+      {
+         "env_host" : null,
+         "env_port" : null,
+         "error" : "",
+         "host" : "a.com",
+         "port" : 6667,
+         "resolved" : true,
+         "resolves" : [
+            "8.8.8.8"
+         ]
+      },
+      {
+         "env_host" : null,
+         "env_port" : null,
+         "error" : "Host a.com points to a private address",
+         "host" : "a.com",
+         "port" : 6667,
+         "resolved" : true,
+         "resolves" : [
+            "8.8.8.8",
+            "127.0.0.1"
+         ]
+      },
+      {
+         "env_host" : null,
+         "env_port" : null,
+         "error" : "Host a.com points to a private address",
+         "host" : "a.com",
+         "port" : 6667,
+         "resolved" : true,
+         "resolves" : [
+            "::ffff:127.0.0.1"
+         ]
+      },
+      {
+         "env_host" : null,
+         "env_port" : null,
+         "error" : "",
+         "host" : "a.com",
+         "port" : 6667,
+         "resolved" : true,
+         "resolves" : [
+            "2001:4860::8888"
+         ]
+      },
+      {
+         "env_host" : null,
+         "env_port" : null,
+         "error" : "Couldn't find host nosuch.invalid",
+         "host" : "nosuch.invalid",
+         "port" : 6667,
+         "resolved" : true,
+         "resolves" : []
+      },
+      {
+         "env_host" : null,
+         "env_port" : null,
+         "error" : "Host 127.0.0.1 points to a private address",
+         "host" : "127.0.0.1",
+         "port" : 6667,
+         "resolved" : false,
+         "resolves" : [
+            "8.8.8.8"
+         ]
+      },
+      {
+         "env_host" : null,
+         "env_port" : null,
+         "error" : "",
+         "host" : "8.8.8.8",
+         "port" : 6667,
+         "resolved" : false,
+         "resolves" : [
+            "127.0.0.1"
+         ]
+      },
+      {
+         "env_host" : null,
+         "env_port" : null,
+         "error" : "Host ergo points to a private address",
+         "host" : "ergo",
+         "port" : 6667,
+         "resolved" : true,
+         "resolves" : [
+            "172.18.0.5"
+         ]
+      },
+      {
+         "env_host" : "IRC.relaychat.party",
+         "env_port" : null,
+         "error" : "",
+         "host" : "irc.relaychat.party",
+         "port" : 6667,
+         "resolved" : false,
+         "resolves" : [
+            "127.0.0.1"
+         ]
+      },
+      {
+         "env_host" : "irc.relaychat.party",
+         "env_port" : null,
+         "error" : "Host irc.relaychat.party points to a private address",
+         "host" : "irc.relaychat.party",
+         "port" : 5005,
+         "resolved" : true,
+         "resolves" : [
+            "127.0.0.1"
+         ]
+      },
+      {
+         "env_host" : "ergo",
+         "env_port" : "6697",
+         "error" : "",
+         "host" : "ergo",
+         "port" : 6697,
+         "resolved" : false,
+         "resolves" : [
+            "172.18.0.5"
+         ]
+      },
+      {
+         "env_host" : "ergo",
+         "env_port" : "6697",
+         "error" : "Host ergo points to a private address",
+         "host" : "ergo",
+         "port" : 6667,
+         "resolved" : true,
+         "resolves" : [
+            "172.18.0.5"
+         ]
+      },
+      {
+         "env_host" : "127.0.0.1",
+         "env_port" : null,
+         "error" : "",
+         "host" : "127.0.0.1",
+         "port" : 6667,
+         "resolved" : false,
+         "resolves" : []
+      }
+   ],
+   "clean" : [
+      {
+         "input" : "{\"Host\":\" ergo \",\"Port\":\"6667\",\"Nick\":\"lee\",\"Channels\":[\"#a\",\"\",\" #b \"],\"Highlight\":[\"lee\",\"\"],\"Alias\":\" my net \",\"Ssl\":1,\"Pass\":\" pw \",\"Extra\":1}",
+         "name" : "full config, normalised",
+         "want" : {
+            "Alias" : "my net",
+            "Channels" : [
+               "#a",
+               "#b"
+            ],
+            "Highlight" : [
+               "lee"
+            ],
+            "Host" : "ergo",
+            "Nick" : "lee",
+            "Pass" : " pw ",
+            "Port" : 6667,
+            "SASL" : false,
+            "Ssl" : true
+         }
+      },
+      {
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"User\":\"\",\"Alias\":\"  \",\"Pass\":\"\"}",
+         "name" : "blank optionals omitted",
+         "want" : {
+            "Channels" : [],
+            "Highlight" : [],
+            "Host" : "irc.libera.chat",
+            "Nick" : "lee",
+            "Port" : 6697,
+            "SASL" : false,
+            "Ssl" : false
+         }
+      },
+      {
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Host\":\"irc.libera.chat\"}",
+         "name" : "Host irc.libera.chat",
+         "want" : {
+            "Channels" : [],
+            "Highlight" : [],
+            "Host" : "irc.libera.chat",
+            "Nick" : "lee",
+            "Port" : 6697,
+            "SASL" : false,
+            "Ssl" : false
+         }
+      },
+      {
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Host\":\"1.2.3.4\"}",
+         "name" : "Host 1.2.3.4",
+         "want" : {
+            "Channels" : [],
+            "Highlight" : [],
+            "Host" : "1.2.3.4",
+            "Nick" : "lee",
+            "Port" : 6697,
+            "SASL" : false,
+            "Ssl" : false
+         }
+      },
+      {
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Host\":\"a-b.c\"}",
+         "name" : "Host a-b.c",
+         "want" : {
+            "Channels" : [],
+            "Highlight" : [],
+            "Host" : "a-b.c",
+            "Nick" : "lee",
+            "Port" : 6697,
+            "SASL" : false,
+            "Ssl" : false
+         }
+      },
+      {
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Host\":\"ergo\"}",
+         "name" : "Host ergo",
+         "want" : {
+            "Channels" : [],
+            "Highlight" : [],
+            "Host" : "ergo",
+            "Nick" : "lee",
+            "Port" : 6697,
+            "SASL" : false,
+            "Ssl" : false
+         }
+      },
+      {
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Host\":\"Irc.Example.COM\"}",
+         "name" : "Host Irc.Example.COM",
+         "want" : {
+            "Channels" : [],
+            "Highlight" : [],
+            "Host" : "Irc.Example.COM",
+            "Nick" : "lee",
+            "Port" : 6697,
+            "SASL" : false,
+            "Ssl" : false
+         }
+      },
+      {
+         "error" : "Host must be an IPv4 address or a domain name",
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Host\":\"::1\"}",
+         "name" : "Host ::1"
+      },
+      {
+         "error" : "Host must be an IPv4 address or a domain name",
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Host\":\"-a.com\"}",
+         "name" : "Host -a.com"
+      },
+      {
+         "error" : "Host must be an IPv4 address or a domain name",
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Host\":\"a-.com\"}",
+         "name" : "Host a-.com"
+      },
+      {
+         "error" : "Host must be an IPv4 address or a domain name",
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Host\":\"a..b\"}",
+         "name" : "Host a..b"
+      },
+      {
+         "error" : "Host must be an IPv4 address or a domain name",
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Host\":\"a.com.\"}",
+         "name" : "Host a.com."
+      },
+      {
+         "error" : "Host must be an IPv4 address or a domain name",
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Host\":\"a_b.com\"}",
+         "name" : "Host a_b.com"
+      },
+      {
+         "error" : "Host must be an IPv4 address or a domain name",
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Host\":\"a b\"}",
+         "name" : "Host a b"
+      },
+      {
+         "error" : "Host must be an IPv4 address or a domain name",
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Host\":\"1.2.3.256\"}",
+         "name" : "Host 1.2.3.256"
+      },
+      {
+         "error" : "Host must be an IPv4 address or a domain name",
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Host\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}",
+         "name" : "Host aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      {
+         "error" : "Host is required",
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Host\":\"\"}",
+         "name" : "Host "
+      },
+      {
+         "error" : "Host is required",
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Host\":\" \"}",
+         "name" : "Host  "
+      },
+      {
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Host\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}",
+         "name" : "Host of 253 characters",
+         "want" : {
+            "Channels" : [],
+            "Highlight" : [],
+            "Host" : "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "Nick" : "lee",
+            "Port" : 6697,
+            "SASL" : false,
+            "Ssl" : false
+         }
+      },
+      {
+         "error" : "Host must be an IPv4 address or a domain name",
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Host\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}",
+         "name" : "Host of 254 characters"
+      },
+      {
+         "error" : "Host must be an IPv4 address or a domain name",
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Host\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.a\"}",
+         "name" : "Host of 255 characters"
+      },
+      {
+         "error" : "Host is required",
+         "input" : "{\"Port\":6667,\"Nick\":\"lee\"}",
+         "name" : "missing Host"
+      },
+      {
+         "error" : "Host is required",
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Host\":null}",
+         "name" : "Host null"
+      },
+      {
+         "error" : "Host must be an IPv4 address or a domain name",
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Host\":[\"x\"]}",
+         "name" : "Host list"
+      },
+      {
+         "error" : "Host must be an IPv4 address or a domain name",
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Host\":123}",
+         "name" : "Host number"
+      },
+      {
+         "error" : "Host must be an IPv4 address or a domain name",
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Host\":true}",
+         "name" : "Host true"
+      },
+      {
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Host\":\" ergo \"}",
+         "name" : "Host NBSP-padded",
+         "want" : {
+            "Channels" : [],
+            "Highlight" : [],
+            "Host" : "ergo",
+            "Nick" : "lee",
+            "Port" : 6697,
+            "SASL" : false,
+            "Ssl" : false
+         }
+      },
+      {
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Port\":1}",
+         "name" : "Port 1",
+         "want" : {
+            "Channels" : [],
+            "Highlight" : [],
+            "Host" : "irc.libera.chat",
+            "Nick" : "lee",
+            "Port" : 1,
+            "SASL" : false,
+            "Ssl" : false
+         }
+      },
+      {
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Port\":65535}",
+         "name" : "Port 65535",
+         "want" : {
+            "Channels" : [],
+            "Highlight" : [],
+            "Host" : "irc.libera.chat",
+            "Nick" : "lee",
+            "Port" : 65535,
+            "SASL" : false,
+            "Ssl" : false
+         }
+      },
+      {
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Port\":\"6697\"}",
+         "name" : "Port \"6697\"",
+         "want" : {
+            "Channels" : [],
+            "Highlight" : [],
+            "Host" : "irc.libera.chat",
+            "Nick" : "lee",
+            "Port" : 6697,
+            "SASL" : false,
+            "Ssl" : false
+         }
+      },
+      {
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Port\":\" 6697 \"}",
+         "name" : "Port \" 6697 \"",
+         "want" : {
+            "Channels" : [],
+            "Highlight" : [],
+            "Host" : "irc.libera.chat",
+            "Nick" : "lee",
+            "Port" : 6697,
+            "SASL" : false,
+            "Ssl" : false
+         }
+      },
+      {
+         "error" : "Port must be a number from 1 to 65535",
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Port\":0}",
+         "name" : "Port 0"
+      },
+      {
+         "error" : "Port must be a number from 1 to 65535",
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Port\":65536}",
+         "name" : "Port 65536"
+      },
+      {
+         "error" : "Port must be a number from 1 to 65535",
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Port\":\"abc\"}",
+         "name" : "Port \"abc\""
+      },
+      {
+         "error" : "Port must be a number from 1 to 65535",
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Port\":\"66 97\"}",
+         "name" : "Port \"66 97\""
+      },
+      {
+         "error" : "Port must be a number from 1 to 65535",
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Port\":6.5}",
+         "name" : "Port 6.5"
+      },
+      {
+         "error" : "Port must be a number from 1 to 65535",
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Port\":\"\"}",
+         "name" : "Port \"\""
+      },
+      {
+         "error" : "Port must be a number from 1 to 65535",
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Port\":-1}",
+         "name" : "Port -1"
+      },
+      {
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Port\":6667.0}",
+         "name" : "Port 6667.0",
+         "want" : {
+            "Channels" : [],
+            "Highlight" : [],
+            "Host" : "irc.libera.chat",
+            "Nick" : "lee",
+            "Port" : 6667,
+            "SASL" : false,
+            "Ssl" : false
+         }
+      },
+      {
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Port\":1e3}",
+         "name" : "Port 1e3",
+         "want" : {
+            "Channels" : [],
+            "Highlight" : [],
+            "Host" : "irc.libera.chat",
+            "Nick" : "lee",
+            "Port" : 1000,
+            "SASL" : false,
+            "Ssl" : false
+         }
+      },
+      {
+         "error" : "Port must be a number from 1 to 65535",
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Port\":true}",
+         "name" : "Port true"
+      },
+      {
+         "error" : "Port must be a number from 1 to 65535",
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Port\":false}",
+         "name" : "Port false"
+      },
+      {
+         "error" : "Port must be a number from 1 to 65535",
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Port\":null}",
+         "name" : "Port null"
+      },
+      {
+         "error" : "Port must be a number from 1 to 65535",
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Port\":[]}",
+         "name" : "Port []"
+      },
+      {
+         "error" : "Port must be a number from 1 to 65535",
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Port\":{}}",
+         "name" : "Port {}"
+      },
+      {
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Port\":\"06667\"}",
+         "name" : "Port \"06667\"",
+         "want" : {
+            "Channels" : [],
+            "Highlight" : [],
+            "Host" : "irc.libera.chat",
+            "Nick" : "lee",
+            "Port" : 6667,
+            "SASL" : false,
+            "Ssl" : false
+         }
+      },
+      {
+         "error" : "Port must be a number from 1 to 65535",
+         "input" : "{\"Host\":\"a.com\",\"Nick\":\"lee\"}",
+         "name" : "missing Port"
+      },
+      {
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Nick\":\"lee\"}",
+         "name" : "Nick \"lee\"",
+         "want" : {
+            "Channels" : [],
+            "Highlight" : [],
+            "Host" : "irc.libera.chat",
+            "Nick" : "lee",
+            "Port" : 6697,
+            "SASL" : false,
+            "Ssl" : false
+         }
+      },
+      {
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Nick\":\"[away]\"}",
+         "name" : "Nick \"[away]\"",
+         "want" : {
+            "Channels" : [],
+            "Highlight" : [],
+            "Host" : "irc.libera.chat",
+            "Nick" : "[away]",
+            "Port" : 6697,
+            "SASL" : false,
+            "Ssl" : false
+         }
+      },
+      {
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Nick\":\"_2cool\"}",
+         "name" : "Nick \"_2cool\"",
+         "want" : {
+            "Channels" : [],
+            "Highlight" : [],
+            "Host" : "irc.libera.chat",
+            "Nick" : "_2cool",
+            "Port" : 6697,
+            "SASL" : false,
+            "Ssl" : false
+         }
+      },
+      {
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Nick\":\"a-b\"}",
+         "name" : "Nick \"a-b\"",
+         "want" : {
+            "Channels" : [],
+            "Highlight" : [],
+            "Host" : "irc.libera.chat",
+            "Nick" : "a-b",
+            "Port" : 6697,
+            "SASL" : false,
+            "Ssl" : false
+         }
+      },
+      {
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Nick\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}",
+         "name" : "Nick \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"",
+         "want" : {
+            "Channels" : [],
+            "Highlight" : [],
+            "Host" : "irc.libera.chat",
+            "Nick" : "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "Port" : 6697,
+            "SASL" : false,
+            "Ssl" : false
+         }
+      },
+      {
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Nick\":\"`x\\\\y^{|}\"}",
+         "name" : "Nick \"`x\\\\y^{|}\"",
+         "want" : {
+            "Channels" : [],
+            "Highlight" : [],
+            "Host" : "irc.libera.chat",
+            "Nick" : "`x\\y^{|}",
+            "Port" : 6697,
+            "SASL" : false,
+            "Ssl" : false
+         }
+      },
+      {
+         "error" : "Nick must be up to 32 letters, digits, - or [ ] \\ ` _ ^ { | }, not starting with a digit or -",
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Nick\":\"2cool\"}",
+         "name" : "Nick \"2cool\""
+      },
+      {
+         "error" : "Nick must be up to 32 letters, digits, - or [ ] \\ ` _ ^ { | }, not starting with a digit or -",
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Nick\":\"-a\"}",
+         "name" : "Nick \"-a\""
+      },
+      {
+         "error" : "Nick must be up to 32 letters, digits, - or [ ] \\ ` _ ^ { | }, not starting with a digit or -",
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Nick\":\"a b\"}",
+         "name" : "Nick \"a b\""
+      },
+      {
+         "error" : "Nick must be up to 32 letters, digits, - or [ ] \\ ` _ ^ { | }, not starting with a digit or -",
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Nick\":\"a.b\"}",
+         "name" : "Nick \"a.b\""
+      },
+      {
+         "error" : "Nick must be up to 32 letters, digits, - or [ ] \\ ` _ ^ { | }, not starting with a digit or -",
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Nick\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}",
+         "name" : "Nick \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\""
+      },
+      {
+         "error" : "Nick must be up to 32 letters, digits, - or [ ] \\ ` _ ^ { | }, not starting with a digit or -",
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Nick\":\"lée\"}",
+         "name" : "Nick \"lée\""
+      },
+      {
+         "error" : "Nick is required",
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Nick\":\"\"}",
+         "name" : "Nick \"\""
+      },
+      {
+         "error" : "Nick is required",
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Nick\":\"  \"}",
+         "name" : "Nick \"  \""
+      },
+      {
+         "error" : "Nick must be up to 32 letters, digits, - or [ ] \\ ` _ ^ { | }, not starting with a digit or -",
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Nick\":12}",
+         "name" : "Nick 12"
+      },
+      {
+         "error" : "Nick must be up to 32 letters, digits, - or [ ] \\ ` _ ^ { | }, not starting with a digit or -",
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Nick\":1.5}",
+         "name" : "Nick 1.5"
+      },
+      {
+         "error" : "Nick is required",
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Nick\":true}",
+         "name" : "Nick true"
+      },
+      {
+         "error" : "Nick is required",
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Nick\":null}",
+         "name" : "Nick null"
+      },
+      {
+         "error" : "Nick is required",
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Nick\":[]}",
+         "name" : "Nick []"
+      },
+      {
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Nick\":\" lee \"}",
+         "name" : "Nick \" lee \"",
+         "want" : {
+            "Channels" : [],
+            "Highlight" : [],
+            "Host" : "irc.libera.chat",
+            "Nick" : "lee",
+            "Port" : 6697,
+            "SASL" : false,
+            "Ssl" : false
+         }
+      },
+      {
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Nick\":\" lee\"}",
+         "name" : "Nick \" lee\"",
+         "want" : {
+            "Channels" : [],
+            "Highlight" : [],
+            "Host" : "irc.libera.chat",
+            "Nick" : "lee",
+            "Port" : 6697,
+            "SASL" : false,
+            "Ssl" : false
+         }
+      },
+      {
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Nick\":\"　lee　\"}",
+         "name" : "Nick \"　lee　\"",
+         "want" : {
+            "Channels" : [],
+            "Highlight" : [],
+            "Host" : "irc.libera.chat",
+            "Nick" : "lee",
+            "Port" : 6697,
+            "SASL" : false,
+            "Ssl" : false
+         }
+      },
+      {
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Nick\":\"lee\\n\"}",
+         "name" : "Nick \"lee\\n\"",
+         "want" : {
+            "Channels" : [],
+            "Highlight" : [],
+            "Host" : "irc.libera.chat",
+            "Nick" : "lee",
+            "Port" : 6697,
+            "SASL" : false,
+            "Ssl" : false
+         }
+      },
+      {
+         "error" : "Nick must be up to 32 letters, digits, - or [ ] \\ ` _ ^ { | }, not starting with a digit or -",
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Nick\":\"le\\te\"}",
+         "name" : "Nick \"le\\te\""
+      },
+      {
+         "error" : "Nick is required",
+         "input" : "{\"Host\":\"a.com\",\"Port\":1}",
+         "name" : "missing Nick"
+      },
+      {
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"User\":\" ~lee.a \"}",
+         "name" : "User \" ~lee.a \"",
+         "want" : {
+            "Channels" : [],
+            "Highlight" : [],
+            "Host" : "irc.libera.chat",
+            "Nick" : "lee",
+            "Port" : 6697,
+            "SASL" : false,
+            "Ssl" : false,
+            "User" : "~lee.a"
+         }
+      },
+      {
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"User\":\"2cool\"}",
+         "name" : "User \"2cool\"",
+         "want" : {
+            "Channels" : [],
+            "Highlight" : [],
+            "Host" : "irc.libera.chat",
+            "Nick" : "lee",
+            "Port" : 6697,
+            "SASL" : false,
+            "Ssl" : false,
+            "User" : "2cool"
+         }
+      },
+      {
+         "error" : "Username must be up to 32 letters, digits, - . ~ or [ ] \\ ` _ ^ { | }",
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"User\":\"a b\"}",
+         "name" : "User \"a b\""
+      },
+      {
+         "error" : "Username must be up to 32 letters, digits, - . ~ or [ ] \\ ` _ ^ { | }",
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"User\":\"a@b\"}",
+         "name" : "User \"a@b\""
+      },
+      {
+         "error" : "Username must be up to 32 letters, digits, - . ~ or [ ] \\ ` _ ^ { | }",
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"User\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}",
+         "name" : "User \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\""
+      },
+      {
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"User\":12}",
+         "name" : "User 12",
+         "want" : {
+            "Channels" : [],
+            "Highlight" : [],
+            "Host" : "irc.libera.chat",
+            "Nick" : "lee",
+            "Port" : 6697,
+            "SASL" : false,
+            "Ssl" : false,
+            "User" : "12"
+         }
+      },
+      {
+         "error" : "Username must be up to 32 letters, digits, - . ~ or [ ] \\ ` _ ^ { | }",
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"User\":true}",
+         "name" : "User true"
+      },
+      {
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"User\":null}",
+         "name" : "User null",
+         "want" : {
+            "Channels" : [],
+            "Highlight" : [],
+            "Host" : "irc.libera.chat",
+            "Nick" : "lee",
+            "Port" : 6697,
+            "SASL" : false,
+            "Ssl" : false
+         }
+      },
+      {
+         "error" : "Username must be up to 32 letters, digits, - . ~ or [ ] \\ ` _ ^ { | }",
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"User\":[]}",
+         "name" : "User []"
+      },
+      {
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"User\":\"\"}",
+         "name" : "User \"\"",
+         "want" : {
+            "Channels" : [],
+            "Highlight" : [],
+            "Host" : "irc.libera.chat",
+            "Nick" : "lee",
+            "Port" : 6697,
+            "SASL" : false,
+            "Ssl" : false
+         }
+      },
+      {
+         "error" : "Password can't contain line breaks",
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Pass\":\"a\\r\\nQUIT\"}",
+         "name" : "Pass \"a\\r\\nQUIT\""
+      },
+      {
+         "error" : "Password can't contain line breaks",
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Pass\":\"a\\nb\"}",
+         "name" : "Pass \"a\\nb\""
+      },
+      {
+         "error" : "Password can't contain line breaks",
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Pass\":\"a\\rb\"}",
+         "name" : "Pass \"a\\rb\""
+      },
+      {
+         "error" : "Password can't contain line breaks",
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Pass\":\"a\\u0000b\"}",
+         "name" : "Pass \"a\\u0000b\""
+      },
+      {
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Pass\":\"a b\"}",
+         "name" : "Pass \"a b\"",
+         "want" : {
+            "Channels" : [],
+            "Highlight" : [],
+            "Host" : "irc.libera.chat",
+            "Nick" : "lee",
+            "Pass" : "a b",
+            "Port" : 6697,
+            "SASL" : false,
+            "Ssl" : false
+         }
+      },
+      {
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Pass\":\" pw \"}",
+         "name" : "Pass \" pw \"",
+         "want" : {
+            "Channels" : [],
+            "Highlight" : [],
+            "Host" : "irc.libera.chat",
+            "Nick" : "lee",
+            "Pass" : " pw ",
+            "Port" : 6697,
+            "SASL" : false,
+            "Ssl" : false
+         }
+      },
+      {
+         "error" : "Password must be text",
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Pass\":[\"a\"]}",
+         "name" : "Pass [\"a\"]"
+      },
+      {
+         "error" : "Password must be text",
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Pass\":true}",
+         "name" : "Pass true"
+      },
+      {
+         "error" : "Password must be text",
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Pass\":false}",
+         "name" : "Pass false"
+      },
+      {
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Pass\":12}",
+         "name" : "Pass 12",
+         "want" : {
+            "Channels" : [],
+            "Highlight" : [],
+            "Host" : "irc.libera.chat",
+            "Nick" : "lee",
+            "Pass" : "12",
+            "Port" : 6697,
+            "SASL" : false,
+            "Ssl" : false
+         }
+      },
+      {
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Pass\":1.5}",
+         "name" : "Pass 1.5",
+         "want" : {
+            "Channels" : [],
+            "Highlight" : [],
+            "Host" : "irc.libera.chat",
+            "Nick" : "lee",
+            "Pass" : "1.5",
+            "Port" : 6697,
+            "SASL" : false,
+            "Ssl" : false
+         }
+      },
+      {
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Pass\":0}",
+         "name" : "Pass 0",
+         "want" : {
+            "Channels" : [],
+            "Highlight" : [],
+            "Host" : "irc.libera.chat",
+            "Nick" : "lee",
+            "Pass" : "0",
+            "Port" : 6697,
+            "SASL" : false,
+            "Ssl" : false
+         }
+      },
+      {
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Pass\":null}",
+         "name" : "Pass null",
+         "want" : {
+            "Channels" : [],
+            "Highlight" : [],
+            "Host" : "irc.libera.chat",
+            "Nick" : "lee",
+            "Port" : 6697,
+            "SASL" : false,
+            "Ssl" : false
+         }
+      },
+      {
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Pass\":\"\"}",
+         "name" : "Pass \"\"",
+         "want" : {
+            "Channels" : [],
+            "Highlight" : [],
+            "Host" : "irc.libera.chat",
+            "Nick" : "lee",
+            "Port" : 6697,
+            "SASL" : false,
+            "Ssl" : false
+         }
+      },
+      {
+         "error" : "Password must be text",
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Pass\":{}}",
+         "name" : "Pass {}"
+      },
+      {
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Channels\":[\"#Foo-Bar\"]}",
+         "name" : "Channels [\"#Foo-Bar\"]",
+         "want" : {
+            "Channels" : [
+               "#Foo-Bar"
+            ],
+            "Highlight" : [],
+            "Host" : "irc.libera.chat",
+            "Nick" : "lee",
+            "Port" : 6697,
+            "SASL" : false,
+            "Ssl" : false
+         }
+      },
+      {
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Channels\":[\"&local\"]}",
+         "name" : "Channels [\"&local\"]",
+         "want" : {
+            "Channels" : [
+               "&local"
+            ],
+            "Highlight" : [],
+            "Host" : "irc.libera.chat",
+            "Nick" : "lee",
+            "Port" : 6697,
+            "SASL" : false,
+            "Ssl" : false
+         }
+      },
+      {
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Channels\":[\"##java\"]}",
+         "name" : "Channels [\"##java\"]",
+         "want" : {
+            "Channels" : [
+               "##java"
+            ],
+            "Highlight" : [],
+            "Host" : "irc.libera.chat",
+            "Nick" : "lee",
+            "Port" : 6697,
+            "SASL" : false,
+            "Ssl" : false
+         }
+      },
+      {
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Channels\":[\"+x\"]}",
+         "name" : "Channels [\"+x\"]",
+         "want" : {
+            "Channels" : [
+               "+x"
+            ],
+            "Highlight" : [],
+            "Host" : "irc.libera.chat",
+            "Nick" : "lee",
+            "Port" : 6697,
+            "SASL" : false,
+            "Ssl" : false
+         }
+      },
+      {
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Channels\":[\"!12345x\"]}",
+         "name" : "Channels [\"!12345x\"]",
+         "want" : {
+            "Channels" : [
+               "!12345x"
+            ],
+            "Highlight" : [],
+            "Host" : "irc.libera.chat",
+            "Nick" : "lee",
+            "Port" : 6697,
+            "SASL" : false,
+            "Ssl" : false
+         }
+      },
+      {
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Channels\":[\"#é\"]}",
+         "name" : "Channels [\"#é\"]",
+         "want" : {
+            "Channels" : [
+               "#é"
+            ],
+            "Highlight" : [],
+            "Host" : "irc.libera.chat",
+            "Nick" : "lee",
+            "Port" : 6697,
+            "SASL" : false,
+            "Ssl" : false
+         }
+      },
+      {
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Channels\":[\"#aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]}",
+         "name" : "Channels [\"#aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]",
+         "want" : {
+            "Channels" : [
+               "#aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            ],
+            "Highlight" : [],
+            "Host" : "irc.libera.chat",
+            "Nick" : "lee",
+            "Port" : 6697,
+            "SASL" : false,
+            "Ssl" : false
+         }
+      },
+      {
+         "error" : "a isn't a valid channel name",
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Channels\":[\"a\"]}",
+         "name" : "Channels [\"a\"]"
+      },
+      {
+         "error" : "#a b isn't a valid channel name",
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Channels\":[\"#a b\"]}",
+         "name" : "Channels [\"#a b\"]"
+      },
+      {
+         "error" : "#a,#b isn't a valid channel name",
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Channels\":[\"#a,#b\"]}",
+         "name" : "Channels [\"#a,#b\"]"
+      },
+      {
+         "error" : "#a\u0007 isn't a valid channel name",
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Channels\":[\"#a\\u0007\"]}",
+         "name" : "Channels [\"#a\\u0007\"]"
+      },
+      {
+         "error" : "#aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa isn't a valid channel name",
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Channels\":[\"#aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]}",
+         "name" : "Channels [\"#aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]"
+      },
+      {
+         "error" : "# isn't a valid channel name",
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Channels\":[\"#\"]}",
+         "name" : "Channels [\"#\"]"
+      },
+      {
+         "error" : "Channels must be a list",
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Channels\":\"#a\"}",
+         "name" : "Channels \"#a\""
+      },
+      {
+         "error" : "Channels must be a list",
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Channels\":[[\"#a\"]]}",
+         "name" : "Channels [[\"#a\"]]"
+      },
+      {
+         "error" : "1 isn't a valid channel name",
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Channels\":[\"#a\", 1]}",
+         "name" : "Channels [\"#a\", 1]"
+      },
+      {
+         "error" : "Channels must be a list",
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Channels\":[\"#a\", null]}",
+         "name" : "Channels [\"#a\", null]"
+      },
+      {
+         "error" : "Channels must be a list",
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Channels\":[\"#a\", true]}",
+         "name" : "Channels [\"#a\", true]"
+      },
+      {
+         "error" : "#a b isn't a valid channel name",
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Channels\":[\"#a b\"]}",
+         "name" : "Channels [\"#a b\"]"
+      },
+      {
+         "error" : "# isn't a valid channel name",
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Channels\":[\"#　\"]}",
+         "name" : "Channels [\"#　\"]"
+      },
+      {
+         "error" : "#ab isn't a valid channel name",
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Channels\":[\"#a\\u0085b\"]}",
+         "name" : "Channels [\"#a\\u0085b\"]"
+      },
+      {
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Channels\":[]}",
+         "name" : "Channels []",
+         "want" : {
+            "Channels" : [],
+            "Highlight" : [],
+            "Host" : "irc.libera.chat",
+            "Nick" : "lee",
+            "Port" : 6697,
+            "SASL" : false,
+            "Ssl" : false
+         }
+      },
+      {
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Channels\":null}",
+         "name" : "Channels null",
+         "want" : {
+            "Channels" : [],
+            "Highlight" : [],
+            "Host" : "irc.libera.chat",
+            "Nick" : "lee",
+            "Port" : 6697,
+            "SASL" : false,
+            "Ssl" : false
+         }
+      },
+      {
+         "error" : "Channels must be a list",
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Channels\":{}}",
+         "name" : "Channels {}"
+      },
+      {
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Channels\":[\"\", \" \"]}",
+         "name" : "Channels [\"\", \" \"]",
+         "want" : {
+            "Channels" : [],
+            "Highlight" : [],
+            "Host" : "irc.libera.chat",
+            "Nick" : "lee",
+            "Port" : 6697,
+            "SASL" : false,
+            "Ssl" : false
+         }
+      },
+      {
+         "error" : "Highlight must be a list",
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Highlight\":\"lee\"}",
+         "name" : "Highlight \"lee\""
+      },
+      {
+         "error" : "Highlight words can't contain control characters",
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Highlight\":[\"a\\nb\"]}",
+         "name" : "Highlight [\"a\\nb\"]"
+      },
+      {
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Highlight\":[\"lee\", \"\"]}",
+         "name" : "Highlight [\"lee\", \"\"]",
+         "want" : {
+            "Channels" : [],
+            "Highlight" : [
+               "lee"
+            ],
+            "Host" : "irc.libera.chat",
+            "Nick" : "lee",
+            "Port" : 6697,
+            "SASL" : false,
+            "Ssl" : false
+         }
+      },
+      {
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Highlight\":[1]}",
+         "name" : "Highlight [1]",
+         "want" : {
+            "Channels" : [],
+            "Highlight" : [
+               "1"
+            ],
+            "Host" : "irc.libera.chat",
+            "Nick" : "lee",
+            "Port" : 6697,
+            "SASL" : false,
+            "Ssl" : false
+         }
+      },
+      {
+         "error" : "Highlight must be a list",
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Highlight\":[null]}",
+         "name" : "Highlight [null]"
+      },
+      {
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Highlight\":[\" \"]}",
+         "name" : "Highlight [\" \"]",
+         "want" : {
+            "Channels" : [],
+            "Highlight" : [],
+            "Host" : "irc.libera.chat",
+            "Nick" : "lee",
+            "Port" : 6697,
+            "SASL" : false,
+            "Ssl" : false
+         }
+      },
+      {
+         "error" : "Highlight words can't contain control characters",
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Highlight\":[\"a\\u007fb\"]}",
+         "name" : "Highlight [\"a\\u007fb\"]"
+      },
+      {
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Alias\":\"Libera Chat 2\"}",
+         "name" : "Alias \"Libera Chat 2\"",
+         "want" : {
+            "Alias" : "Libera Chat 2",
+            "Channels" : [],
+            "Highlight" : [],
+            "Host" : "irc.libera.chat",
+            "Nick" : "lee",
+            "Port" : 6697,
+            "SASL" : false,
+            "Ssl" : false
+         }
+      },
+      {
+         "error" : "Network alias can only use letters, digits and spaces, up to 32 characters",
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Alias\":\"libera.chat\"}",
+         "name" : "Alias \"libera.chat\""
+      },
+      {
+         "error" : "Network alias can only use letters, digits and spaces, up to 32 characters",
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Alias\":\"a-b\"}",
+         "name" : "Alias \"a-b\""
+      },
+      {
+         "error" : "Network alias can only use letters, digits and spaces, up to 32 characters",
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Alias\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}",
+         "name" : "Alias \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\""
+      },
+      {
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Alias\":\"  \"}",
+         "name" : "Alias \"  \"",
+         "want" : {
+            "Channels" : [],
+            "Highlight" : [],
+            "Host" : "irc.libera.chat",
+            "Nick" : "lee",
+            "Port" : 6697,
+            "SASL" : false,
+            "Ssl" : false
+         }
+      },
+      {
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Alias\":12}",
+         "name" : "Alias 12",
+         "want" : {
+            "Alias" : "12",
+            "Channels" : [],
+            "Highlight" : [],
+            "Host" : "irc.libera.chat",
+            "Nick" : "lee",
+            "Port" : 6697,
+            "SASL" : false,
+            "Ssl" : false
+         }
+      },
+      {
+         "error" : "Network alias can only use letters, digits and spaces, up to 32 characters",
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Alias\":true}",
+         "name" : "Alias true"
+      },
+      {
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Alias\":null}",
+         "name" : "Alias null",
+         "want" : {
+            "Channels" : [],
+            "Highlight" : [],
+            "Host" : "irc.libera.chat",
+            "Nick" : "lee",
+            "Port" : 6697,
+            "SASL" : false,
+            "Ssl" : false
+         }
+      },
+      {
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Alias\":\" net\"}",
+         "name" : "Alias \" net\"",
+         "want" : {
+            "Alias" : "net",
+            "Channels" : [],
+            "Highlight" : [],
+            "Host" : "irc.libera.chat",
+            "Nick" : "lee",
+            "Port" : 6697,
+            "SASL" : false,
+            "Ssl" : false
+         }
+      },
+      {
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Ssl\":true,\"SASL\":true}",
+         "name" : "Ssl true",
+         "want" : {
+            "Channels" : [],
+            "Highlight" : [],
+            "Host" : "irc.libera.chat",
+            "Nick" : "lee",
+            "Port" : 6697,
+            "SASL" : true,
+            "Ssl" : true
+         }
+      },
+      {
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Ssl\":false,\"SASL\":false}",
+         "name" : "Ssl false",
+         "want" : {
+            "Channels" : [],
+            "Highlight" : [],
+            "Host" : "irc.libera.chat",
+            "Nick" : "lee",
+            "Port" : 6697,
+            "SASL" : false,
+            "Ssl" : false
+         }
+      },
+      {
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Ssl\":1,\"SASL\":1}",
+         "name" : "Ssl 1",
+         "want" : {
+            "Channels" : [],
+            "Highlight" : [],
+            "Host" : "irc.libera.chat",
+            "Nick" : "lee",
+            "Port" : 6697,
+            "SASL" : true,
+            "Ssl" : true
+         }
+      },
+      {
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Ssl\":0,\"SASL\":0}",
+         "name" : "Ssl 0",
+         "want" : {
+            "Channels" : [],
+            "Highlight" : [],
+            "Host" : "irc.libera.chat",
+            "Nick" : "lee",
+            "Port" : 6697,
+            "SASL" : false,
+            "Ssl" : false
+         }
+      },
+      {
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Ssl\":0.0,\"SASL\":0.0}",
+         "name" : "Ssl 0.0",
+         "want" : {
+            "Channels" : [],
+            "Highlight" : [],
+            "Host" : "irc.libera.chat",
+            "Nick" : "lee",
+            "Port" : 6697,
+            "SASL" : false,
+            "Ssl" : false
+         }
+      },
+      {
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Ssl\":\"0\",\"SASL\":\"0\"}",
+         "name" : "Ssl \"0\"",
+         "want" : {
+            "Channels" : [],
+            "Highlight" : [],
+            "Host" : "irc.libera.chat",
+            "Nick" : "lee",
+            "Port" : 6697,
+            "SASL" : false,
+            "Ssl" : false
+         }
+      },
+      {
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Ssl\":\"false\",\"SASL\":\"false\"}",
+         "name" : "Ssl \"false\"",
+         "want" : {
+            "Channels" : [],
+            "Highlight" : [],
+            "Host" : "irc.libera.chat",
+            "Nick" : "lee",
+            "Port" : 6697,
+            "SASL" : true,
+            "Ssl" : true
+         }
+      },
+      {
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Ssl\":\"\",\"SASL\":\"\"}",
+         "name" : "Ssl \"\"",
+         "want" : {
+            "Channels" : [],
+            "Highlight" : [],
+            "Host" : "irc.libera.chat",
+            "Nick" : "lee",
+            "Port" : 6697,
+            "SASL" : false,
+            "Ssl" : false
+         }
+      },
+      {
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Ssl\":\"0.0\",\"SASL\":\"0.0\"}",
+         "name" : "Ssl \"0.0\"",
+         "want" : {
+            "Channels" : [],
+            "Highlight" : [],
+            "Host" : "irc.libera.chat",
+            "Nick" : "lee",
+            "Port" : 6697,
+            "SASL" : true,
+            "Ssl" : true
+         }
+      },
+      {
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Ssl\":\"00\",\"SASL\":\"00\"}",
+         "name" : "Ssl \"00\"",
+         "want" : {
+            "Channels" : [],
+            "Highlight" : [],
+            "Host" : "irc.libera.chat",
+            "Nick" : "lee",
+            "Port" : 6697,
+            "SASL" : true,
+            "Ssl" : true
+         }
+      },
+      {
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Ssl\":[],\"SASL\":[]}",
+         "name" : "Ssl []",
+         "want" : {
+            "Channels" : [],
+            "Highlight" : [],
+            "Host" : "irc.libera.chat",
+            "Nick" : "lee",
+            "Port" : 6697,
+            "SASL" : true,
+            "Ssl" : true
+         }
+      },
+      {
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Ssl\":{},\"SASL\":{}}",
+         "name" : "Ssl {}",
+         "want" : {
+            "Channels" : [],
+            "Highlight" : [],
+            "Host" : "irc.libera.chat",
+            "Nick" : "lee",
+            "Port" : 6697,
+            "SASL" : true,
+            "Ssl" : true
+         }
+      },
+      {
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Ssl\":null,\"SASL\":null}",
+         "name" : "Ssl null",
+         "want" : {
+            "Channels" : [],
+            "Highlight" : [],
+            "Host" : "irc.libera.chat",
+            "Nick" : "lee",
+            "Port" : 6697,
+            "SASL" : false,
+            "Ssl" : false
+         }
+      },
+      {
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Ssl\":\" \",\"SASL\":\" \"}",
+         "name" : "Ssl \" \"",
+         "want" : {
+            "Channels" : [],
+            "Highlight" : [],
+            "Host" : "irc.libera.chat",
+            "Nick" : "lee",
+            "Port" : 6697,
+            "SASL" : true,
+            "Ssl" : true
+         }
+      },
+      {
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Foo\":1,\"Id\":\"x\"}",
+         "name" : "unknown keys dropped",
+         "want" : {
+            "Channels" : [],
+            "Highlight" : [],
+            "Host" : "irc.libera.chat",
+            "Nick" : "lee",
+            "Port" : 6697,
+            "SASL" : false,
+            "Ssl" : false
+         }
+      },
+      {
+         "error" : "Host is required",
+         "input" : "[]",
+         "name" : "input list"
+      },
+      {
+         "error" : "Host is required",
+         "input" : "\"x\"",
+         "name" : "input string"
+      },
+      {
+         "error" : "Host is required",
+         "input" : "null",
+         "name" : "input null"
+      },
+      {
+         "error" : "Host is required",
+         "input" : "{}",
+         "name" : "input empty object"
+      }
+   ],
+   "exempt" : [
+      {
+         "env_host" : "irc.relaychat.party",
+         "env_port" : "",
+         "exempt" : true,
+         "host" : "irc.relaychat.party",
+         "port" : 6667
+      },
+      {
+         "env_host" : "irc.relaychat.party",
+         "env_port" : "",
+         "exempt" : true,
+         "host" : "IRC.relaychat.party",
+         "port" : 6667
+      },
+      {
+         "env_host" : "IRC.relaychat.party",
+         "env_port" : "",
+         "exempt" : true,
+         "host" : "irc.relaychat.party",
+         "port" : 6667
+      },
+      {
+         "env_host" : "irc.relaychat.party",
+         "env_port" : "",
+         "exempt" : false,
+         "host" : "irc.relaychat.party",
+         "port" : 5005
+      },
+      {
+         "env_host" : "irc.relaychat.party",
+         "env_port" : "6697",
+         "exempt" : true,
+         "host" : "irc.relaychat.party",
+         "port" : 6697
+      },
+      {
+         "env_host" : "irc.relaychat.party",
+         "env_port" : "6697",
+         "exempt" : false,
+         "host" : "irc.relaychat.party",
+         "port" : 6667
+      },
+      {
+         "env_host" : "irc.relaychat.party",
+         "env_port" : "abc",
+         "exempt" : false,
+         "host" : "irc.relaychat.party",
+         "port" : 6667
+      },
+      {
+         "env_host" : "irc.relaychat.party",
+         "env_port" : "0",
+         "exempt" : true,
+         "host" : "irc.relaychat.party",
+         "port" : 6667
+      },
+      {
+         "env_host" : "irc.relaychat.party",
+         "env_port" : " 6697",
+         "exempt" : true,
+         "host" : "irc.relaychat.party",
+         "port" : 6697
+      },
+      {
+         "env_host" : "irc.relaychat.party",
+         "env_port" : "6697x",
+         "exempt" : true,
+         "host" : "irc.relaychat.party",
+         "port" : 6697
+      },
+      {
+         "env_host" : "",
+         "env_port" : "",
+         "exempt" : false,
+         "host" : "irc.relaychat.party",
+         "port" : 6667
+      },
+      {
+         "env_host" : null,
+         "env_port" : null,
+         "exempt" : false,
+         "host" : "irc.relaychat.party",
+         "port" : 6667
+      },
+      {
+         "env_host" : "ergo",
+         "env_port" : "",
+         "exempt" : false,
+         "host" : "ergo.",
+         "port" : 6667
+      }
+   ]
+}
