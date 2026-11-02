@@ -120,15 +120,23 @@ sub edit {
   return $app->ok;
 }
 
-# Saves a connection's settings without restarting it: liercd keeps running
-# it with the settings it was started with (also when it reconnects by
-# itself) until the next edit that reconnects, lctl reconnect, or a liercd
-# restart and lctl revive. Highlights apply at once. The channel list and
-# nick aren't changed (see edited_config).
+# Saves a connection's highlight words and network alias, which don't need
+# a reconnect: the notifier reloads highlights, and the UI shows the alias.
+# Everything else needs Save & Reconnect (edit).
 sub save {
   my ($app, $req) = @_;
 
-  my $config = edited_config($app, $req);
+  my $params = eval { decode_json $req->content };
+  die "Invalid connection settings\n" unless ref $params eq "HASH";
+  my $names = API::ConnectionConfig->clean_names($params);
+
+  # the rest of the saved config is kept as it is: it's what liercd is
+  # running, and an old value or a DNS failure can't block this
+  my $config = eval { decode_json($app->lookup_config($req->captures->{id})) };
+  die "Invalid connection settings\n" unless ref $config eq "HASH";
+  delete $config->{Alias};
+  %$config = (%$config, %$names);
+
   $app->update_connection($req->captures->{id}, encode_json $config);
   $app->dbh->do("NOTIFY highlights");
 

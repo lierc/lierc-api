@@ -6,11 +6,11 @@ use JSON::XS;
 use API::Routes;
 use API::Controller::Connection;
 
-# PUT /connection/:id/config saves a connection's settings without touching
-# the running connection in liercd. Neither it nor PUT /connection/:id
-# (save and reconnect) changes the channel list or the nick: they're set
-# when the connection is created, and after that only joining and leaving
-# channels, and /nick, change them.
+# PUT /connection/:id/config saves a connection's highlights and alias
+# without touching the running connection in liercd. PUT /connection/:id
+# (save and reconnect) saves the rest, but not the channel list or the nick:
+# they're set when the connection is created, and after that only joining
+# and leaving channels, and /nick, change them.
 
 my ($name, $captured) = API::Routes->route({ REQUEST_METHOD => "PUT", PATH_INFO => "/connection/abc/config" });
 is $name, "connection.save", "PUT /connection/:id/config routes to connection.save";
@@ -48,55 +48,54 @@ is $name, "connection.edit", "PUT /connection/:id is still save and reconnect";
 my $saved = encode_json { Host => "1.1.1.1", Port => 6667, Nick => "old", Channels => ["#a", "#key secret"] };
 
 {
+  # Save changes only highlights and the alias: the rest of the request is
+  # ignored and the rest of the saved config kept as it is
   my $app = FakeApp->new($saved);
-  my $body = encode_json { Host => " 1.1.1.1 ", Port => 6697, Ssl => JSON::XS::true, Nick => "lee", Highlight => ["lee", ""], Alias => "home",
-    Channels => ["#other"] };
+  my $body = encode_json { Host => "2.2.2.2", Port => 6697, Ssl => JSON::XS::true, Nick => "lee", Pass => "new",
+    Highlight => ["lee", " pizza ", ""], Alias => " home ", Channels => ["#other"] };
   my $res = API::Controller::Connection::save($app, FakeReq->new("abc", $body));
   is $res, "ok", "save returns ok";
   is scalar @{ $app->{updates} }, 1, "one update";
   my ($id, $json) = @{ $app->{updates}[0] };
   is $id, "abc", "updates the connection in the URL";
   is_deeply decode_json($json),
-    { Host => "1.1.1.1", Port => 6697, Ssl => JSON::XS::true, SASL => JSON::XS::false, Nick => "old", Highlight => ["lee"],
-      Channels => ["#a", "#key secret"], Alias => "home" },
-    "stores the cleaned config with the saved channels and nick, not the request's";
+    { Host => "1.1.1.1", Port => 6667, Nick => "old", Channels => ["#a", "#key secret"], Highlight => ["lee", "pizza"], Alias => "home" },
+    "stores the saved config with the request's highlights and alias, cleaned";
   is_deeply $app->{notified}, ["NOTIFY highlights"], "tells the notifier to reload highlights";
   is_deeply $app->{liercd}, [], "doesn't call liercd";
 }
 
 {
-  my $app = FakeApp->new($saved);
-  my $body = encode_json { Host => "1.1.1.1", Port => 6697, Nick => "lee" };
-  API::Controller::Connection::save($app, FakeReq->new("abc", $body));
-  is_deeply decode_json($app->{updates}[0][1])->{Channels}, ["#a", "#key secret"], "a request without Channels keeps them too";
+  my $with_alias = encode_json { Host => "1.1.1.1", Port => 6667, Nick => "old", Alias => "home", Highlight => ["old"] };
+  my $app = FakeApp->new($with_alias);
+  API::Controller::Connection::save($app, FakeReq->new("abc", encode_json { Highlight => [], Alias => "  " }));
+  my $got = decode_json($app->{updates}[0][1]);
+  ok !exists $got->{Alias}, "a blank alias removes it";
+  is_deeply $got->{Highlight}, [], "and no highlight words is an empty list";
 
-  $app = FakeApp->new($saved);
-  API::Controller::Connection::save($app, FakeReq->new("abc", encode_json { Host => "1.1.1.1", Port => 6697 }));
-  is decode_json($app->{updates}[0][1])->{Nick}, "old", "a request without Nick keeps it";
-
-  # the request's nick isn't checked either: it's ignored
-  $app = FakeApp->new($saved);
-  API::Controller::Connection::save($app, FakeReq->new("abc", encode_json { Host => "1.1.1.1", Port => 6697, Nick => "a.b" }));
-  is decode_json($app->{updates}[0][1])->{Nick}, "old", "an invalid nick in the request is ignored, not refused";
+  $app = FakeApp->new($with_alias);
+  API::Controller::Connection::save($app, FakeReq->new("abc", encode_json {}));
+  $got = decode_json($app->{updates}[0][1]);
+  ok !exists $got->{Alias}, "a request without Alias removes it too";
 }
 
 {
-  # saved channels and nick aren't re-checked: an old entry can't block an edit
-  my $app = FakeApp->new(encode_json { Host => "1.1.1.1", Port => 6667, Nick => "old.nick", Channels => ["not a channel"] });
-  API::Controller::Connection::save($app, FakeReq->new("abc", encode_json { Host => "1.1.1.1", Port => 6667, Nick => "lee", Channels => ["bad"] }));
-  is_deeply decode_json($app->{updates}[0][1])->{Channels}, ["not a channel"], "saved channels are kept as they are";
-  is decode_json($app->{updates}[0][1])->{Nick}, "old.nick", "a saved nick today's rule refuses is kept";
-
-  $app = FakeApp->new(encode_json { Host => "1.1.1.1", Port => 6667, Nick => "old" });
-  API::Controller::Connection::save($app, FakeReq->new("abc", encode_json { Host => "1.1.1.1", Port => 6667, Nick => "lee" }));
-  is_deeply decode_json($app->{updates}[0][1])->{Channels}, [], "no saved channels: an empty list";
+  # the saved settings aren't re-checked, nor the host resolved: an old
+  # value or a DNS failure can't block saving highlights
+  local $ENV{DEFAULT_NETWORK_HOST};
+  my $app = FakeApp->new(encode_json { Host => "127.0.0.1", Port => 6667, Nick => "old.nick", User => "bad user", Channels => ["not a channel"] });
+  API::Controller::Connection::save($app, FakeReq->new("abc", encode_json { Highlight => ["x"], Alias => "net" }));
+  is_deeply decode_json($app->{updates}[0][1]),
+    { Host => "127.0.0.1", Port => 6667, Nick => "old.nick", User => "bad user", Channels => ["not a channel"], Highlight => ["x"], Alias => "net" },
+    "saved settings are kept as they are";
 }
 
 {
   my $app = FakeApp->new($saved);
-  my $body = encode_json { Host => "1.1.1.1", Port => 6697, Alias => "a_b" };
-  my $res = eval { API::Controller::Connection::save($app, FakeReq->new("abc", $body)) };
-  like $@, qr/^Network alias can only use/, "an invalid config is refused with the rule's message";
+  my $res = eval { API::Controller::Connection::save($app, FakeReq->new("abc", encode_json { Alias => "a_b" })) };
+  like $@, qr/^Network alias can only use/, "an invalid alias is refused with the rule's message";
+  $res = eval { API::Controller::Connection::save($app, FakeReq->new("abc", encode_json { Highlight => ["a\x07b"] })) };
+  like $@, qr/^Highlight words can't contain control characters/, "so are invalid highlight words";
   is_deeply $app->{updates}, [], "and nothing is saved";
   is_deeply $app->{notified}, [], "or notified";
 }
@@ -109,11 +108,18 @@ my $saved = encode_json { Host => "1.1.1.1", Port => 6667, Nick => "old", Channe
 }
 
 {
+  # an edit that reconnects still checks the whole config
+  my $app = FakeApp->new($saved);
+  my $res = eval { API::Controller::Connection::edit($app, FakeReq->new("abc", encode_json { Host => "1.1.1.1", Port => 6697, Alias => "a_b" })) };
+  like $@, qr/^Network alias can only use/, "save and reconnect refuses an invalid config";
+  is_deeply $app->{liercd}, [], "without touching liercd";
+}
+
+{
   local $ENV{DEFAULT_NETWORK_HOST};
   my $app = FakeApp->new($saved);
-  my $res = eval { API::Controller::Connection::save($app, FakeReq->new("abc", encode_json { Host => "127.0.0.1", Port => 6667, Nick => "lee" })) };
-  like $@, qr/private address/, "a private host is refused";
-  is_deeply $app->{updates}, [], "and nothing is saved";
+  my $res = eval { API::Controller::Connection::edit($app, FakeReq->new("abc", encode_json { Host => "127.0.0.1", Port => 6667 })) };
+  like $@, qr/private address/, "and a private host";
 }
 
 {

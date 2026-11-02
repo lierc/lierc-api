@@ -75,17 +75,7 @@ sub clean {
     $_;
   } list($params->{Channels}, "Channels") ];
 
-  $config{Highlight} = [ map {
-    die "Highlight words can't contain control characters\n" if /[\x00-\x1f\x7f]/;
-    $_;
-  } list($params->{Highlight}, "Highlight") ];
-
-  my $alias = text($params->{Alias});
-  if (defined $params->{Alias} && !(defined $alias && $alias eq "")) {
-    die "Network alias can only use letters, digits, spaces, dots and hyphens, up to 32 characters\n"
-      unless defined $alias && $alias =~ /^[A-Za-z0-9 .-]{1,32}$/;
-    $config{Alias} = $alias;
-  }
+  %config = (%config, %{ $class->clean_names($params) });
 
   $config{Ssl}  = $params->{Ssl}  ? JSON::XS::true : JSON::XS::false;
   $config{SASL} = $params->{SASL} ? JSON::XS::true : JSON::XS::false;
@@ -94,6 +84,28 @@ sub clean {
 }
 
 # A trimmed string, or undef for a missing or non-string value.
+# The highlight words and network alias from $params, cleaned: a hashref
+# with Highlight (a list) and Alias (only if it isn't blank). They're what
+# the user can change without reconnecting.
+sub clean_names {
+  my ($class, $params) = @_;
+  my %names;
+
+  $names{Highlight} = [ map {
+    die "Highlight words can't contain control characters\n" if /[\x00-\x1f\x7f]/;
+    $_;
+  } list($params->{Highlight}, "Highlight") ];
+
+  my $alias = text($params->{Alias});
+  if (defined $params->{Alias} && !(defined $alias && $alias eq "")) {
+    die "Network alias can only use letters, digits, spaces, dots and hyphens, up to 32 characters\n"
+      unless defined $alias && $alias =~ /^[A-Za-z0-9 .-]{1,32}$/;
+    $names{Alias} = $alias;
+  }
+
+  return \%names;
+}
+
 # The length in bytes of a string's UTF-8 encoding.
 sub utf8_bytes {
   my $copy = shift;
