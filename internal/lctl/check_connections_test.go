@@ -137,7 +137,7 @@ func TestCheckDeleteKeepsUnresolved(t *testing.T) {
 		t.Errorf("slept %v, want 7s once", h.slept)
 	}
 	for _, table := range []string{"log", "seen", "private"} {
-		if n := h.count(`SELECT count(*) FROM `+table+` WHERE connection NOT IN ('good', 'bu')`); n != 0 {
+		if n := h.count(`SELECT count(*) FROM ` + table + ` WHERE connection NOT IN ('good', 'bu')`); n != 0 {
 			t.Errorf("%s: %d rows left for deleted connections", table, n)
 		}
 		if n := h.count(`SELECT count(*) FROM ` + table); n != 2 {
