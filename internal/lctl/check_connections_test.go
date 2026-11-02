@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-const nickErr = "Nick must be 1 to 32 characters, without spaces or , * ? ! @, and can't start with # & $ or :"
+const nickErr = "Nick can only use letters, numbers, punctuation and symbols, not spaces or , * ? . ! @ : < > ' \" ; # /, and can't start with ~ & % + - or $"
 
 // seedConnections adds the dev-stack e2e's six connections for one user.
 func seedConnections(h *harness) string {

@@ -16,6 +16,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"math"
 	"net"
 	"net/netip"
@@ -24,6 +25,9 @@ import (
 	"strings"
 	"unicode"
 	"unicode/utf8"
+
+	foldcase "golang.org/x/text/cases"
+	"golang.org/x/text/unicode/norm"
 )
 
 // perlSpace is Perl's Unicode \s (the White_Space property) as a character
@@ -32,13 +36,22 @@ const perlSpace = `\t\n\v\f\r \x{85}\x{a0}\x{1680}\x{2000}-\x{200a}\x{2028}\x{20
 
 // Perl's `$` (end, or before a final newline) is written `\n?$` below.
 
-// A nick may use any characters except whitespace, control characters and
-// , * ? ! @, and can't start with # & $ or : (lib/API/ConnectionConfig.pm
-// lists the same characters).
-const nickNot = perlSpace + `\x00-\x1f\x7f-\x{9f},*?!@`
+// A nick follows Ergo's rule under casemapping "permissive" (see
+// lib/API/ConnectionConfig.pm): letters, numbers, punctuation and symbols
+// only, none of nickForbidden, not starting with # ~ & @ % + - or $, at most
+// 32 bytes before and after folding, and not a name Ergo reserves.
+const nickForbidden = ` ,*?.!@:<>'";#/`
+
+var nickReserved = map[string]bool{}
+
+func init() {
+	for _, n := range []string{"0", "NickServ", "ChanServ", "HostServ", "HistServ", "MemoServ", "BotServ", "OperServ", "Global", "=scene="} {
+		nickReserved[foldcase.Fold().String(n)] = true
+	}
+}
 
 var (
-	nickRe = regexp.MustCompile(`^[^` + nickNot + `#&$:][^` + nickNot + `]{0,31}$`)
+	nickRe = regexp.MustCompile(`^[^#~&@%+\-$][\pL\pN\pP\pS]*$`)
 	// any characters but space, NUL, CR, LF and @, not starting with :
 	userRe    = regexp.MustCompile(`^[^ \x00\r\n@:][^ \x00\r\n@]{0,31}$`)
 	channelRe = regexp.MustCompile(`^[#&+!][^` + perlSpace + `,\x00-\x1f\x7f]{1,199}\n?$`)
@@ -51,9 +64,10 @@ var (
 )
 
 const (
-	errNick  = "Nick must be 1 to 32 characters, without spaces or , * ? ! @, and can't start with # & $ or :"
-	errUser  = "Username must be up to 32 characters, without spaces or @, and can't start with :"
-	errAlias = "Network alias can only use letters, digits, spaces, dots and hyphens, up to 32 characters"
+	errNick     = "Nick can only use letters, numbers, punctuation and symbols, not spaces or , * ? . ! @ : < > ' \" ; # /, and can't start with ~ & % + - or $"
+	errNickLong = "Nick must be at most 32 bytes; accented letters and emoji take 2 to 4 each"
+	errUser     = "Username must be up to 32 characters, without spaces or @, and can't start with :"
+	errAlias    = "Network alias can only use letters, digits, spaces, dots and hyphens, up to 32 characters"
 )
 
 func trim(s string) string { return strings.TrimFunc(s, unicode.IsSpace) }
@@ -187,8 +201,15 @@ func Clean(raw []byte) (map[string]any, error) {
 	if nick = trim(nick); nick == "" {
 		return nil, errors.New("Nick is required")
 	}
-	if !nickRe.MatchString(nick) {
+	if !nickRe.MatchString(nick) || strings.ContainsAny(nick, nickForbidden) {
 		return nil, errors.New(errNick)
+	}
+	// Ergo's folding: NFD, case fold, NFD
+	if len(nick) > 32 || len(norm.NFD.String(foldcase.Fold().String(norm.NFD.String(nick)))) > 32 {
+		return nil, errors.New(errNickLong)
+	}
+	if nickReserved[foldcase.Fold().String(nick)] {
+		return nil, fmt.Errorf("Nick %s is reserved", nick)
 	}
 	config["Nick"] = nick
 

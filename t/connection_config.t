@@ -69,15 +69,19 @@ for my $case (@{ $cases->{check_host} }) {
   is(!!$called, !!$case->{resolved}, "$name: resolver " . ($case->{resolved} ? "called" : "not called"));
 }
 
-# The nick rule, written out (the shared cases above come from running it)
+# The nick rule, written out: Ergo's rule under casemapping "permissive"
 {
-  my $nick_err = "Nick must be 1 to 32 characters, without spaces or , * ? ! @, and can't start with # & \$ or :";
+  my $chars_err = "Nick can only use letters, numbers, punctuation and symbols, not spaces or , * ? . ! \@ : < > ' \" ; # /, and can't start with ~ & % + - or \$";
+  my $long_err = "Nick must be at most 32 bytes; accented letters and emoji take 2 to 4 each";
   my $ok = sub { my $n = shift; my $c = eval { $C->clean({ Host => "a.com", Port => 6667, Nick => $n }) }; $c && $c->{Nick} };
   my $err = sub { my $n = shift; eval { $C->clean({ Host => "a.com", Port => 6667, Nick => $n }) }; (my $e = $@) =~ s/\n\z//; $e };
-  is($ok->($_), $_, "nick $_ accepted") for "l\x{e9}e", "\x{540d}\x{524d}", "ann\x{1f9d9}", "2cool", "-dash", "a.b", "[away]", "a" x 32, "\x{e9}" x 32;
-  is($err->($_), $nick_err, "nick refused") for "a b", "a,b", "a*", "a?", "a!b", "a\@b", "#a", "&a", "\$a", ":a",
-    "a\x{a0}b", "a\x{3000}b", "a\x07b", "a\x7fb", "a\x{85}b", "a\x{9f}b", "a" x 33, "\x{e9}" x 33;
-  is($ok->("a#b"), "a#b", "# allowed after the first character");
+  is($ok->($_), $_, "nick $_ accepted") for "lee", "l\x{e9}e", "\x{540d}\x{524d}", "ann\x{1f9d9}", "2cool", "[away]", "a-b", "a~b", "a\$b",
+    "a&b", "a=b", "\x{1f44d}\x{1f3fd}", "a" x 32, "\x{540d}" x 10, "\x{e9}" x 10, "00", "NickServX";
+  is($err->($_), $chars_err, "nick refused") for "a b", "a,b", "a*", "a?", "a.b", "a!b", "a\@b", "a:b", "a<b", "a>b", "a'b", "a\"b", "a;b", "a#b",
+    "a/b", "#a", "~a", "&a", "%a", "+a", "-a", "\$a", ":a", "a\x{a0}b", "a\x{3000}b", "a\x07b", "a\x7fb", "a\x{85}b",
+    "e\x{301}", "\x{2764}\x{fe0f}", "a\x{200d}b";
+  is($err->($_), $long_err, "nick too long") for "a" x 33, "\x{540d}" x 11, "\x{e9}" x 11, "\x{1f9d9}" x 9;
+  is($err->($_), "Nick $_ is reserved", "nick $_ reserved") for "0", "NickServ", "chanserv", "HostServ", "HistServ", "MemoServ", "BotServ", "OperServ", "Global", "=scene=";
 }
 
 # The alias rule, written out

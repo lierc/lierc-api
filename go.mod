@@ -8,6 +8,7 @@ require (
 	github.com/nsqio/go-nsq v1.1.0
 	golang.org/x/crypto v0.40.0
 	golang.org/x/term v0.33.0
+	golang.org/x/text v0.27.0
 )
 
 require (
@@ -27,7 +28,6 @@ require (
 	github.com/xi2/xz v0.0.0-20171230120015-48954b6210f8 // indirect
 	golang.org/x/sync v0.16.0 // indirect
 	golang.org/x/sys v0.34.0 // indirect
-	golang.org/x/text v0.27.0 // indirect
 )
 
 tool github.com/nsqio/nsq/apps/nsqd

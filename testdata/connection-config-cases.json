@@ -797,38 +797,22 @@
          }
       },
       {
+         "error" : "Nick can only use letters, numbers, punctuation and symbols, not spaces or , * ? . ! @ : < > ' \" ; # /, and can't start with ~ & % + - or $",
          "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Nick\":\"-a\"}",
-         "name" : "Nick \"-a\"",
-         "want" : {
-            "Channels" : [],
-            "Highlight" : [],
-            "Host" : "irc.libera.chat",
-            "Nick" : "-a",
-            "Port" : 6697,
-            "SASL" : false,
-            "Ssl" : false
-         }
+         "name" : "Nick \"-a\""
       },
       {
-         "error" : "Nick must be 1 to 32 characters, without spaces or , * ? ! @, and can't start with # & $ or :",
+         "error" : "Nick can only use letters, numbers, punctuation and symbols, not spaces or , * ? . ! @ : < > ' \" ; # /, and can't start with ~ & % + - or $",
          "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Nick\":\"a b\"}",
          "name" : "Nick \"a b\""
       },
       {
+         "error" : "Nick can only use letters, numbers, punctuation and symbols, not spaces or , * ? . ! @ : < > ' \" ; # /, and can't start with ~ & % + - or $",
          "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Nick\":\"a.b\"}",
-         "name" : "Nick \"a.b\"",
-         "want" : {
-            "Channels" : [],
-            "Highlight" : [],
-            "Host" : "irc.libera.chat",
-            "Nick" : "a.b",
-            "Port" : 6697,
-            "SASL" : false,
-            "Ssl" : false
-         }
+         "name" : "Nick \"a.b\""
       },
       {
-         "error" : "Nick must be 1 to 32 characters, without spaces or , * ? ! @, and can't start with # & $ or :",
+         "error" : "Nick must be at most 32 bytes; accented letters and emoji take 2 to 4 each",
          "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Nick\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}",
          "name" : "Nick \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\""
       },
@@ -869,17 +853,9 @@
          }
       },
       {
+         "error" : "Nick can only use letters, numbers, punctuation and symbols, not spaces or , * ? . ! @ : < > ' \" ; # /, and can't start with ~ & % + - or $",
          "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Nick\":1.5}",
-         "name" : "Nick 1.5",
-         "want" : {
-            "Channels" : [],
-            "Highlight" : [],
-            "Host" : "irc.libera.chat",
-            "Nick" : 1.5,
-            "Port" : 6697,
-            "SASL" : false,
-            "Ssl" : false
-         }
+         "name" : "Nick 1.5"
       },
       {
          "error" : "Nick is required",
@@ -949,7 +925,7 @@
          }
       },
       {
-         "error" : "Nick must be 1 to 32 characters, without spaces or , * ? ! @, and can't start with # & $ or :",
+         "error" : "Nick can only use letters, numbers, punctuation and symbols, not spaces or , * ? . ! @ : < > ' \" ; # /, and can't start with ~ & % + - or $",
          "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Nick\":\"le\\te\"}",
          "name" : "Nick \"le\\te\""
       },
@@ -993,100 +969,332 @@
          }
       },
       {
-         "error" : "Nick must be 1 to 32 characters, without spaces or , * ? ! @, and can't start with # & $ or :",
+         "error" : "Nick can only use letters, numbers, punctuation and symbols, not spaces or , * ? . ! @ : < > ' \" ; # /, and can't start with ~ & % + - or $",
          "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Nick\":\"a,b\"}",
          "name" : "Nick \"a,b\""
       },
       {
-         "error" : "Nick must be 1 to 32 characters, without spaces or , * ? ! @, and can't start with # & $ or :",
+         "error" : "Nick can only use letters, numbers, punctuation and symbols, not spaces or , * ? . ! @ : < > ' \" ; # /, and can't start with ~ & % + - or $",
          "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Nick\":\"a*\"}",
          "name" : "Nick \"a*\""
       },
       {
-         "error" : "Nick must be 1 to 32 characters, without spaces or , * ? ! @, and can't start with # & $ or :",
+         "error" : "Nick can only use letters, numbers, punctuation and symbols, not spaces or , * ? . ! @ : < > ' \" ; # /, and can't start with ~ & % + - or $",
          "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Nick\":\"a?\"}",
          "name" : "Nick \"a?\""
       },
       {
-         "error" : "Nick must be 1 to 32 characters, without spaces or , * ? ! @, and can't start with # & $ or :",
+         "error" : "Nick can only use letters, numbers, punctuation and symbols, not spaces or , * ? . ! @ : < > ' \" ; # /, and can't start with ~ & % + - or $",
          "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Nick\":\"a!b\"}",
          "name" : "Nick \"a!b\""
       },
       {
-         "error" : "Nick must be 1 to 32 characters, without spaces or , * ? ! @, and can't start with # & $ or :",
+         "error" : "Nick can only use letters, numbers, punctuation and symbols, not spaces or , * ? . ! @ : < > ' \" ; # /, and can't start with ~ & % + - or $",
          "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Nick\":\"a@b\"}",
          "name" : "Nick \"a@b\""
       },
       {
-         "error" : "Nick must be 1 to 32 characters, without spaces or , * ? ! @, and can't start with # & $ or :",
+         "error" : "Nick can only use letters, numbers, punctuation and symbols, not spaces or , * ? . ! @ : < > ' \" ; # /, and can't start with ~ & % + - or $",
          "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Nick\":\"#a\"}",
          "name" : "Nick \"#a\""
       },
       {
-         "error" : "Nick must be 1 to 32 characters, without spaces or , * ? ! @, and can't start with # & $ or :",
+         "error" : "Nick can only use letters, numbers, punctuation and symbols, not spaces or , * ? . ! @ : < > ' \" ; # /, and can't start with ~ & % + - or $",
          "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Nick\":\"&a\"}",
          "name" : "Nick \"&a\""
       },
       {
-         "error" : "Nick must be 1 to 32 characters, without spaces or , * ? ! @, and can't start with # & $ or :",
+         "error" : "Nick can only use letters, numbers, punctuation and symbols, not spaces or , * ? . ! @ : < > ' \" ; # /, and can't start with ~ & % + - or $",
          "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Nick\":\"$a\"}",
          "name" : "Nick \"$a\""
       },
       {
-         "error" : "Nick must be 1 to 32 characters, without spaces or , * ? ! @, and can't start with # & $ or :",
+         "error" : "Nick can only use letters, numbers, punctuation and symbols, not spaces or , * ? . ! @ : < > ' \" ; # /, and can't start with ~ & % + - or $",
          "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Nick\":\":a\"}",
          "name" : "Nick \":a\""
       },
       {
+         "error" : "Nick can only use letters, numbers, punctuation and symbols, not spaces or , * ? . ! @ : < > ' \" ; # /, and can't start with ~ & % + - or $",
          "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Nick\":\"a#b\"}",
-         "name" : "Nick \"a#b\"",
-         "want" : {
-            "Channels" : [],
-            "Highlight" : [],
-            "Host" : "irc.libera.chat",
-            "Nick" : "a#b",
-            "Port" : 6697,
-            "SASL" : false,
-            "Ssl" : false
-         }
+         "name" : "Nick \"a#b\""
       },
       {
-         "error" : "Nick must be 1 to 32 characters, without spaces or , * ? ! @, and can't start with # & $ or :",
+         "error" : "Nick can only use letters, numbers, punctuation and symbols, not spaces or , * ? . ! @ : < > ' \" ; # /, and can't start with ~ & % + - or $",
          "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Nick\":\"a　b\"}",
          "name" : "Nick \"a　b\""
       },
       {
-         "error" : "Nick must be 1 to 32 characters, without spaces or , * ? ! @, and can't start with # & $ or :",
+         "error" : "Nick can only use letters, numbers, punctuation and symbols, not spaces or , * ? . ! @ : < > ' \" ; # /, and can't start with ~ & % + - or $",
          "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Nick\":\"a\\u0085b\"}",
          "name" : "Nick \"a\\u0085b\""
       },
       {
-         "error" : "Nick must be 1 to 32 characters, without spaces or , * ? ! @, and can't start with # & $ or :",
+         "error" : "Nick can only use letters, numbers, punctuation and symbols, not spaces or , * ? . ! @ : < > ' \" ; # /, and can't start with ~ & % + - or $",
          "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Nick\":\"a\\u009fb\"}",
          "name" : "Nick \"a\\u009fb\""
       },
       {
-         "error" : "Nick must be 1 to 32 characters, without spaces or , * ? ! @, and can't start with # & $ or :",
+         "error" : "Nick can only use letters, numbers, punctuation and symbols, not spaces or , * ? . ! @ : < > ' \" ; # /, and can't start with ~ & % + - or $",
          "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Nick\":\"a\\u007fb\"}",
          "name" : "Nick \"a\\u007fb\""
       },
       {
+         "error" : "Nick must be at most 32 bytes; accented letters and emoji take 2 to 4 each",
          "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Nick\":\"éééééééééééééééééééééééééééééééé\"}",
-         "name" : "Nick \"éééééééééééééééééééééééééééééééé\"",
+         "name" : "Nick \"éééééééééééééééééééééééééééééééé\""
+      },
+      {
+         "error" : "Nick must be at most 32 bytes; accented letters and emoji take 2 to 4 each",
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Nick\":\"ééééééééééééééééééééééééééééééééé\"}",
+         "name" : "Nick \"ééééééééééééééééééééééééééééééééé\""
+      },
+      {
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Nick\":\"éééééééééé\"}",
+         "name" : "Nick \"éééééééééé\"",
          "want" : {
             "Channels" : [],
             "Highlight" : [],
             "Host" : "irc.libera.chat",
-            "Nick" : "éééééééééééééééééééééééééééééééé",
+            "Nick" : "éééééééééé",
             "Port" : 6697,
             "SASL" : false,
             "Ssl" : false
          }
       },
       {
-         "error" : "Nick must be 1 to 32 characters, without spaces or , * ? ! @, and can't start with # & $ or :",
-         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Nick\":\"ééééééééééééééééééééééééééééééééé\"}",
-         "name" : "Nick \"ééééééééééééééééééééééééééééééééé\""
+         "error" : "Nick must be at most 32 bytes; accented letters and emoji take 2 to 4 each",
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Nick\":\"ééééééééééé\"}",
+         "name" : "Nick \"ééééééééééé\""
+      },
+      {
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Nick\":\"名名名名名名名名名名\"}",
+         "name" : "Nick \"名名名名名名名名名名\"",
+         "want" : {
+            "Channels" : [],
+            "Highlight" : [],
+            "Host" : "irc.libera.chat",
+            "Nick" : "名名名名名名名名名名",
+            "Port" : 6697,
+            "SASL" : false,
+            "Ssl" : false
+         }
+      },
+      {
+         "error" : "Nick must be at most 32 bytes; accented letters and emoji take 2 to 4 each",
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Nick\":\"名名名名名名名名名名名\"}",
+         "name" : "Nick \"名名名名名名名名名名名\""
+      },
+      {
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Nick\":\"🧙🧙🧙🧙🧙🧙🧙🧙\"}",
+         "name" : "Nick \"🧙🧙🧙🧙🧙🧙🧙🧙\"",
+         "want" : {
+            "Channels" : [],
+            "Highlight" : [],
+            "Host" : "irc.libera.chat",
+            "Nick" : "🧙🧙🧙🧙🧙🧙🧙🧙",
+            "Port" : 6697,
+            "SASL" : false,
+            "Ssl" : false
+         }
+      },
+      {
+         "error" : "Nick must be at most 32 bytes; accented letters and emoji take 2 to 4 each",
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Nick\":\"🧙🧙🧙🧙🧙🧙🧙🧙🧙\"}",
+         "name" : "Nick \"🧙🧙🧙🧙🧙🧙🧙🧙🧙\""
+      },
+      {
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Nick\":\"ÅÅÅÅÅÅÅÅÅÅ\"}",
+         "name" : "Nick \"ÅÅÅÅÅÅÅÅÅÅ\"",
+         "want" : {
+            "Channels" : [],
+            "Highlight" : [],
+            "Host" : "irc.libera.chat",
+            "Nick" : "ÅÅÅÅÅÅÅÅÅÅ",
+            "Port" : 6697,
+            "SASL" : false,
+            "Ssl" : false
+         }
+      },
+      {
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Nick\":\"ßßßßßßßßßßßßßßßß\"}",
+         "name" : "Nick \"ßßßßßßßßßßßßßßßß\"",
+         "want" : {
+            "Channels" : [],
+            "Highlight" : [],
+            "Host" : "irc.libera.chat",
+            "Nick" : "ßßßßßßßßßßßßßßßß",
+            "Port" : 6697,
+            "SASL" : false,
+            "Ssl" : false
+         }
+      },
+      {
+         "error" : "Nick can only use letters, numbers, punctuation and symbols, not spaces or , * ? . ! @ : < > ' \" ; # /, and can't start with ~ & % + - or $",
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Nick\":\"e\\u0301\"}",
+         "name" : "Nick \"e\\u0301\""
+      },
+      {
+         "error" : "Nick can only use letters, numbers, punctuation and symbols, not spaces or , * ? . ! @ : < > ' \" ; # /, and can't start with ~ & % + - or $",
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Nick\":\"\\u2764\\ufe0f\"}",
+         "name" : "Nick \"\\u2764\\ufe0f\""
+      },
+      {
+         "error" : "Nick can only use letters, numbers, punctuation and symbols, not spaces or , * ? . ! @ : < > ' \" ; # /, and can't start with ~ & % + - or $",
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Nick\":\"a\\u200db\"}",
+         "name" : "Nick \"a\\u200db\""
+      },
+      {
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Nick\":\"👍🏽\"}",
+         "name" : "Nick \"👍🏽\"",
+         "want" : {
+            "Channels" : [],
+            "Highlight" : [],
+            "Host" : "irc.libera.chat",
+            "Nick" : "👍🏽",
+            "Port" : 6697,
+            "SASL" : false,
+            "Ssl" : false
+         }
+      },
+      {
+         "error" : "Nick can only use letters, numbers, punctuation and symbols, not spaces or , * ? . ! @ : < > ' \" ; # /, and can't start with ~ & % + - or $",
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Nick\":\"~a\"}",
+         "name" : "Nick \"~a\""
+      },
+      {
+         "error" : "Nick can only use letters, numbers, punctuation and symbols, not spaces or , * ? . ! @ : < > ' \" ; # /, and can't start with ~ & % + - or $",
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Nick\":\"%a\"}",
+         "name" : "Nick \"%a\""
+      },
+      {
+         "error" : "Nick can only use letters, numbers, punctuation and symbols, not spaces or , * ? . ! @ : < > ' \" ; # /, and can't start with ~ & % + - or $",
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Nick\":\"+a\"}",
+         "name" : "Nick \"+a\""
+      },
+      {
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Nick\":\"a~b\"}",
+         "name" : "Nick \"a~b\"",
+         "want" : {
+            "Channels" : [],
+            "Highlight" : [],
+            "Host" : "irc.libera.chat",
+            "Nick" : "a~b",
+            "Port" : 6697,
+            "SASL" : false,
+            "Ssl" : false
+         }
+      },
+      {
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Nick\":\"a$b\"}",
+         "name" : "Nick \"a$b\"",
+         "want" : {
+            "Channels" : [],
+            "Highlight" : [],
+            "Host" : "irc.libera.chat",
+            "Nick" : "a$b",
+            "Port" : 6697,
+            "SASL" : false,
+            "Ssl" : false
+         }
+      },
+      {
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Nick\":\"a=b\"}",
+         "name" : "Nick \"a=b\"",
+         "want" : {
+            "Channels" : [],
+            "Highlight" : [],
+            "Host" : "irc.libera.chat",
+            "Nick" : "a=b",
+            "Port" : 6697,
+            "SASL" : false,
+            "Ssl" : false
+         }
+      },
+      {
+         "error" : "Nick can only use letters, numbers, punctuation and symbols, not spaces or , * ? . ! @ : < > ' \" ; # /, and can't start with ~ & % + - or $",
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Nick\":\"a/b\"}",
+         "name" : "Nick \"a/b\""
+      },
+      {
+         "error" : "Nick can only use letters, numbers, punctuation and symbols, not spaces or , * ? . ! @ : < > ' \" ; # /, and can't start with ~ & % + - or $",
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Nick\":\"a<b\"}",
+         "name" : "Nick \"a<b\""
+      },
+      {
+         "error" : "Nick can only use letters, numbers, punctuation and symbols, not spaces or , * ? . ! @ : < > ' \" ; # /, and can't start with ~ & % + - or $",
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Nick\":\"a>b\"}",
+         "name" : "Nick \"a>b\""
+      },
+      {
+         "error" : "Nick can only use letters, numbers, punctuation and symbols, not spaces or , * ? . ! @ : < > ' \" ; # /, and can't start with ~ & % + - or $",
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Nick\":\"a'b\"}",
+         "name" : "Nick \"a'b\""
+      },
+      {
+         "error" : "Nick can only use letters, numbers, punctuation and symbols, not spaces or , * ? . ! @ : < > ' \" ; # /, and can't start with ~ & % + - or $",
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Nick\":\"a\\\"b\"}",
+         "name" : "Nick \"a\\\"b\""
+      },
+      {
+         "error" : "Nick can only use letters, numbers, punctuation and symbols, not spaces or , * ? . ! @ : < > ' \" ; # /, and can't start with ~ & % + - or $",
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Nick\":\"a;b\"}",
+         "name" : "Nick \"a;b\""
+      },
+      {
+         "error" : "Nick can only use letters, numbers, punctuation and symbols, not spaces or , * ? . ! @ : < > ' \" ; # /, and can't start with ~ & % + - or $",
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Nick\":\"a:b\"}",
+         "name" : "Nick \"a:b\""
+      },
+      {
+         "error" : "Nick 0 is reserved",
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Nick\":\"0\"}",
+         "name" : "Nick \"0\""
+      },
+      {
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Nick\":\"00\"}",
+         "name" : "Nick \"00\"",
+         "want" : {
+            "Channels" : [],
+            "Highlight" : [],
+            "Host" : "irc.libera.chat",
+            "Nick" : "00",
+            "Port" : 6697,
+            "SASL" : false,
+            "Ssl" : false
+         }
+      },
+      {
+         "error" : "Nick NickServ is reserved",
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Nick\":\"NickServ\"}",
+         "name" : "Nick \"NickServ\""
+      },
+      {
+         "error" : "Nick chanserv is reserved",
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Nick\":\"chanserv\"}",
+         "name" : "Nick \"chanserv\""
+      },
+      {
+         "error" : "Nick Global is reserved",
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Nick\":\"Global\"}",
+         "name" : "Nick \"Global\""
+      },
+      {
+         "error" : "Nick =scene= is reserved",
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Nick\":\"=scene=\"}",
+         "name" : "Nick \"=scene=\""
+      },
+      {
+         "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Nick\":\"NickServX\"}",
+         "name" : "Nick \"NickServX\"",
+         "want" : {
+            "Channels" : [],
+            "Highlight" : [],
+            "Host" : "irc.libera.chat",
+            "Nick" : "NickServX",
+            "Port" : 6697,
+            "SASL" : false,
+            "Ssl" : false
+         }
       },
       {
          "error" : "Nick is required",
@@ -2248,17 +2456,9 @@
          }
       },
       {
+         "error" : "Nick can only use letters, numbers, punctuation and symbols, not spaces or , * ? . ! @ : < > ' \" ; # /, and can't start with ~ & % + - or $",
          "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Nick\":-12345678901234567890}",
-         "name" : "big number Nick -12345678901234567890",
-         "want" : {
-            "Channels" : [],
-            "Highlight" : [],
-            "Host" : "irc.libera.chat",
-            "Nick" : "-12345678901234567890",
-            "Port" : 6697,
-            "SASL" : false,
-            "Ssl" : false
-         }
+         "name" : "big number Nick -12345678901234567890"
       },
       {
          "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Nick\":18446744073709551616}",
@@ -2313,17 +2513,9 @@
          }
       },
       {
+         "error" : "Nick can only use letters, numbers, punctuation and symbols, not spaces or , * ? . ! @ : < > ' \" ; # /, and can't start with ~ & % + - or $",
          "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Nick\":-1E400}",
-         "name" : "big number Nick -1E400",
-         "want" : {
-            "Channels" : [],
-            "Highlight" : [],
-            "Host" : "irc.libera.chat",
-            "Nick" : "-Inf",
-            "Port" : 6697,
-            "SASL" : false,
-            "Ssl" : false
-         }
+         "name" : "big number Nick -1E400"
       },
       {
          "error" : "Host must be an IPv4 address or a domain name",
@@ -2467,17 +2659,9 @@
          }
       },
       {
+         "error" : "Nick 0 is reserved",
          "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Nick\":1e-400}",
-         "name" : "big number Nick 1e-400",
-         "want" : {
-            "Channels" : [],
-            "Highlight" : [],
-            "Host" : "irc.libera.chat",
-            "Nick" : 0,
-            "Port" : 6697,
-            "SASL" : false,
-            "Ssl" : false
-         }
+         "name" : "big number Nick 1e-400"
       },
       {
          "error" : "Host must be an IPv4 address or a domain name",

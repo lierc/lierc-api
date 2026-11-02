@@ -7,7 +7,9 @@ package API::ConnectionConfig;
 use strict;
 use warnings;
 
+use feature 'fc';
 use JSON::XS;
+use Unicode::Normalize qw(NFD);
 use Socket qw(AF_INET AF_INET6 SOCK_STREAM getaddrinfo inet_pton inet_ntop
               unpack_sockaddr_in unpack_sockaddr_in6);
 
@@ -16,13 +18,15 @@ use Socket qw(AF_INET AF_INET6 SOCK_STREAM getaddrinfo inet_pton inet_ntop
 # and a leading :, which would start USER's trailing parameter.
 my $USER_RE = qr/^[^ \x00\r\n\@:][^ \x00\r\n\@]{0,31}\z/;
 
-# A nick may use any characters (servers decide what they allow) except
-# whitespace, control characters and , * ? ! @, and can't start with a
-# channel prefix (# &) or $ or :. Whitespace is listed rather than \s so it
-# matches internal/connconfig exactly.
-my $SPACE = q{\t\n\x0b\f\r \x{85}\x{a0}\x{1680}\x{2000}-\x{200a}\x{2028}\x{2029}\x{202f}\x{205f}\x{3000}};
-my $NICK_NOT = qq{${SPACE}\\x00-\\x1f\\x7f-\\x9f,*?!\@};
-my $NICK_RE = qr/^[^${NICK_NOT}#&\$:][^${NICK_NOT}]{0,31}\z/;
+# A nick follows Ergo's rule under casemapping "permissive" (irc/strings.go,
+# irc/client_lookup_set.go and irc/i18n in ergo v2.19.1), so the default
+# network accepts every nick saved here: letters, numbers, punctuation and
+# symbols only, none of the characters Ergo forbids, not starting with
+# # ~ & @ % + - or $, and not a name Ergo reserves. internal/connconfig has the
+# same rule.
+my $NICK_RE = qr/^(?![#~&\@%+\-\$])[\p{L}\p{N}\p{P}\p{S}]+\z/;
+my $NICK_FORBIDDEN = qr{[ ,*?.!\@:<>'";#/]};
+my %NICK_RESERVED = map { fc($_) => 1 } qw(0 NickServ ChanServ HostServ HistServ MemoServ BotServ OperServ Global =scene=);
 
 # Returns a new hashref with only the known keys, trimmed (except Pass) and
 # normalised; dies on the first invalid field.
@@ -44,8 +48,11 @@ sub clean {
 
   my $nick = text($params->{Nick});
   die "Nick is required\n" if !defined $nick || $nick eq "";
-  die "Nick must be 1 to 32 characters, without spaces or , * ? ! \@, and can't start with # & \$ or :\n"
-    unless $nick =~ $NICK_RE;
+  die "Nick can only use letters, numbers, punctuation and symbols, not spaces or , * ? . ! \@ : < > ' \" ; # /, and can't start with ~ & % + - or \$\n"
+    unless $nick =~ $NICK_RE && $nick !~ $NICK_FORBIDDEN;
+  die "Nick must be at most 32 bytes; accented letters and emoji take 2 to 4 each\n"
+    if utf8_bytes($nick) > 32 || utf8_bytes(NFD(fc(NFD($nick)))) > 32;
+  die "Nick $nick is reserved\n" if $NICK_RESERVED{fc $nick};
   $config{Nick} = $nick;
 
   my $user = text($params->{User});
@@ -87,6 +94,13 @@ sub clean {
 }
 
 # A trimmed string, or undef for a missing or non-string value.
+# The length in bytes of a string's UTF-8 encoding.
+sub utf8_bytes {
+  my $copy = shift;
+  utf8::encode($copy);
+  return length $copy;
+}
+
 sub text {
   my $value = shift;
   return undef if !defined $value || ref $value;

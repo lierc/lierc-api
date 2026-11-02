@@ -48,6 +48,12 @@ my @clean = (
   (map { ["Nick $_", with(qq{"Nick":$_})] } qq{"l\x{e9}e"}, qq{"\x{540d}\x{524d}"}, qq{"ann\x{1f9d9}"}, '"a,b"', '"a*"', '"a?"',
      '"a!b"', '"a@b"', '"#a"', '"&a"', '"$a"', '":a"', '"a#b"', qq{"a\x{3000}b"}, '"a\u0085b"', '"a\u009fb"', '"a\u007fb"',
      '"' . ("\x{e9}" x 32) . '"', '"' . ("\x{e9}" x 33) . '"'),
+  # Ergo's permissive rule: byte lengths, folded length, marks, joiners, reserved names
+  (map { ["Nick $_", with(qq{"Nick":$_})] } '"' . ("\x{e9}" x 10) . '"', '"' . ("\x{e9}" x 11) . '"',
+     '"' . ("\x{540d}" x 10) . '"', '"' . ("\x{540d}" x 11) . '"', '"' . ("\x{1f9d9}" x 8) . '"', '"' . ("\x{1f9d9}" x 9) . '"',
+     '"' . ("\x{c5}" x 10) . '"', '"' . ("\x{df}" x 16) . '"', '"e\u0301"', '"\u2764\ufe0f"', '"a\u200db"', qq{"\x{1f44d}\x{1f3fd}"},
+     '"~a"', '"%a"', '"+a"', '"a~b"', '"a$b"', '"a=b"', '"a/b"', '"a<b"', '"a>b"', "\"a'b\"", '"a\\"b"', '"a;b"', '"a:b"',
+     '"0"', '"00"', '"NickServ"', '"chanserv"', '"Global"', '"=scene="', '"NickServX"'),
   ["missing Nick", q({"Host":"a.com","Port":1})],
   (map { ["User $_", with(qq{"User":$_})] } '" ~lee.a "', '"2cool"', '"lee/libera"', '"a b"', '"a:b"', '":a"', '"a\\tb"', '"a\\u0000b"', '"a\\u0007b"', qq{"l\x{e9}e"}, qq{"a\x{a0}b"}, '"a@b"', '"' . ("a" x 33) . '"',
      "12", "true", "null", '[]', '""'),
