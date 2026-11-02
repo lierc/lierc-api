@@ -18,8 +18,8 @@ const connectionInfoUsage = `connection-info ID...
 Shows each connection: its owner, its saved config (passwords are never
 shown), whether that config passes the connection rules and address check,
 and its live state in liercd: connected or not, current nick, status
-message, network, capabilities, joined channels, and any setting where the
-running config differs from the saved one.`
+message, network, capabilities, how many channels it's in, and any setting
+where the running config differs from the saved one.`
 
 // liercdConfig is the config liercd is running a connection with.
 type liercdConfig struct {
@@ -46,12 +46,8 @@ type liercdData struct {
 	}
 	Isupport  []string
 	CapsAcked []string
-	Channels  []struct {
-		Name  string
-		Nicks []string
-		Topic *struct{ Topic, User string } // lierc's IRCTopic; null before one is set
-		Mode  string
-	}
+	// only counted, so their contents (topics, nicks) aren't decoded
+	Channels []json.RawMessage
 }
 
 func connectionInfo(ctx context.Context, env *Env, args []string) error {
@@ -230,18 +226,6 @@ func printLive(out io.Writer, d *liercdData, saved map[string]any) {
 		fmt.Fprintf(out, "  differs:     %s\n", strings.Join(diffs, "; "))
 	}
 	fmt.Fprintf(out, "  joined:      %d channels\n", len(d.Channels))
-	sort.Slice(d.Channels, func(i, j int) bool { return d.Channels[i].Name < d.Channels[j].Name })
-	for _, c := range d.Channels {
-		line := fmt.Sprintf("    %s  %s  %d nicks", c.Name, c.Mode, len(c.Nicks))
-		if c.Topic != nil && c.Topic.Topic != "" {
-			topic := []rune(c.Topic.Topic)
-			if len(topic) > 80 {
-				topic = append(topic[:79], '…')
-			}
-			line += "  topic: " + string(topic)
-		}
-		fmt.Fprintln(out, line)
-	}
 }
 
 // configDiffs lists the settings where liercd's running config differs

@@ -46,10 +46,8 @@ func TestConnectionInfo(t *testing.T) {
 		"  caps:        sasl, server-time\n",
 		"  differs:     Nick (running ann_, saved ann)\n",
 		"  joined:      2 channels\n",
-		"    #a  +  1 nicks\n",
-		"    #b  +nt  3 nicks  topic: welcome to b\n",
 	)
-	h.lacks("hunter2")
+	h.lacks("hunter2", "#b ", "topic", "nicks")
 }
 
 func TestConnectionInfoNotRunning(t *testing.T) {
