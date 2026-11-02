@@ -149,13 +149,7 @@ func checkConnections(ctx context.Context, env *Env, args []string) error {
 	}
 
 	deleted, skipped, err := destroyAndDelete(ctx, env, targets, time.Duration(*settle)*time.Second,
-		[]string{"log", "seen", "private", "connection"},
-		func(table string) string {
-			if table == "connection" {
-				return "id = $1"
-			}
-			return "connection = $1"
-		})
+		connectionTables, connectionWhere)
 	fmt.Fprintf(out, "deleted %d connection(s), skipped %d\n", deleted, skipped)
 	if err != nil {
 		return err
@@ -164,6 +158,16 @@ func checkConnections(ctx context.Context, env *Env, args []string) error {
 		return fmt.Errorf("%d connection(s) skipped", skipped)
 	}
 	return nil
+}
+
+// connectionTables hold a connection's data, in delete order.
+var connectionTables = []string{"log", "seen", "private", "connection"}
+
+func connectionWhere(table string) string {
+	if table == "connection" {
+		return "id = $1"
+	}
+	return "connection = $1"
 }
 
 // destroyAndDelete destroys each connection in liercd (200 or 404 is fine,
