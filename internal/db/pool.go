@@ -71,3 +71,9 @@ func (r rows) Values() ([]any, error) {
 type row struct{ pgx.Row }
 
 func (r row) Scan(dest ...any) error { return wrap(r.Row.Scan(dest...)) }
+
+// Begin starts a transaction; its own errors are not wrapped.
+func (p *Pool) Begin(ctx context.Context) (pgx.Tx, error) {
+	tx, err := p.Pool.Begin(ctx)
+	return tx, wrap(err)
+}

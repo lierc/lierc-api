@@ -1,5 +1,6 @@
-// Command lierc-api runs the SSE event stream (`lierc-api stream`). The JSON
-// API is still bin/api.psgi.
+// Command lierc-api runs the SSE event stream (`lierc-api stream`) and the
+// admin commands (`lierc-api lctl COMMAND`). The JSON API is still
+// bin/api.psgi.
 package main
 
 import (
@@ -17,6 +18,7 @@ import (
 
 	"github.com/lierc/lierc-api/internal/config"
 	"github.com/lierc/lierc-api/internal/db"
+	"github.com/lierc/lierc-api/internal/lctl"
 	"github.com/lierc/lierc-api/internal/liercd"
 	"github.com/lierc/lierc-api/internal/proxy"
 	"github.com/lierc/lierc-api/internal/stream"
@@ -29,6 +31,9 @@ const shutdownTimeout = 10 * time.Second
 func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
 	defer stop()
+	if len(os.Args) > 1 && os.Args[1] == "lctl" {
+		os.Exit(lctl.Main(ctx, os.Args[2:], lctl.OSSystem()))
+	}
 	os.Exit(run(ctx, os.Args[1:], os.Getenv, os.Stderr, nil))
 }
 
@@ -36,7 +41,7 @@ func main() {
 // non-nil, is called with the bound address once the server is accepting.
 func run(ctx context.Context, args []string, getenv func(string) string, stderr io.Writer, onListen func(net.Addr)) int {
 	if len(args) != 1 || args[0] != "stream" {
-		fmt.Fprintln(stderr, "usage: lierc-api stream")
+		fmt.Fprintln(stderr, "usage: lierc-api stream | lierc-api lctl COMMAND")
 		return 2
 	}
 	logger := log.New(stderr, "", log.LstdFlags)

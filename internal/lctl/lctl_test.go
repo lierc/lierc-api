@@ -1,0 +1,231 @@
+package lctl
+
+import (
+	"bytes"
+	"context"
+	"errors"
+	"strings"
+	"testing"
+
+	"github.com/lierc/lierc-api/internal/testenv"
+)
+
+func TestMain(m *testing.M) { testenv.Main(m) }
+
+type out struct{ stdout, stderr bytes.Buffer }
+
+func (o *out) sys(stdin string, terminal bool) System {
+	return System{
+		Getenv:          func(string) string { return "" },
+		Stdin:           strings.NewReader(stdin),
+		Stdout:          &o.stdout,
+		Stderr:          &o.stderr,
+		StdinIsTerminal: terminal,
+	}
+}
+
+var testCommands = []Command{
+	{Name: "alpha", Summary: "Do the first thing", Run: func(ctx context.Context, env *Env, args []string) error {
+		env.Stdout.Write([]byte("alpha ran " + strings.Join(args, ",") + "\n"))
+		return nil
+	}},
+	{Name: "bad-args", Summary: "Always a usage error", Run: func(ctx context.Context, env *Env, args []string) error {
+		return &UsageError{Msg: "needs an argument"}
+	}},
+	{Name: "fails", Summary: "Always fails", Run: func(ctx context.Context, env *Env, args []string) error {
+		return errors.New("it broke")
+	}},
+	{Name: "flags", Summary: "Has flags", Run: func(ctx context.Context, env *Env, args []string) error {
+		fs := NewFlags(env, "flags", "flags [--n N]\n\nTakes a number.")
+		n := fs.Int("n", 1, "a number")
+		if err := Parse(fs, args); err != nil {
+			return err
+		}
+		env.Stdout.Write([]byte(strings.Repeat("x", *n) + "\n"))
+		return nil
+	}},
+}
+
+// noOpen fails the test if a command that shouldn't need the database
+// asks for an Env.
+func noOpen(t *testing.T) Opener {
+	return func(ctx context.Context, sys System) (*Env, func(), error) {
+		t.Fatal("opened an Env")
+		return nil, nil, nil
+	}
+}
+
+func fakeOpen(sys System) Opener {
+	return func(ctx context.Context, s System) (*Env, func(), error) {
+		return &Env{Stdin: s.Stdin, Stdout: s.Stdout, Stderr: s.Stderr, StdinIsTerminal: s.StdinIsTerminal}, func() {}, nil
+	}
+}
+
+func TestHelpListsCommandsWithoutDB(t *testing.T) {
+	for _, args := range [][]string{{"help"}, {}} {
+		var o out
+		if code := mainWith(context.Background(), args, o.sys("", true), testCommands, noOpen(t)); code != 0 {
+			t.Fatalf("%v: exit %d", args, code)
+		}
+		for _, c := range testCommands {
+			if !strings.Contains(o.stdout.String(), c.Name) || !strings.Contains(o.stdout.String(), c.Summary) {
+				t.Errorf("%v: help is missing %s: %q", args, c.Name, o.stdout.String())
+			}
+		}
+	}
+}
+
+func TestRealCommandsAreListed(t *testing.T) {
+	var o out
+	mainWith(context.Background(), []string{"help"}, o.sys("", true), Commands, noOpen(t))
+	for _, c := range Commands {
+		if !strings.Contains(o.stdout.String(), c.Name) {
+			t.Errorf("help is missing %s", c.Name)
+		}
+	}
+}
+
+func TestUnknownCommand(t *testing.T) {
+	var o out
+	if code := mainWith(context.Background(), []string{"nope"}, o.sys("", true), testCommands, noOpen(t)); code != 2 {
+		t.Fatalf("exit %d, want 2", code)
+	}
+	if !strings.Contains(o.stderr.String(), "usage:") || !strings.Contains(o.stderr.String(), "unknown command nope") {
+		t.Fatalf("stderr %q", o.stderr.String())
+	}
+}
+
+func TestRunsCommandWithArgs(t *testing.T) {
+	var o out
+	sys := o.sys("", true)
+	if code := mainWith(context.Background(), []string{"alpha", "a", "b"}, sys, testCommands, fakeOpen(sys)); code != 0 {
+		t.Fatalf("exit %d: %s", code, o.stderr.String())
+	}
+	if o.stdout.String() != "alpha ran a,b\n" {
+		t.Fatalf("stdout %q", o.stdout.String())
+	}
+}
+
+func TestUsageErrorExits2(t *testing.T) {
+	var o out
+	sys := o.sys("", true)
+	if code := mainWith(context.Background(), []string{"bad-args"}, sys, testCommands, fakeOpen(sys)); code != 2 {
+		t.Fatalf("exit %d, want 2", code)
+	}
+	if !strings.Contains(o.stderr.String(), "lctl bad-args: needs an argument") {
+		t.Fatalf("stderr %q", o.stderr.String())
+	}
+}
+
+func TestErrorExits1(t *testing.T) {
+	var o out
+	sys := o.sys("", true)
+	if code := mainWith(context.Background(), []string{"fails"}, sys, testCommands, fakeOpen(sys)); code != 1 {
+		t.Fatalf("exit %d, want 1", code)
+	}
+	if !strings.Contains(o.stderr.String(), "lctl fails: it broke") {
+		t.Fatalf("stderr %q", o.stderr.String())
+	}
+}
+
+func TestOpenErrorExits1(t *testing.T) {
+	var o out
+	failing := func(context.Context, System) (*Env, func(), error) { return nil, nil, errors.New("no database") }
+	if code := mainWith(context.Background(), []string{"alpha"}, o.sys("", true), testCommands, failing); code != 1 {
+		t.Fatalf("exit %d, want 1", code)
+	}
+	if !strings.Contains(o.stderr.String(), "no database") {
+		t.Fatalf("stderr %q", o.stderr.String())
+	}
+}
+
+func TestFlags(t *testing.T) {
+	var o out
+	sys := o.sys("", true)
+	if code := mainWith(context.Background(), []string{"flags", "--n", "3"}, sys, testCommands, fakeOpen(sys)); code != 0 || o.stdout.String() != "xxx\n" {
+		t.Fatalf("exit %d stdout %q stderr %q", code, o.stdout.String(), o.stderr.String())
+	}
+	o = out{}
+	sys = o.sys("", true)
+	if code := mainWith(context.Background(), []string{"flags", "-h"}, sys, testCommands, fakeOpen(sys)); code != 0 {
+		t.Fatalf("-h: exit %d", code)
+	}
+	if !strings.Contains(o.stderr.String(), "usage: lctl flags [--n N]") || !strings.Contains(o.stderr.String(), "Takes a number.") {
+		t.Fatalf("-h: stderr %q", o.stderr.String())
+	}
+	o = out{}
+	sys = o.sys("", true)
+	if code := mainWith(context.Background(), []string{"flags", "--bogus"}, sys, testCommands, fakeOpen(sys)); code != 2 {
+		t.Fatalf("bad flag: exit %d, want 2", code)
+	}
+}
+
+func TestReadIDs(t *testing.T) {
+	env := &Env{Stdin: strings.NewReader(" a \n\nb\n"), StdinIsTerminal: false}
+	if got := ReadIDs(env, []string{"x", "y"}); strings.Join(got, ",") != "x,y" {
+		t.Errorf("args: %v", got)
+	}
+	if got := ReadIDs(env, nil); strings.Join(got, ",") != "a,b" {
+		t.Errorf("stdin: %v", got)
+	}
+	env = &Env{Stdin: strings.NewReader("a\n"), StdinIsTerminal: true}
+	if got := ReadIDs(env, nil); len(got) != 0 {
+		t.Errorf("terminal: %v", got)
+	}
+}
+
+func TestEnvFromSystem(t *testing.T) {
+	vars := map[string]string{"POSTGRES_HOST": "127.0.0.1:1", "POSTGRES_DB": "other", "LIERCD_HOST": "liercd", "API_STATS": "http://s/stats"}
+	var o out
+	sys := o.sys("", false)
+	sys.Getenv = func(k string) string { return vars[k] }
+	env, closeEnv, err := OpenEnv(context.Background(), sys)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer closeEnv()
+	if env.Config.DBName != "other" {
+		t.Errorf("DBName %q, want POSTGRES_DB", env.Config.DBName)
+	}
+	if env.Liercd.BaseURL != "http://liercd:5005" || env.StatsURL != "http://s/stats" {
+		t.Errorf("liercd %q stats %q", env.Liercd.BaseURL, env.StatsURL)
+	}
+	delete(vars, "POSTGRES_DB")
+	delete(vars, "API_STATS")
+	env2, close2, err := OpenEnv(context.Background(), sys)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer close2()
+	if env2.Config.DBName != "lierc" || env2.StatsURL != "http://127.0.0.1:5003/stats" {
+		t.Errorf("defaults: db %q stats %q", env2.Config.DBName, env2.StatsURL)
+	}
+	if env2.Resolve == nil || env2.Sleep == nil || env2.ReadPassword == nil {
+		t.Error("Resolve, Sleep and ReadPassword must be set")
+	}
+}
+
+func TestSleepCancelled(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if err := sleepCtx(ctx, 1e9); !errors.Is(err, context.Canceled) {
+		t.Fatalf("got %v", err)
+	}
+}
+
+func TestPoolBegin(t *testing.T) {
+	d := testenv.Postgres(t)
+	tx, err := d.Pool.Begin(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tx.Exec(context.Background(), `INSERT INTO pref ("user", name, value) VALUES ('u', 'n', 'v')`); err != nil {
+		t.Fatal(err)
+	}
+	tx.Rollback(context.Background())
+	var n int
+	d.Pool.QueryRow(context.Background(), `SELECT count(*) FROM pref`).Scan(&n)
+	if n != 0 {
+		t.Fatalf("rolled back insert is visible: %d rows", n)
+	}
+}
