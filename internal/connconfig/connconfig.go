@@ -2,10 +2,13 @@
 // the API applies to an IRC connection's settings, and the check that refuses
 // hosts pointing at loopback or private addresses. lctl uses it to judge saved
 // connections exactly as the API judged them, so it reproduces Perl's
-// behaviour, quirks included: JSON numbers become text the way Perl prints
-// them, Ssl/SASL use Perl truthiness, `\s` is Unicode whitespace and `$` also
-// matches before a final newline. testdata/connection-config-cases.json is run
-// by both test suites; a rule changed here must change there too.
+// behaviour, quirks included: Ssl/SASL use Perl truthiness, `\s` is Unicode
+// whitespace and `$` also matches before a final newline. One deliberate
+// difference: text fields must be JSON strings (Perl also takes numbers);
+// only Port may be a number, and it's read the way Perl prints it.
+// testdata/connection-config-cases.json is run by both test suites (Go's own
+// result is under "go" where it's stricter); a rule changed here must change
+// there too.
 package connconfig
 
 import (
@@ -105,9 +108,19 @@ func perlNumber(lit string) string {
 
 func trim(s string) string { return strings.TrimFunc(s, unicode.IsSpace) }
 
-// text is Perl's text(): the trimmed string of a scalar, ok false otherwise.
+// textKind is how a text field sees v: unlike Perl, lctl requires a real
+// JSON string there, so a number counts as a reference (like a boolean).
+// Only Port takes a number.
+func textKind(v any) (kind, string) {
+	if _, ok := v.(json.Number); ok {
+		return ref, ""
+	}
+	return perlValue(v)
+}
+
+// text is Perl's text(): the trimmed string of a string, ok false otherwise.
 func text(v any) (string, bool) {
-	k, s := perlValue(v)
+	k, s := textKind(v)
 	if k != scalar {
 		return "", false
 	}
@@ -127,7 +140,7 @@ func list(v any, name string) ([]string, error) {
 	}
 	var all []string
 	for _, item := range items {
-		k, _ := perlValue(item)
+		k, _ := textKind(item)
 		if k != scalar {
 			return nil, errors.New(name + " must be a list")
 		}
@@ -249,7 +262,7 @@ func Clean(raw []byte) (map[string]any, error) {
 	}
 
 	if rawPass := params["Pass"]; rawPass != nil {
-		k, pass := perlValue(rawPass)
+		k, pass := textKind(rawPass)
 		if k == ref {
 			return nil, errors.New("Password must be text")
 		}

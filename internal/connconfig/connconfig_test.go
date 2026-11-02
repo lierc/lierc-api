@@ -18,6 +18,12 @@ type cases struct {
 		Input string          `json:"input"`
 		Want  json.RawMessage `json:"want"`
 		Error *string         `json:"error"`
+		// Go's own result where it's stricter than Perl (JSON strings
+		// required in text fields)
+		Go *struct {
+			Want  json.RawMessage `json:"want"`
+			Error *string         `json:"error"`
+		} `json:"go"`
 	} `json:"clean"`
 	Blocked []struct {
 		IP      string `json:"ip"`
@@ -84,6 +90,9 @@ func normal(t *testing.T, v any) any {
 
 func TestSharedCleanCases(t *testing.T) {
 	for _, c := range load(t).Clean {
+		if c.Go != nil {
+			c.Want, c.Error = c.Go.Want, c.Go.Error
+		}
 		t.Run(c.Name, func(t *testing.T) {
 			got, err := Clean([]byte(c.Input))
 			if c.Error != nil {
@@ -172,14 +181,15 @@ func deref(s *string) string {
 	return *s
 }
 
-// Perl accepts a User or Alias of 1e-400 (it prints as "0") but saves it as
-// the number 0, an encoder quirk the shared cases can't compare; only the
-// verdict matters to lctl.
-func TestTinyNumberTextFieldsAccepted(t *testing.T) {
+// A JSON number in a text field is refused like a boolean, including ones
+// the shared cases leave out (Perl saves 1e-400 as the number 0).
+func TestNumbersInTextFieldsRefused(t *testing.T) {
 	for _, f := range []string{"User", "Alias"} {
-		got, err := Clean([]byte(`{"Host":"irc.libera.chat","Port":6697,"Nick":"lee","` + f + `":1e-400}`))
-		if err != nil || got[f] != "0" {
-			t.Errorf("%s 1e-400: %v %v", f, got[f], err)
+		if _, err := Clean([]byte(`{"Host":"irc.libera.chat","Port":6697,"Nick":"lee","` + f + `":1e-400}`)); err == nil {
+			t.Errorf("%s 1e-400 accepted", f)
 		}
+	}
+	if _, err := Clean([]byte(`{"Host":"irc.libera.chat","Port":"6697","Nick":"lee"}`)); err != nil {
+		t.Errorf("Port as a string refused: %v", err)
 	}
 }

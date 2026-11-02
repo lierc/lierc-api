@@ -1,5 +1,5 @@
 {
-   "_comment" : "Shared by t/connection_config.t and internal/connconfig. Expected values are what lib/API/ConnectionConfig.pm returns; 'input' is the raw request JSON. Keep Perl and Go in step: a rule changed in one must pass here in both.",
+   "_comment" : "Shared by t/connection_config.t and internal/connconfig. Expected values are what lib/API/ConnectionConfig.pm returns; 'input' is the raw request JSON. Where Go is stricter (it requires JSON strings in text fields; only Port may be a number), its result is under 'go'. Keep Perl and Go in step: a rule changed in one must pass here in both.",
    "blocked" : [
       {
          "blocked" : true,
@@ -825,11 +825,17 @@
       },
       {
          "error" : "Nick must be up to 32 letters, digits, - or [ ] \\ ` _ ^ { | }, not starting with a digit or -",
+         "go" : {
+            "error" : "Nick is required"
+         },
          "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Nick\":12}",
          "name" : "Nick 12"
       },
       {
          "error" : "Nick must be up to 32 letters, digits, - or [ ] \\ ` _ ^ { | }, not starting with a digit or -",
+         "go" : {
+            "error" : "Nick is required"
+         },
          "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Nick\":1.5}",
          "name" : "Nick 1.5"
       },
@@ -954,6 +960,9 @@
          "name" : "User \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\""
       },
       {
+         "go" : {
+            "error" : "Username must be up to 32 letters, digits, - . ~ or [ ] \\ ` _ ^ { | }"
+         },
          "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"User\":12}",
          "name" : "User 12",
          "want" : {
@@ -1067,6 +1076,9 @@
          "name" : "Pass false"
       },
       {
+         "go" : {
+            "error" : "Password must be text"
+         },
          "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Pass\":12}",
          "name" : "Pass 12",
          "want" : {
@@ -1081,6 +1093,9 @@
          }
       },
       {
+         "go" : {
+            "error" : "Password must be text"
+         },
          "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Pass\":1.5}",
          "name" : "Pass 1.5",
          "want" : {
@@ -1095,6 +1110,9 @@
          }
       },
       {
+         "go" : {
+            "error" : "Password must be text"
+         },
          "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Pass\":0}",
          "name" : "Pass 0",
          "want" : {
@@ -1286,6 +1304,9 @@
       },
       {
          "error" : "1 isn't a valid channel name",
+         "go" : {
+            "error" : "Channels must be a list"
+         },
          "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Channels\":[\"#a\", 1]}",
          "name" : "Channels [\"#a\", 1]"
       },
@@ -1384,6 +1405,9 @@
          }
       },
       {
+         "go" : {
+            "error" : "Highlight must be a list"
+         },
          "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Highlight\":[1]}",
          "name" : "Highlight [1]",
          "want" : {
@@ -1464,6 +1488,9 @@
          }
       },
       {
+         "go" : {
+            "error" : "Network alias can only use letters, digits and spaces, up to 32 characters"
+         },
          "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Alias\":12}",
          "name" : "Alias 12",
          "want" : {
@@ -1692,6 +1719,9 @@
          }
       },
       {
+         "go" : {
+            "error" : "Username must be up to 32 letters, digits, - . ~ or [ ] \\ ` _ ^ { | }"
+         },
          "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"User\":12345678901234567890123}",
          "name" : "big number User 12345678901234567890123",
          "want" : {
@@ -1706,6 +1736,9 @@
          }
       },
       {
+         "go" : {
+            "error" : "Username must be up to 32 letters, digits, - . ~ or [ ] \\ ` _ ^ { | }"
+         },
          "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"User\":-12345678901234567890}",
          "name" : "big number User -12345678901234567890",
          "want" : {
@@ -1720,6 +1753,9 @@
          }
       },
       {
+         "go" : {
+            "error" : "Username must be up to 32 letters, digits, - . ~ or [ ] \\ ` _ ^ { | }"
+         },
          "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"User\":18446744073709551616}",
          "name" : "big number User 18446744073709551616",
          "want" : {
@@ -1734,6 +1770,9 @@
          }
       },
       {
+         "go" : {
+            "error" : "Username must be up to 32 letters, digits, - . ~ or [ ] \\ ` _ ^ { | }"
+         },
          "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"User\":100000000000000000000}",
          "name" : "big number User 100000000000000000000",
          "want" : {
@@ -1748,6 +1787,9 @@
          }
       },
       {
+         "go" : {
+            "error" : "Username must be up to 32 letters, digits, - . ~ or [ ] \\ ` _ ^ { | }"
+         },
          "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"User\":9223372036854775808}",
          "name" : "big number User 9223372036854775808",
          "want" : {
@@ -1762,6 +1804,9 @@
          }
       },
       {
+         "go" : {
+            "error" : "Username must be up to 32 letters, digits, - . ~ or [ ] \\ ` _ ^ { | }"
+         },
          "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"User\":1E400}",
          "name" : "big number User 1E400",
          "want" : {
@@ -1776,6 +1821,9 @@
          }
       },
       {
+         "go" : {
+            "error" : "Username must be up to 32 letters, digits, - . ~ or [ ] \\ ` _ ^ { | }"
+         },
          "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"User\":-1E400}",
          "name" : "big number User -1E400",
          "want" : {
@@ -1790,6 +1838,9 @@
          }
       },
       {
+         "go" : {
+            "error" : "Network alias can only use letters, digits and spaces, up to 32 characters"
+         },
          "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Alias\":12345678901234567890123}",
          "name" : "big number Alias 12345678901234567890123",
          "want" : {
@@ -1809,6 +1860,9 @@
          "name" : "big number Alias -12345678901234567890"
       },
       {
+         "go" : {
+            "error" : "Network alias can only use letters, digits and spaces, up to 32 characters"
+         },
          "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Alias\":18446744073709551616}",
          "name" : "big number Alias 18446744073709551616",
          "want" : {
@@ -1823,6 +1877,9 @@
          }
       },
       {
+         "go" : {
+            "error" : "Network alias can only use letters, digits and spaces, up to 32 characters"
+         },
          "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Alias\":100000000000000000000}",
          "name" : "big number Alias 100000000000000000000",
          "want" : {
@@ -1837,6 +1894,9 @@
          }
       },
       {
+         "go" : {
+            "error" : "Network alias can only use letters, digits and spaces, up to 32 characters"
+         },
          "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Alias\":9223372036854775808}",
          "name" : "big number Alias 9223372036854775808",
          "want" : {
@@ -1851,6 +1911,9 @@
          }
       },
       {
+         "go" : {
+            "error" : "Network alias can only use letters, digits and spaces, up to 32 characters"
+         },
          "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Alias\":1E400}",
          "name" : "big number Alias 1E400",
          "want" : {
@@ -1871,30 +1934,48 @@
       },
       {
          "error" : "Nick must be up to 32 letters, digits, - or [ ] \\ ` _ ^ { | }, not starting with a digit or -",
+         "go" : {
+            "error" : "Nick is required"
+         },
          "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Nick\":12345678901234567890123}",
          "name" : "big number Nick 12345678901234567890123"
       },
       {
          "error" : "Nick must be up to 32 letters, digits, - or [ ] \\ ` _ ^ { | }, not starting with a digit or -",
+         "go" : {
+            "error" : "Nick is required"
+         },
          "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Nick\":-12345678901234567890}",
          "name" : "big number Nick -12345678901234567890"
       },
       {
          "error" : "Nick must be up to 32 letters, digits, - or [ ] \\ ` _ ^ { | }, not starting with a digit or -",
+         "go" : {
+            "error" : "Nick is required"
+         },
          "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Nick\":18446744073709551616}",
          "name" : "big number Nick 18446744073709551616"
       },
       {
          "error" : "Nick must be up to 32 letters, digits, - or [ ] \\ ` _ ^ { | }, not starting with a digit or -",
+         "go" : {
+            "error" : "Nick is required"
+         },
          "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Nick\":100000000000000000000}",
          "name" : "big number Nick 100000000000000000000"
       },
       {
          "error" : "Nick must be up to 32 letters, digits, - or [ ] \\ ` _ ^ { | }, not starting with a digit or -",
+         "go" : {
+            "error" : "Nick is required"
+         },
          "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Nick\":9223372036854775808}",
          "name" : "big number Nick 9223372036854775808"
       },
       {
+         "go" : {
+            "error" : "Nick is required"
+         },
          "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Nick\":1E400}",
          "name" : "big number Nick 1E400",
          "want" : {
@@ -1909,6 +1990,9 @@
       },
       {
          "error" : "Nick must be up to 32 letters, digits, - or [ ] \\ ` _ ^ { | }, not starting with a digit or -",
+         "go" : {
+            "error" : "Nick is required"
+         },
          "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Nick\":-1E400}",
          "name" : "big number Nick -1E400"
       },
@@ -1938,6 +2022,9 @@
          "name" : "big number Host 9223372036854775808"
       },
       {
+         "go" : {
+            "error" : "Host must be an IPv4 address or a domain name"
+         },
          "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Host\":1E400}",
          "name" : "big number Host 1E400",
          "want" : {
@@ -1956,6 +2043,9 @@
          "name" : "big number Host -1E400"
       },
       {
+         "go" : {
+            "error" : "Password must be text"
+         },
          "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Pass\":12345678901234567890123}",
          "name" : "big number Pass 12345678901234567890123",
          "want" : {
@@ -1970,6 +2060,9 @@
          }
       },
       {
+         "go" : {
+            "error" : "Password must be text"
+         },
          "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Pass\":-12345678901234567890}",
          "name" : "big number Pass -12345678901234567890",
          "want" : {
@@ -1984,6 +2077,9 @@
          }
       },
       {
+         "go" : {
+            "error" : "Password must be text"
+         },
          "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Pass\":18446744073709551616}",
          "name" : "big number Pass 18446744073709551616",
          "want" : {
@@ -1998,6 +2094,9 @@
          }
       },
       {
+         "go" : {
+            "error" : "Password must be text"
+         },
          "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Pass\":100000000000000000000}",
          "name" : "big number Pass 100000000000000000000",
          "want" : {
@@ -2012,6 +2111,9 @@
          }
       },
       {
+         "go" : {
+            "error" : "Password must be text"
+         },
          "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Pass\":9223372036854775808}",
          "name" : "big number Pass 9223372036854775808",
          "want" : {
@@ -2026,6 +2128,9 @@
          }
       },
       {
+         "go" : {
+            "error" : "Password must be text"
+         },
          "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Pass\":1E400}",
          "name" : "big number Pass 1E400",
          "want" : {
@@ -2040,6 +2145,9 @@
          }
       },
       {
+         "go" : {
+            "error" : "Password must be text"
+         },
          "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Pass\":-1E400}",
          "name" : "big number Pass -1E400",
          "want" : {
@@ -2055,6 +2163,9 @@
       },
       {
          "error" : "Nick must be up to 32 letters, digits, - or [ ] \\ ` _ ^ { | }, not starting with a digit or -",
+         "go" : {
+            "error" : "Nick is required"
+         },
          "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Nick\":1e-400}",
          "name" : "big number Nick 1e-400"
       },
@@ -2064,6 +2175,9 @@
          "name" : "big number Host 1e-400"
       },
       {
+         "go" : {
+            "error" : "Password must be text"
+         },
          "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Pass\":1e-400}",
          "name" : "big number Pass 1e-400",
          "want" : {
@@ -2078,6 +2192,9 @@
          }
       },
       {
+         "go" : {
+            "error" : "Highlight must be a list"
+         },
          "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Highlight\":[12345678901234567890123]}",
          "name" : "big number Highlight 12345678901234567890123",
          "want" : {
@@ -2093,6 +2210,9 @@
          }
       },
       {
+         "go" : {
+            "error" : "Highlight must be a list"
+         },
          "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Highlight\":[1E400]}",
          "name" : "big number Highlight 1E400",
          "want" : {
@@ -2109,6 +2229,9 @@
       },
       {
          "error" : "12345678901234567890123 isn't a valid channel name",
+         "go" : {
+            "error" : "Channels must be a list"
+         },
          "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Channels\":[12345678901234567890123]}",
          "name" : "big number Channels 12345678901234567890123"
       },
