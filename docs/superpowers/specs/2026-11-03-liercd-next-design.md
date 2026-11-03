@@ -86,12 +86,21 @@ out (YAGNI) unless it shows up.
 
 1. refuses an unknown instance, an unknown connection, a move to the
    instance it's already on, or `next` when `LIERCD_NEXT_HOST` is unset;
-2. destroys the connection on its current instance (404 is fine: it may
+2. asks the new instance for the connection's status, by host, and
+   refuses if that instance can't be reached or is already running it;
+3. destroys the connection on its current instance (404 is fine: it may
    not be running);
-3. sets the column;
-4. creates it on the new instance from its saved config.
+4. sets the column;
+5. destroys it on the old instance again, by host (404 is fine). A user's
+   stream opening between steps 3 and 4 finds it missing and recreates it
+   through the column, which still names the old instance; this removes
+   that copy, and the command says it did;
+6. creates it on the new instance from its saved config.
 
-If step 4 fails, the column is already set, so the stream server's
+Steps 2, 5 and 6 go to an instance by its host rather than through the
+column, so the column changing under them can't send them to the wrong one.
+
+If step 6 fails, the column is already set, so the stream server's
 recreate-on-open (or `lctl reconnect`) creates it on the new instance
 later; the command says so. The user sees a reconnect, with the usual
 DISCONNECT and CREATE events in the UI and the log.
@@ -123,8 +132,35 @@ for this.
 4. Deploy relaychat-infra with `liercd-next`.
 5. Move one of the user's own connections first with `lctl`.
 
-Promoting the branch later: deploy it as `main`, move every `next`
-connection back, then remove `liercd-next`.
+Promoting the branch later: see "Operating it".
+
+## Operating it
+
+- **Starting `liercd-next`.** It is `manual_restart`, so the playbook
+  installs it but doesn't start or restart it. After a deploy, start it by
+  hand (`systemctl start liercd-next`) and check it answers:
+  `curl -s 127.0.0.2:5005/portmap`.
+- **Which connections are on `next`:**
+  `SELECT id FROM connection WHERE liercd IS NOT NULL`.
+- **Before rolling lierc-api back** (either image, `lierc_api` or
+  `lierc_api_go`) past this change, **or stopping or removing
+  `liercd-next`**, move every one of those rows back to `main` with
+  `lctl move-connection ID main`. Older images route every call to `main`,
+  and the stream server recreates any connection `main` isn't running, so a
+  `next` connection would then run on both instances.
+- **If `liercd-next` is down**, a moved user's stream replay fails, and
+  replay is all-or-nothing, so the user gets none of their connections, not
+  only the moved one. Restart `liercd-next`, or move their `next`
+  connections back to `main`.
+- **Promoting the branch:**
+  1. pin the `irc-go` image as `images.lierc`, deploy, and restart
+     `liercd` by hand (it is `manual_restart` too);
+  2. move every `next` row back to `main` (the query above);
+  3. `systemctl disable --now liercd-next`;
+  4. remove the `liercd-next` unit and its services entry,
+     `images.lierc_next`, and `LIERCD_NEXT_HOST` from `lierc.env`, and
+     deploy.
+- **Removing it without promoting:** steps 2 to 4.
 
 ## Testing
 
@@ -132,8 +168,10 @@ connection back, then remove `liercd-next`.
   a NULL or missing one to `LIERCD_HOST`, and errors for `next` without
   `LIERCD_NEXT_HOST`.
 - Go: the same for `Client.Do`, and `lctl move-connection`'s order
-  (destroy on the old instance, column, create on the new), its refusals,
-  and a failed create leaving the column set.
+  (status on the new instance, destroy on the old, column, destroy on the
+  old again, create on the new), its refusals (including the new instance
+  unreachable or already running it), a recreate slipping in mid-move, and
+  a failed create leaving the column set.
 - End to end in the dev stack with two liercds: move a connection to
   `next`, send a message, see it arrive; move it back.
 
