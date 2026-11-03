@@ -230,4 +230,37 @@ my $saved = encode_json { Host => "1.1.1.1", Port => 6667, Nick => "old", Channe
   like $@, qr/^Nick can only use/, "create still checks the nick";
 }
 
+{
+  # A new connection's row is saved before liercd creates it: liercd's
+  # instance is looked up from the row (a column default can send new
+  # connections to liercd-next), and the stream sends the connection's
+  # first events to whoever the row says owns it.
+  my $body = encode_json { Host => "1.1.1.1", Port => 6697, Nick => "lee" };
+  my $app = FakeApp->new(undef);
+  my $res = API::Controller::Connection::create($app, FakeReq->new(undef, $body));
+  is $res->{success}, "ok", "create succeeds";
+  is_deeply $app->{log}, ["insert", "liercd create"], "saves the row, then creates the connection";
+  is $app->{liercd}[0][1], "$app->{saves}[0][0]/create", "for the saved id";
+  is_deeply $app->{notified}, ["NOTIFY highlights"], "and tells the notifier";
+
+  # liercd refusing leaves no row behind, as before
+  $app = FakeApp->new(undef);
+  $app->{liercd_code}{create} = 500;
+  eval { API::Controller::Connection::create($app, FakeReq->new(undef, $body)) };
+  like $@, qr/liercd said no/, "a refused create fails with liercd's message";
+  is_deeply $app->{log}, ["insert", "liercd create", "delete"], "and deletes the row it saved";
+  is $app->{deletes}[0][0], $app->{saves}[0][0], "the same one";
+  is_deeply $app->{notified}, [], "without telling the notifier";
+
+  # so does failing to reach liercd at all
+  $app = FakeApp->new(undef);
+  {
+    no warnings 'redefine';
+    local *FakeApp::request = sub { push @{ $_[0]{log} }, "liercd create"; die "no host\n" };
+    eval { API::Controller::Connection::create($app, FakeReq->new(undef, $body)) };
+  }
+  is $@, "no host\n", "an unreachable liercd fails with its error";
+  is_deeply $app->{log}, ["insert", "liercd create", "delete"], "and deletes the row too";
+}
+
 done_testing;

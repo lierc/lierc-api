@@ -98,12 +98,23 @@ sub valid_config_from {
   return $config;
 }
 
+# Saves the row before liercd creates the connection: which liercd it
+# goes to is looked up from the row (the column's default can send new
+# connections to liercd-next), and the stream sends the connection's
+# first events to whoever the row says owns it. If the create fails,
+# the row is deleted again.
 sub start {
   my ($app, $id, $user, $config) = @_;
   my $json = encode_json $config;
-  my $res  = $app->request(POST => "$id/create", $json);
-  die $res->decoded_content unless $res->code == 200;
   $app->save_connection($id, $user, $json);
+
+  my $res = eval { $app->request(POST => "$id/create", $json) };
+  my $err = $@ || ($res->code == 200 ? undef : $res->decoded_content);
+  if (defined $err) {
+    $app->delete_connection($id);
+    die $err;
+  }
+
   $app->dbh->do("NOTIFY highlights");
 }
 
