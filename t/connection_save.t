@@ -8,9 +8,10 @@ use API::Controller::Connection;
 
 # PUT /connection/:id/config saves a connection's highlights and alias
 # without touching the running connection in liercd. PUT /connection/:id
-# (save and reconnect) saves the rest, but not the channel list or the nick:
-# they're set when the connection is created, and after that only joining
-# and leaving channels, and /nick, change them.
+# (save and reconnect) saves the rest, but not the channel list: it's set
+# when the connection is created, and after that only joining and leaving
+# channels change it. The nick is the request's, so a nick the server
+# refuses can be fixed; a request without one keeps the saved nick.
 
 my ($name, $captured) = API::Routes->route({ REQUEST_METHOD => "PUT", PATH_INFO => "/connection/abc/config" });
 is $name, "connection.save", "PUT /connection/:id/config routes to connection.save";
@@ -136,7 +137,7 @@ my $saved = encode_json { Host => "1.1.1.1", Port => 6667, Nick => "old", Channe
   my ($create) = grep { $_->[1] eq "abc/create" } @{ $app->{liercd} };
   ok $create, "edit restarts the connection in liercd";
   is_deeply decode_json($create->[2])->{Channels}, ["#a", "#key secret"], "with the saved channels";
-  is decode_json($create->[2])->{Nick}, "old", "and nick";
+  is decode_json($create->[2])->{Nick}, "lee", "and the request's nick";
   is_deeply decode_json($app->{updates}[0][1])->{Channels}, ["#a", "#key secret"], "and saves them";
 }
 
@@ -161,14 +162,14 @@ my $saved = encode_json { Host => "1.1.1.1", Port => 6667, Nick => "old", Channe
 
 {
   # save and reconnect only reconnects if a setting the IRC connection
-  # uses changed: address, port, username, password, TLS or SASL
+  # uses changed: address, port, nick, username, password, TLS or SASL
   my $server = encode_json { Host => "1.1.1.1", Port => "6697", Nick => "old", User => "u", Pass => "p",
     Ssl => JSON::XS::true, SASL => JSON::XS::false, Channels => ["#a"], Highlight => ["x"] };
-  my %same = (Host => " 1.1.1.1 ", Port => 6697, User => "u", Pass => "p", Ssl => 1, SASL => 0);
+  my %same = (Host => " 1.1.1.1 ", Port => 6697, Nick => "old", User => "u", Pass => "p", Ssl => 1, SASL => 0);
 
   my $app = FakeApp->new($server);
   my $res = API::Controller::Connection::edit($app, FakeReq->new("abc", encode_json {
-    %same, Nick => "other", Channels => ["#b"], Highlight => ["y"], Alias => "home" }));
+    %same, Channels => ["#b"], Highlight => ["y"], Alias => "home" }));
   is $res, "ok", "unchanged server settings: edit returns ok";
   is_deeply $app->{log}, ["update"], "and only updates the row, without reconnecting";
   my $got = decode_json($app->{updates}[0][1]);
@@ -176,7 +177,18 @@ my $saved = encode_json { Host => "1.1.1.1", Port => 6667, Nick => "old", Channe
     "saving the alias and highlights, keeping the nick and channels";
   is_deeply $app->{notified}, ["NOTIFY highlights"], "and telling the notifier";
 
-  for my $change ([Host => "8.8.8.8"], [Port => 6698], [User => "v"], [User => ""],
+  # a request without a nick (an older UI's) keeps the saved one, and
+  # doesn't count as a change
+  my %no_nick = %same;
+  delete $no_nick{Nick};
+  for my $nick (undef, "") {
+    my $app = FakeApp->new($server);
+    API::Controller::Connection::edit($app, FakeReq->new("abc", encode_json { %no_nick, defined $nick ? (Nick => $nick) : () }));
+    is_deeply $app->{log}, ["update"], "no nick in the request: no reconnect";
+    is decode_json($app->{updates}[0][1])->{Nick}, "old", "and the saved nick kept";
+  }
+
+  for my $change ([Host => "8.8.8.8"], [Port => 6698], [Nick => "new"], [Nick => "Old"], [User => "v"], [User => ""],
                   [Pass => "q"], [Pass => ""], [Ssl => 0], [SASL => 1]) {
     my ($field, $value) = @$change;
     my $app = FakeApp->new($server);
@@ -187,8 +199,22 @@ my $saved = encode_json { Host => "1.1.1.1", Port => 6667, Nick => "old", Channe
 
   # no username or password saved, and none given
   $app = FakeApp->new(encode_json { Host => "1.1.1.1", Port => 6697, Nick => "old" });
-  API::Controller::Connection::edit($app, FakeReq->new("abc", encode_json { Host => "1.1.1.1", Port => 6697, User => "", Pass => "" }));
+  API::Controller::Connection::edit($app, FakeReq->new("abc", encode_json { Host => "1.1.1.1", Port => 6697, Nick => "old", User => "", Pass => "" }));
   is_deeply $app->{log}, ["update"], "blank username and password match none saved";
+}
+
+{
+  # a changed nick is checked like any other setting, before liercd is
+  # touched; a kept one isn't, so an old saved nick can't block an edit
+  my $app = FakeApp->new($saved);
+  eval { API::Controller::Connection::edit($app, FakeReq->new("abc", encode_json { Host => "1.1.1.1", Port => 6667, Nick => "bad.nick" })) };
+  like $@, qr/^Nick can only use/, "edit checks a new nick";
+  is_deeply $app->{liercd}, [], "without touching liercd";
+
+  $app = FakeApp->new(encode_json { Host => "1.1.1.1", Port => 6667, Nick => "old.nick" });
+  my $res = API::Controller::Connection::edit($app, FakeReq->new("abc", encode_json { Host => "1.1.1.1", Port => 6667 }));
+  is $res, "ok", "a saved nick today's rules refuse is kept without a check";
+  is decode_json($app->{updates}[0][1])->{Nick}, "old.nick", "as it was";
 }
 
 {

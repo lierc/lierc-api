@@ -50,11 +50,13 @@ sub valid_config {
 }
 
 # The settings for an existing connection: the request's, but with the
-# saved channel list and nick. Both are only set when a connection is
-# created; after that, joining and leaving channels and /nick change them
-# (liercd reports the change and the logger saves it). The saved values are
-# kept as they are, so an old one that today's rules refuse can't block an
-# edit.
+# saved channel list. Channels are only set when a connection is created;
+# after that, joining and leaving channels change them (liercd reports the
+# change and the logger saves it). The nick is the request's, checked like
+# the rest, so a nick the server refuses can be fixed here; a request
+# without one (an older UI's) keeps the saved nick, which /nick also
+# changes. A kept nick isn't re-checked, so an old one that today's rules
+# refuse can't block an edit.
 sub edited_config {
   my ($app, $req) = @_;
   my $params = eval { decode_json $req->content };
@@ -65,25 +67,26 @@ sub edited_config {
   $nick = undef if ref $nick || !defined $nick || $nick eq "";
 
   delete $params->{Channels};
-  # the request's nick is ignored; it's only checked if there's no saved
-  # nick to keep
-  $params->{Nick} = "placeholder" if defined $nick;
+  my $keep_nick = defined $nick && (!defined $params->{Nick} || $params->{Nick} eq "");
+  # a kept nick is only checked if there's no saved one
+  $params->{Nick} = "placeholder" if $keep_nick;
   my $config = valid_config_from($params);
 
-  $config->{Nick} = $nick if defined $nick;
+  $config->{Nick} = $nick if $keep_nick;
   $config->{Channels} = ref $saved->{Channels} eq "ARRAY" ? $saved->{Channels} : [];
   return $config;
 }
 
 # The settings liercd connects with, as one string to compare: a saved
 # config may have a string port, 0 or 1 for a flag, or "" for no username.
-my @SERVER_FIELDS = qw(Host Port User Pass Ssl SASL);
+# The nick is one: liercd registers with it, so changing it reconnects.
+my @SERVER_FIELDS = qw(Host Port Nick User Pass Ssl SASL);
 sub server_key {
   my $config = shift;
   my %c = %$config;
   $c{Host} = lc($c{Host} // "") =~ s/^\s+|\s+$//gr;
   $c{Port} = ($c{Port} // "") =~ /^\s*(\d+)\s*$/ ? int $1 : $c{Port} // "";
-  $c{$_} = $c{$_} // "" for qw(User Pass);
+  $c{$_} = $c{$_} // "" for qw(Nick User Pass);
   $c{$_} = $c{$_} ? 1 : 0 for qw(Ssl SASL);
   return join "\0", map { ref $c{$_} ? "" : $c{$_} } @SERVER_FIELDS;
 }
