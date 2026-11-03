@@ -5,3 +5,4 @@ config.json
 .carmel
 
 testdata/fixtures/local/
+/docs/
