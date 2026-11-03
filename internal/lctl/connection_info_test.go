@@ -27,8 +27,7 @@ func TestConnectionInfo(t *testing.T) {
 	}
 	h.has(
 		"c1\n",
-		"  user:        ann ("+u+")\n",
-		"saved config:\n",
+		"  user:        ann ("+u+")\n  liercd:      main\nsaved config:\n",
 		"  server:      irc.libera.chat:6697 (tls)\n",
 		"  nick:        ann\n",
 		"  username:    ann\n",
@@ -54,10 +53,11 @@ func TestConnectionInfoNotRunning(t *testing.T) {
 	h := newHarness(t)
 	u := h.user("bob")
 	h.conn("c2", u, `{"Host":"127.0.0.1","Port":5005,"Nick":"bob","Pass":"pw"}`)
+	h.exec(`UPDATE connection SET liercd='next' WHERE id='c2'`)
 	if err := h.run("connection-info", "c2"); err != nil {
 		t.Fatal(err)
 	}
-	h.has("  server:      127.0.0.1:5005\n", "  username:    (uses nick)\n", "  password:    set, sent with PASS\n",
+	h.has("  liercd:      next\n", "  server:      127.0.0.1:5005\n", "  username:    (uses nick)\n", "  password:    set, sent with PASS\n",
 		"  channels:    none\n", "  valid:       no: Host 127.0.0.1 points to a private address\n",
 		"liercd:\n  state:       not running\n")
 	h.lacks("  status:", "  alias:")

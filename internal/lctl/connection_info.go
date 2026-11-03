@@ -17,7 +17,7 @@ const connectionInfoUsage = `connection-info ID...
 
 Shows each connection: its owner, its saved config (passwords are never
 shown), whether that config passes the connection rules and address check,
-and its live state in liercd: connected or not, current nick, status
+the liercd instance it's on (main or next), and its live state in liercd: connected or not, current nick, status
 message, network, capabilities, how many channels it's in, and any setting
 where the running config differs from the saved one.`
 
@@ -88,6 +88,11 @@ func connectionInfo(ctx context.Context, env *Env, args []string) error {
 				name = *username
 			}
 			fmt.Fprintf(out, "  user:        %s (%s)\n", name, user)
+			inst, err := instanceName(ctx, env, id)
+			if err != nil {
+				return err
+			}
+			fmt.Fprintf(out, "  liercd:      %s\n", inst)
 			fmt.Fprintln(out, "saved config:")
 			v, _ := connconfig.Decode([]byte(config))
 			params, _ = v.(map[string]any)
@@ -113,6 +118,15 @@ func connectionInfo(ctx context.Context, env *Env, args []string) error {
 		return fmt.Errorf("%d connection(s) not found", missing)
 	}
 	return nil
+}
+
+// instanceName is the liercd instance a connection is on: "main" or "next".
+func instanceName(ctx context.Context, env *Env, id string) (string, error) {
+	inst, err := env.DB.LookupLiercd(ctx, id)
+	if inst == "" {
+		inst = "main"
+	}
+	return inst, err
 }
 
 // liercdStatus fetches a connection's live state; data is nil when liercd

@@ -16,6 +16,8 @@ func TestUserInfo(t *testing.T) {
 	h.conn("c1", u, `{"Host":"irc.libera.chat","Port":6697,"Nick":"ann","Ssl":true,"SASL":true,"User":"ann","Pass":"hunter2","Alias":"Libera","Channels":["#a","#b"]}`)
 	h.conn("c2", u, `{"Host":"irc.relaychat.party","Port":6667,"Nick":"ann_"}`)
 	h.conn("c3", u, `"not an object"`)
+	h.exec(`UPDATE connection SET liercd='next' WHERE id='c2'`)
+	h.exec(`UPDATE connection SET liercd='' WHERE id='c3'`) // '' is main, as NULL
 	if _, err := h.env.Liercd.Do(h.t.Context(), "POST", "c1/create", []byte("{}")); err != nil {
 		t.Fatal(err)
 	}
@@ -35,9 +37,9 @@ func TestUserInfo(t *testing.T) {
 			"  last login:  2026-10-30 10:00 UTC (3 days ago)\n",
 			"  password:    bcrypt\n",
 			"  connections: 3\n",
-			"    c1  irc.libera.chat:6697  nick ann  ssl sasl  alias Libera  2 channels  server password set  connected as ann\n",
-			"    c2  irc.relaychat.party:6667  nick ann_  0 channels  running, not connected\n",
-			"    c3  config isn't a JSON object  not running\n",
+			"    c1  irc.libera.chat:6697  nick ann  ssl sasl  alias Libera  2 channels  server password set  connected as ann\n      liercd: main\n",
+			"    c2  irc.relaychat.party:6667  nick ann_  0 channels  running, not connected\n      liercd: next\n",
+			"    c3  config isn't a JSON object  not running\n      liercd: main\n",
 		)
 		h.lacks("hunter2", "$2a$")
 	}

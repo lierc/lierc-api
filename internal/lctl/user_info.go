@@ -16,7 +16,7 @@ const userInfoUsage = `user-info USER...
 Shows each user (by id, username or email; names and emails match
 case-insensitively): email and whether it's verified, last login, how the
 password is stored, and their connections with whether liercd is running
-them. Passwords are never shown.`
+them and which liercd instance (main or next) each is on. Passwords are never shown.`
 
 func userInfo(ctx context.Context, env *Env, args []string) error {
 	fs := NewFlags(env, "user-info", userInfoUsage)
@@ -72,6 +72,11 @@ func userInfo(ctx context.Context, env *Env, args []string) error {
 		fmt.Fprintf(out, "  connections: %d\n", len(conns))
 		for _, c := range conns {
 			fmt.Fprintf(out, "    %s  %s  %s\n", c.ID, describeConfig(c.Config), liercdState(ctx, env, c.ID))
+			inst, err := instanceName(ctx, env, c.ID)
+			if err != nil {
+				return err
+			}
+			fmt.Fprintf(out, "      liercd: %s\n", inst)
 		}
 	}
 	if missing > 0 {
