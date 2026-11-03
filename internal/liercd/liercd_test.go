@@ -188,6 +188,31 @@ func TestNewRoutedHosts(t *testing.T) {
 	}
 }
 
+// A host may give its own port; without one it's liercd's 5005.
+func TestHostPort(t *testing.T) {
+	for host, want := range map[string]string{
+		"a":              "http://a:5005",
+		"127.0.0.2":      "http://127.0.0.2:5005",
+		"127.0.0.1:5006": "http://127.0.0.1:5006",
+		"liercd-next:80": "http://liercd-next:80",
+	} {
+		if got := liercd.New(host).BaseURL; got != want {
+			t.Errorf("New(%q).BaseURL = %q, want %q", host, got, want)
+		}
+	}
+	c := liercd.NewRouted(liercd.Instances{Main: "127.0.0.1", Next: "127.0.0.1:5006"}, nil)
+	if c.BaseURL != "http://127.0.0.1:5005" {
+		t.Errorf("main BaseURL = %q", c.BaseURL)
+	}
+	next, err := c.For("next")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if next.BaseURL != "http://127.0.0.1:5006" {
+		t.Errorf("next BaseURL = %q", next.BaseURL)
+	}
+}
+
 func TestFindOrRecreateRoutes(t *testing.T) {
 	d := testenv.Postgres(t)
 	m, n := testenv.FakeLiercd(t), testenv.FakeLiercd(t)

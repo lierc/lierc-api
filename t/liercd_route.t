@@ -52,6 +52,11 @@ eval { $app->request(GET => "b1/status") };
 is $@, qq{unknown liercd instance "bogus"\n}, "unknown instance dies, without a file and line";
 is_deeply [urls()], [], "no request made";
 
+# a host may give its own port; without one it's liercd's 5005
+$Stub::App::NEXT = "127.0.0.1:5006";
+$app->request(GET => "n1/status");
+is_deeply [urls()], ["http://127.0.0.1:5006/n1/status"], "a next host with a port keeps it";
+
 for my $v (undef, "") {
   $Stub::App::NEXT = $v;
   eval { $app->request(GET => "n1/status") };

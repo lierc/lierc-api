@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"strings"
 	"time"
@@ -36,7 +37,8 @@ type Response struct {
 	Body   []byte
 }
 
-// New returns a client for http://host:5005/ (Liercd.pm url()).
+// New returns a client for http://host:5005/, or host's own port if it
+// has one (Liercd.pm liercd_url()).
 func New(host string) *Client {
 	return &Client{
 		BaseURL: baseURL(host),
@@ -60,7 +62,15 @@ func newRoutedBase(mainBase, nextBase string, instanceOf func(ctx context.Contex
 	return c
 }
 
-func baseURL(host string) string { return fmt.Sprintf("http://%s:5005", host) }
+// baseURL is http://host:5005, liercd's port, unless host gives its own
+// ("127.0.0.1:5006"): a second liercd on the same host needs another port
+// when the first listens on every address.
+func baseURL(host string) string {
+	if _, _, err := net.SplitHostPort(host); err == nil {
+		return "http://" + host
+	}
+	return fmt.Sprintf("http://%s:5005", host)
+}
 
 // base returns the base URL for path: the instance of the connection id
 // that starts it, or main without routing.

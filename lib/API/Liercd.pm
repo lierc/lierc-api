@@ -29,7 +29,10 @@ sub liercd_url {
     die qq{unknown liercd instance "$instance"\n};
   }
 
-  sprintf "http://%s:5005/%s", $host, $path;
+  # liercd's port is 5005 unless the host gives its own ("127.0.0.1:5006"),
+  # as Go's baseURL does
+  $host .= ":5005" unless $host =~ /:\d+\z/;
+  sprintf "http://%s/%s", $host, $path;
 }
 
 sub request {

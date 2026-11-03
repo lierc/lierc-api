@@ -74,7 +74,8 @@ A connection whose instance has no configured host (`next` with
 `LIERCD_NEXT_HOST` unset) fails with an error naming the instance; it
 never falls back to the other instance. A missing row (a connection being
 created, before its row exists, or one already deleted) routes to `main`,
-as today. The port stays 5005 on both instances.
+as today. A host is liercd's port 5005 unless it gives its own
+(`127.0.0.1:5008`).
 
 The lookup is one primary-key query per liercd call, including each
 message sent. That's acceptable at relaychat's volume; caching is left
@@ -109,10 +110,12 @@ DISCONNECT and CREATE events in the UI and the log.
 
 - `images.lierc_next`: the `irc-go` image (`ghcr.io/lierc/lierc:sha-...`).
 - A `liercd-next` unit, a copy of `liercd`'s with `--name` from the unit,
-  `-e LISTEN=127.0.0.2:5005` and `images.lierc_next`, and
-  `manual_restart: true`. `127.0.0.0/8` is all loopback on Linux, so no
-  port changes anywhere.
-- `LIERCD_NEXT_HOST=127.0.0.2` in `lierc.env`, which lierc-api,
+  `-e LISTEN=127.0.0.1:5008` and `images.lierc_next`, and
+  `manual_restart: true`. (The first plan, `127.0.0.2:5005`, didn't work:
+  production's liercd was started from an image older than its `LISTEN`
+  support and binds `*:5005`, which covers every loopback address; a
+  separate port works whatever main binds.)
+- `LIERCD_NEXT_HOST=127.0.0.1:5008` in `lierc.env`, which lierc-api,
   lierc-api-stream and `lctl` already read.
 - The logger and notifier need nothing: both liercds publish to the same
   NSQ topics.
@@ -139,7 +142,8 @@ Promoting the branch later: see "Operating it".
 - **Starting `liercd-next`.** It is `manual_restart`, so the playbook
   installs it but doesn't start or restart it. After a deploy, start it by
   hand (`systemctl start liercd-next`) and check it answers:
-  `curl -s 127.0.0.2:5005/portmap`.
+  `curl -s 127.0.0.1:5008/portmap` should print `[]` (main's port map
+  means liercd-next didn't get the port and something else answered).
 - **Which connections are on `next`:**
   `SELECT id FROM connection WHERE liercd IS NOT NULL`.
 - **Before rolling lierc-api back** (either image, `lierc_api` or
