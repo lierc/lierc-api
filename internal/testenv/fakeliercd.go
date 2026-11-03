@@ -12,7 +12,9 @@ import (
 type LiercdCall struct{ Method, Path, Body string }
 
 // LiercdServer stands in for liercd. By default `/:id/status` is 404 until
-// `/:id/create` has been called, then it returns the status set for the id.
+// `/:id/create` has been called, then it returns the status set for the id;
+// `/:id/destroy` is 200 for a created id (which it then forgets) and 404
+// otherwise.
 type LiercdServer struct {
 	URL string
 
@@ -72,6 +74,20 @@ func (f *LiercdServer) Respond(method, path string, code int, body string) {
 	f.overrides[method+" "+path] = override{code, body}
 }
 
+// Running reports whether id has been created and not destroyed since.
+func (f *LiercdServer) Running(id string) bool {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.created[id]
+}
+
+// MarkRunning makes id count as created, as if something else created it.
+func (f *LiercdServer) MarkRunning(id string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.created[id] = true
+}
+
 func (f *LiercdServer) Calls() []LiercdCall {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -102,6 +118,10 @@ func (f *LiercdServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case parts[1] == "create" && r.Method == http.MethodPost:
 			f.created[id] = true
+			io.WriteString(w, "{}")
+			return
+		case parts[1] == "destroy" && r.Method == http.MethodPost && f.created[id]:
+			delete(f.created, id)
 			io.WriteString(w, "{}")
 			return
 		case parts[1] == "status" && r.Method == http.MethodGet && f.created[id]:

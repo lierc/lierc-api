@@ -207,3 +207,37 @@ func TestFindOrRecreateRoutes(t *testing.T) {
 		t.Fatalf("main calls = %+v", got)
 	}
 }
+
+func TestFor(t *testing.T) {
+	m, n := testenv.FakeLiercd(t), testenv.FakeLiercd(t)
+	looked := 0
+	c := liercd.NewRoutedBase(m.URL, n.URL, func(context.Context, string) (string, error) {
+		looked++
+		return "next", nil
+	})
+	for _, tc := range []struct {
+		instance string
+		hit      *testenv.LiercdServer
+	}{{"main", m}, {"next", n}} {
+		pinned, err := c.For(tc.instance)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := pinned.Do(ctx, "GET", "c1/status", nil); err != nil {
+			t.Fatal(err)
+		}
+		if got := tc.hit.Calls(); len(got) != 1 || got[0].Path != "/c1/status" {
+			t.Errorf("%s calls = %+v", tc.instance, got)
+		}
+	}
+	if looked != 0 {
+		t.Errorf("a pinned client looked up the column %d times", looked)
+	}
+	if _, err := liercd.NewRoutedBase(m.URL, "", nil).For("next"); err == nil ||
+		!strings.Contains(err.Error(), `liercd instance "next" has no host (LIERCD_NEXT_HOST)`) {
+		t.Errorf("next without host: err = %v", err)
+	}
+	if _, err := c.For("bogus"); err == nil || !strings.Contains(err.Error(), `unknown liercd instance "bogus"`) {
+		t.Errorf("bogus: err = %v", err)
+	}
+}

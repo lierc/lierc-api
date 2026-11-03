@@ -88,6 +88,24 @@ func (c *Client) base(ctx context.Context, path string) (string, error) {
 	return "", fmt.Errorf("unknown liercd instance %q", inst)
 }
 
+// For returns a client pinned to one instance ("main" or "next"), for calls
+// that must reach that instance whatever the connection's column says (a
+// move, which changes the column). It errors for "next" without a host.
+func (c *Client) For(instance string) (*Client, error) {
+	base := c.BaseURL
+	switch instance {
+	case "main":
+	case "next":
+		if c.nextURL == "" {
+			return nil, errors.New(`liercd instance "next" has no host (LIERCD_NEXT_HOST)`)
+		}
+		base = c.nextURL
+	default:
+		return nil, fmt.Errorf("unknown liercd instance %q", instance)
+	}
+	return &Client{BaseURL: base, HTTP: c.HTTP}, nil
+}
+
 // Do sends the request; path is relative to the base URL ("id/status").
 func (c *Client) Do(ctx context.Context, method, path string, body []byte) (*Response, error) {
 	path = trimSlash(path)

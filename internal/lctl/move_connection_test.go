@@ -16,9 +16,12 @@ import (
 // ordered list.
 type moveHarness struct {
 	*harness
-	main, next *testenv.LiercdServer
-	mu         sync.Mutex
-	order      []string
+	main, next       *testenv.LiercdServer
+	mainURL, nextURL string
+	mu               sync.Mutex
+	order            []string
+	// after, if set, runs after each fake answers a request.
+	after func(name, method, path string)
 }
 
 func newMoveHarness(t *testing.T) *moveHarness {
@@ -29,12 +32,15 @@ func newMoveHarness(t *testing.T) *moveHarness {
 			m.order = append(m.order, name+" "+r.Method+" "+r.URL.Path)
 			m.mu.Unlock()
 			f.ServeHTTP(w, r)
+			if m.after != nil {
+				m.after(name, r.Method, r.URL.Path)
+			}
 		}))
 		t.Cleanup(s.Close)
 		return s.URL
 	}
-	mu, nu := serve("main", m.main), serve("next", m.next)
-	m.env.Liercd = liercd.NewRoutedForTest(mu, nu, m.db.LookupLiercd)
+	m.mainURL, m.nextURL = serve("main", m.main), serve("next", m.next)
+	m.env.Liercd = liercd.NewRoutedForTest(m.mainURL, m.nextURL, m.db.LookupLiercd)
 	m.env.Config.LiercdNextHost = "next.example"
 	return m
 }
@@ -48,6 +54,12 @@ func (m *moveHarness) column(id string) string {
 	return inst
 }
 
+func (m *moveHarness) calls() string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return strings.Join(m.order, "|")
+}
+
 func (m *moveHarness) calledNothing() {
 	m.t.Helper()
 	if len(m.order) != 0 {
@@ -58,20 +70,25 @@ func (m *moveHarness) calledNothing() {
 func TestMoveMainToNext(t *testing.T) {
 	m := newMoveHarness(t)
 	m.conn("c1", m.user("alice"), `{"Host":"x"}`)
+	m.main.MarkRunning("c1")
 	if err := m.run("move-connection", "c1", "next"); err != nil {
 		t.Fatal(err)
 	}
-	want := []string{"main POST /c1/destroy", "next POST /c1/create"}
-	if strings.Join(m.order, "|") != strings.Join(want, "|") {
-		t.Errorf("calls = %v, want %v", m.order, want)
+	want := "next GET /c1/status|main POST /c1/destroy|main POST /c1/destroy|next POST /c1/create"
+	if got := m.calls(); got != want {
+		t.Errorf("calls = %q, want %q", got, want)
 	}
 	if got := m.column("c1"); got != "next" {
 		t.Errorf("column = %q", got)
 	}
-	if got := m.next.Calls(); len(got) != 1 || got[0].Body != `{"Host":"x"}` {
+	if got := m.next.Calls(); len(got) != 2 || got[1].Path != "/c1/create" || got[1].Body != `{"Host":"x"}` {
 		t.Errorf("next calls = %v", got)
 	}
+	if m.main.Running("c1") || !m.next.Running("c1") {
+		t.Errorf("running: main %v, next %v", m.main.Running("c1"), m.next.Running("c1"))
+	}
 	m.has("moved c1 from main to next")
+	m.lacks("slipped in")
 }
 
 func TestMoveNextToMain(t *testing.T) {
@@ -81,12 +98,12 @@ func TestMoveNextToMain(t *testing.T) {
 	if err := m.run("move-connection", "c1", "main"); err != nil {
 		t.Fatal(err)
 	}
-	want := "next POST /c1/destroy|main POST /c1/create"
-	if got := strings.Join(m.order, "|"); got != want {
+	want := "main GET /c1/status|next POST /c1/destroy|next POST /c1/destroy|main POST /c1/create"
+	if got := m.calls(); got != want {
 		t.Errorf("calls = %q, want %q", got, want)
 	}
-	if got := m.column("c1"); got != "" {
-		t.Errorf("column = %q", got)
+	if n := m.count(`SELECT count(*) FROM connection WHERE id='c1' AND liercd IS NULL`); n != 1 {
+		t.Errorf("column isn't NULL after moving to main")
 	}
 	m.has("moved c1 from next to main")
 }
@@ -140,8 +157,8 @@ func TestMoveDestroyFailureStops(t *testing.T) {
 	if got := m.column("c1"); got != "" {
 		t.Errorf("column = %q", got)
 	}
-	if len(m.next.Calls()) != 0 {
-		t.Errorf("next was called: %v", m.next.Calls())
+	if got := m.calls(); got != "next GET /c1/status|main POST /c1/destroy" {
+		t.Errorf("calls = %q", got)
 	}
 }
 
@@ -157,4 +174,97 @@ func TestMoveCreateFailure(t *testing.T) {
 		t.Errorf("column = %q", got)
 	}
 	m.has("c1 is now on next, but creating it there failed: ", "; it will be created when its user's stream next opens, or run lctl reconnect c1")
+}
+
+// A stream opening while the move runs recreates the connection on the old
+// instance (the column still says so); the second destroy removes it.
+func TestMoveRecreateSlipsIn(t *testing.T) {
+	m := newMoveHarness(t)
+	m.conn("c1", m.user("alice"), `{}`)
+	m.main.MarkRunning("c1")
+	destroys := 0
+	m.after = func(name, method, path string) {
+		if name == "main" && method == "POST" && path == "/c1/destroy" {
+			if destroys++; destroys == 1 {
+				m.main.MarkRunning("c1") // the stream's POST create on main
+			}
+		}
+	}
+	if err := m.run("move-connection", "c1", "next"); err != nil {
+		t.Fatal(err)
+	}
+	want := "next GET /c1/status|main POST /c1/destroy|main POST /c1/destroy|next POST /c1/create"
+	if got := m.calls(); got != want {
+		t.Errorf("calls = %q, want %q", got, want)
+	}
+	if m.main.Running("c1") {
+		t.Error("still running on main")
+	}
+	if !m.next.Running("c1") {
+		t.Error("not created on next")
+	}
+	if got := m.column("c1"); got != "next" {
+		t.Errorf("column = %q", got)
+	}
+	m.has("a recreate on main slipped in during the move; destroyed it there\n", "moved c1 from main to next")
+}
+
+func TestMoveSecondDestroyFailure(t *testing.T) {
+	m := newMoveHarness(t)
+	m.conn("c1", m.user("alice"), `{}`)
+	destroys := 0
+	m.after = func(name, method, path string) {
+		if name == "main" && path == "/c1/destroy" {
+			if destroys++; destroys == 1 {
+				m.main.Respond("POST", "/c1/destroy", 500, "boom")
+			}
+		}
+	}
+	if err := m.run("move-connection", "c1", "next"); err == nil {
+		t.Fatal("want error")
+	}
+	if m.next.Running("c1") {
+		t.Error("created on next after a failed second destroy")
+	}
+	m.has("c1 is now on next, but destroying it again on main failed: liercd said 500 Internal Server Error")
+}
+
+func TestMoveTargetUnreachable(t *testing.T) {
+	m := newMoveHarness(t)
+	m.conn("c1", m.user("alice"), `{}`)
+	m.main.MarkRunning("c1")
+	gone := httptest.NewServer(http.NotFoundHandler())
+	gone.Close()
+	m.env.Liercd = liercd.NewRoutedForTest(m.mainURL, gone.URL, m.db.LookupLiercd)
+	err := m.run("move-connection", "c1", "next")
+	if err == nil || !strings.HasPrefix(err.Error(), "liercd instance next isn't reachable: ") {
+		t.Fatalf("err = %v", err)
+	}
+	m.calledNothing()
+	if !m.main.Running("c1") {
+		t.Error("destroyed on main")
+	}
+	if got := m.column("c1"); got != "" {
+		t.Errorf("column = %q", got)
+	}
+}
+
+func TestMoveTargetAlreadyRunning(t *testing.T) {
+	m := newMoveHarness(t)
+	m.conn("c1", m.user("alice"), `{}`)
+	m.main.MarkRunning("c1")
+	m.next.MarkRunning("c1")
+	err := m.run("move-connection", "c1", "next")
+	if err == nil || err.Error() != "c1 is already running on next" {
+		t.Fatalf("err = %v", err)
+	}
+	if got := m.calls(); got != "next GET /c1/status" {
+		t.Errorf("calls = %q", got)
+	}
+	if !m.main.Running("c1") {
+		t.Error("destroyed on main")
+	}
+	if got := m.column("c1"); got != "" {
+		t.Errorf("column = %q", got)
+	}
 }

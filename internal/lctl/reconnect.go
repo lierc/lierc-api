@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+
+	"github.com/lierc/lierc-api/internal/liercd"
 )
 
 const reconnectUsage = `reconnect ID
@@ -40,7 +42,12 @@ func reconnect(ctx context.Context, env *Env, args []string) error {
 
 // create starts a connection in liercd from its config.
 func create(ctx context.Context, env *Env, id string, config []byte) error {
-	res, err := env.Liercd.Do(ctx, http.MethodPost, id+"/create", config)
+	return createOn(ctx, env.Liercd, id, config)
+}
+
+// createOn is create through a given client (one pinned to an instance).
+func createOn(ctx context.Context, c *liercd.Client, id string, config []byte) error {
+	res, err := c.Do(ctx, http.MethodPost, id+"/create", config)
 	if err != nil {
 		return fmt.Errorf("creating %s: %v", id, err)
 	}
