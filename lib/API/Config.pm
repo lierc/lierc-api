@@ -85,7 +85,7 @@ sub as_hash {
   my $self = shift;
   return map {
     $_ => $self->$_
-  } qw(base site_url host dsn dbuser dbpass dbhost secret secure smtp_opts from_address default_network);
+  } qw(base site_url host next_host dsn dbuser dbpass dbhost secret secure smtp_opts from_address default_network);
 }
 
 1;

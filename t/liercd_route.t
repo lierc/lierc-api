@@ -72,4 +72,34 @@ $Stub::App::NEXT = "next.example";
     "recreate talks to next throughout";
 }
 
+# The real API class, built the way bin/api.psgi builds it.
+{
+  require API;
+  require API::Config;
+  {
+    package API::Test;
+    our @ISA = ('API');
+    our %INST;
+    sub lookup_liercd { $INST{$_[1]} }
+  }
+  local %API::Test::INST = (n1 => "next");
+
+  local $ENV{LIERCD_HOST} = "main.example";
+  local $ENV{LIERCD_NEXT_HOST} = "next.example";
+  my $real = API::Test->new(API::Config->new->as_hash);
+  $real->{ua} = Stub::UA->new;
+  $real->request(GET => "n1/status");
+  $real->request(GET => "c1/status");
+  is_deeply $real->{ua}{urls},
+    ["http://next.example:5005/n1/status", "http://main.example:5005/c1/status"],
+    "real API routes via as_hash config";
+
+  delete $ENV{LIERCD_NEXT_HOST};
+  my $unset = API::Test->new(API::Config->new->as_hash);
+  $unset->{ua} = Stub::UA->new;
+  eval { $unset->request(GET => "n1/status") };
+  like $@, qr/liercd instance "next" has no host \(LIERCD_NEXT_HOST\)/, "real API: unset next_host dies";
+  is_deeply $unset->{ua}{urls}, [], "no request made";
+}
+
 done_testing;
