@@ -15,13 +15,14 @@ func TestDefaults(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := map[string][2]string{
-		"DBName":     {c.DBName, "lierc"},
-		"Secret":     {c.Secret, "changeme"},
-		"Key":        {c.Key, "changeme"},
-		"NSQAddr":    {c.NSQAddr, "127.0.0.1:4150"},
-		"Listen":     {c.Listen, ":5003"},
-		"LiercdHost": {c.LiercdHost, "127.0.0.1"},
-		"DBHost":     {c.DBHost, "127.0.0.1"},
+		"DBName":         {c.DBName, "lierc"},
+		"Secret":         {c.Secret, "changeme"},
+		"Key":            {c.Key, "changeme"},
+		"NSQAddr":        {c.NSQAddr, "127.0.0.1:4150"},
+		"Listen":         {c.Listen, ":5003"},
+		"LiercdHost":     {c.LiercdHost, "127.0.0.1"},
+		"LiercdNextHost": {c.LiercdNextHost, ""},
+		"DBHost":         {c.DBHost, "127.0.0.1"},
 	}
 	for k, v := range want {
 		if v[0] != v[1] {
@@ -39,13 +40,13 @@ func TestDefaults(t *testing.T) {
 func TestOverrides(t *testing.T) {
 	c, err := Load(env(map[string]string{
 		"LISTEN": ":9", "TRUSTED_PROXIES": "10.0.0.1, 10.0.0.2", "NSQD_HOST": "nsq",
-		"LIERCD_HOST": "lc", "POSTGRES_HOST": "pg", "POSTGRES_USER": "u",
+		"LIERCD_HOST": "lc", "LIERCD_NEXT_HOST": "lcn", "POSTGRES_HOST": "pg", "POSTGRES_USER": "u",
 		"POSTGRES_PASSWORD": "p", "API_KEY": "k", "API_SECRET": "s",
 	}))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if c.Listen != ":9" || c.NSQAddr != "nsq:4150" || c.LiercdHost != "lc" ||
+	if c.Listen != ":9" || c.NSQAddr != "nsq:4150" || c.LiercdHost != "lc" || c.LiercdNextHost != "lcn" ||
 		c.DBHost != "pg" || c.DBUser != "u" || c.DBPass != "p" || c.Key != "k" || c.Secret != "s" {
 		t.Errorf("overrides not applied: %+v", c)
 	}

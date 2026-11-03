@@ -168,7 +168,7 @@ func OpenEnv(ctx context.Context, sys System) (*Env, func(), error) {
 		stats = "http://127.0.0.1:5003/stats"
 	}
 	env := &Env{
-		Config: cfg, Getenv: sys.Getenv, DB: d, Liercd: liercd.New(cfg.LiercdHost), StatsURL: stats,
+		Config: cfg, Getenv: sys.Getenv, DB: d, Liercd: liercd.NewRouted(liercd.Instances{Main: cfg.LiercdHost, Next: cfg.LiercdNextHost}, d.LookupLiercd), StatsURL: stats,
 		Stdin: sys.Stdin, Stdout: sys.Stdout, Stderr: sys.Stderr, StdinIsTerminal: sys.StdinIsTerminal,
 		Resolve: connconfig.SystemResolver, Sleep: sleepCtx,
 		ReadPassword: func() (string, error) {

@@ -14,6 +14,9 @@ type Config struct {
 	NSQAddr                                                 string
 	Listen                                                  string
 	TrustedProxies                                          []string
+	// LiercdNextHost is the "next" liercd instance's host
+	// (LIERCD_NEXT_HOST); "" when there is none.
+	LiercdNextHost string
 	// DBMaxConns is the Postgres pool size (DB_MAX_CONNS).
 	DBMaxConns int
 }
@@ -32,10 +35,11 @@ func Load(getenv func(string) string) (Config, error) {
 	}
 
 	c := Config{
-		LiercdHost: or("LIERCD_HOST", "127.0.0.1"),
-		DBHost:     or("POSTGRES_HOST", "127.0.0.1"),
-		DBUser:     or("POSTGRES_USER", ""),
-		DBPass:     or("POSTGRES_PASSWORD", ""),
+		LiercdHost:     or("LIERCD_HOST", "127.0.0.1"),
+		LiercdNextHost: or("LIERCD_NEXT_HOST", ""),
+		DBHost:         or("POSTGRES_HOST", "127.0.0.1"),
+		DBUser:         or("POSTGRES_USER", ""),
+		DBPass:         or("POSTGRES_PASSWORD", ""),
 		// Stream's Postgres pool hard-codes dbname "lierc" (bin/stream.psgi),
 		// so POSTGRES_DB is ignored.
 		DBName:  "lierc",

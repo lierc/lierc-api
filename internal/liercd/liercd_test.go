@@ -2,6 +2,7 @@ package liercd_test
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 
@@ -101,5 +102,108 @@ func TestFindOrRecreateStatusStillFails(t *testing.T) {
 	_, err := client(f).FindOrRecreate(ctx, d, "c1")
 	if err == nil || !strings.HasPrefix(err.Error(), "Unable to create new connection: 404 Not Found") {
 		t.Fatalf("err = %v", err)
+	}
+}
+
+func TestRoutedDo(t *testing.T) {
+	cases := []struct {
+		name, instance, path, body string
+		noNext                     bool
+		want                       string // "main", "next", or "" for an error
+		errHas                     string
+	}{
+		{name: "main", instance: "", path: "c1/status", want: "main"},
+		{name: "next", instance: "next", path: "c1/status", want: "next"},
+		{name: "leading slash", instance: "next", path: "/c1/status", want: "next"},
+		{name: "body", instance: "next", path: "c1/raw", body: "PRIVMSG #a :hi", want: "next"},
+		{name: "next unset", instance: "next", path: "c1/status", noNext: true,
+			errHas: `liercd instance "next" has no host (LIERCD_NEXT_HOST)`},
+		{name: "unknown", instance: "bogus", path: "c1/status", errHas: `unknown liercd instance "bogus"`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			m, n := testenv.FakeLiercd(t), testenv.FakeLiercd(t)
+			nextBase := n.URL
+			if tc.noNext {
+				nextBase = ""
+			}
+			var looked []string
+			c := liercd.NewRoutedBase(m.URL, nextBase, func(_ context.Context, id string) (string, error) {
+				looked = append(looked, id)
+				return tc.instance, nil
+			})
+			method := "GET"
+			var body []byte
+			if tc.body != "" {
+				method, body = "POST", []byte(tc.body)
+			}
+			_, err := c.Do(ctx, method, tc.path, body)
+			if len(looked) != 1 || looked[0] != "c1" {
+				t.Errorf("looked up %v, want [c1]", looked)
+			}
+			if tc.errHas != "" {
+				if err == nil || !strings.Contains(err.Error(), tc.errHas) {
+					t.Fatalf("err = %v, want %q", err, tc.errHas)
+				}
+				if len(m.Calls())+len(n.Calls()) != 0 {
+					t.Fatalf("liercd called: main %+v next %+v", m.Calls(), n.Calls())
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			hit, miss := m, n
+			if tc.want == "next" {
+				hit, miss = n, m
+			}
+			wantCall := testenv.LiercdCall{Method: method, Path: "/" + strings.TrimLeft(tc.path, "/"), Body: tc.body}
+			if c := hit.Calls(); len(c) != 1 || c[0] != wantCall {
+				t.Errorf("%s calls = %+v, want %+v", tc.want, c, wantCall)
+			}
+			if c := miss.Calls(); len(c) != 0 {
+				t.Errorf("other instance called: %+v", c)
+			}
+		})
+	}
+}
+
+func TestRoutedDoLookupError(t *testing.T) {
+	m := testenv.FakeLiercd(t)
+	c := liercd.NewRoutedBase(m.URL, "", func(context.Context, string) (string, error) {
+		return "", errors.New("db down")
+	})
+	if _, err := c.Do(ctx, "GET", "c1/status", nil); err == nil || !strings.Contains(err.Error(), "db down") {
+		t.Fatalf("err = %v", err)
+	}
+	if len(m.Calls()) != 0 {
+		t.Fatal("liercd called")
+	}
+}
+
+func TestNewRoutedHosts(t *testing.T) {
+	c := liercd.NewRouted(liercd.Instances{Main: "a", Next: "b"}, nil)
+	if c.BaseURL != "http://a:5005" {
+		t.Errorf("BaseURL = %q", c.BaseURL)
+	}
+}
+
+func TestFindOrRecreateRoutes(t *testing.T) {
+	d := testenv.Postgres(t)
+	m, n := testenv.FakeLiercd(t), testenv.FakeLiercd(t)
+	testenv.AddConnection(t, d, "c1", "u1", `{"a":1}`)
+	if _, err := d.Pool.Exec(ctx, `UPDATE connection SET liercd='next' WHERE id='c1'`); err != nil {
+		t.Fatal(err)
+	}
+	n.SetStatus("c1", `{"Status":"new"}`)
+	body, err := liercd.NewRoutedBase(m.URL, n.URL, d.LookupLiercd).FindOrRecreate(ctx, d, "c1")
+	if err != nil || string(body) != `{"Status":"new"}` {
+		t.Fatalf("got %s %v", body, err)
+	}
+	if got := n.Calls(); len(got) != 3 || got[1] != (testenv.LiercdCall{Method: "POST", Path: "/c1/create", Body: `{"a":1}`}) {
+		t.Fatalf("next calls = %+v", got)
+	}
+	if got := m.Calls(); len(got) != 0 {
+		t.Fatalf("main calls = %+v", got)
 	}
 }

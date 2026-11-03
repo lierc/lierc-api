@@ -9,15 +9,27 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/lierc/lierc-api/internal/db"
 )
 
 type Client struct {
+	// BaseURL is the main instance's base URL, and the only one without
+	// routing.
 	BaseURL string
 	HTTP    *http.Client
+
+	// nextURL and instanceOf are set by NewRouted: instanceOf names the
+	// instance a connection id is on ("" for main, "next").
+	nextURL    string
+	instanceOf func(ctx context.Context, id string) (string, error)
 }
+
+// Instances are the liercd hosts: Main (LIERCD_HOST) and Next
+// (LIERCD_NEXT_HOST, "" when unset).
+type Instances struct{ Main, Next string }
 
 type Response struct {
 	Status int
@@ -27,14 +39,63 @@ type Response struct {
 // New returns a client for http://host:5005/ (Liercd.pm url()).
 func New(host string) *Client {
 	return &Client{
-		BaseURL: fmt.Sprintf("http://%s:5005", host),
+		BaseURL: baseURL(host),
 		HTTP:    &http.Client{Timeout: 180 * time.Second},
 	}
 }
 
+// NewRouted returns a client that sends each request to the instance
+// instanceOf names for the path's connection id.
+func NewRouted(hosts Instances, instanceOf func(ctx context.Context, id string) (string, error)) *Client {
+	next := ""
+	if hosts.Next != "" {
+		next = baseURL(hosts.Next)
+	}
+	return newRoutedBase(baseURL(hosts.Main), next, instanceOf)
+}
+
+func newRoutedBase(mainBase, nextBase string, instanceOf func(ctx context.Context, id string) (string, error)) *Client {
+	c := New("")
+	c.BaseURL, c.nextURL, c.instanceOf = mainBase, nextBase, instanceOf
+	return c
+}
+
+func baseURL(host string) string { return fmt.Sprintf("http://%s:5005", host) }
+
+// base returns the base URL for path: the instance of the connection id
+// that starts it, or main without routing.
+func (c *Client) base(ctx context.Context, path string) (string, error) {
+	if c.instanceOf == nil {
+		return c.BaseURL, nil
+	}
+	id, _, _ := strings.Cut(path, "/")
+	if id == "" {
+		return c.BaseURL, nil
+	}
+	inst, err := c.instanceOf(ctx, id)
+	if err != nil {
+		return "", err
+	}
+	switch inst {
+	case "":
+		return c.BaseURL, nil
+	case "next":
+		if c.nextURL == "" {
+			return "", errors.New(`liercd instance "next" has no host (LIERCD_NEXT_HOST)`)
+		}
+		return c.nextURL, nil
+	}
+	return "", fmt.Errorf("unknown liercd instance %q", inst)
+}
+
 // Do sends the request; path is relative to the base URL ("id/status").
 func (c *Client) Do(ctx context.Context, method, path string, body []byte) (*Response, error) {
-	url := c.BaseURL + "/" + trimSlash(path)
+	path = trimSlash(path)
+	base, err := c.base(ctx, path)
+	if err != nil {
+		return nil, err
+	}
+	url := base + "/" + path
 	var r io.Reader
 	if body != nil {
 		r = bytes.NewReader(body)

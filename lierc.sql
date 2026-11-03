@@ -19,6 +19,7 @@ create table connection (
   id      varchar(24) not null,
   "user"  varchar(24) not null,
   config  json not null,
+  liercd  text,
   primary key (id)
 );
 

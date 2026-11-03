@@ -62,7 +62,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, stderr 
 	defer cancel()
 	nsqErr := make(chan error, 1)
 
-	s := stream.New(cfg, d, liercd.New(cfg.LiercdHost))
+	s := stream.New(cfg, d, liercd.NewRouted(liercd.Instances{Main: cfg.LiercdHost, Next: cfg.LiercdNextHost}, d.LookupLiercd))
 	go s.Run(ctx)
 	go func() {
 		if err := s.Consume(ctx, cfg.NSQAddr); err != nil && ctx.Err() == nil {

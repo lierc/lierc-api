@@ -159,3 +159,17 @@ func TestLatestMessageID(t *testing.T) {
 		}
 	}
 }
+
+func TestLookupLiercd(t *testing.T) {
+	d := testenv.Postgres(t)
+	testenv.AddConnection(t, d, "c1", "u1", `{}`)
+	testenv.AddConnection(t, d, "c2", "u1", `{}`)
+	if _, err := d.Pool.Exec(ctx, `UPDATE connection SET liercd='next' WHERE id='c2'`); err != nil {
+		t.Fatal(err)
+	}
+	for id, want := range map[string]string{"c1": "", "c2": "next", "nope": ""} {
+		if got, err := d.LookupLiercd(ctx, id); err != nil || got != want {
+			t.Errorf("LookupLiercd(%q) = %q %v, want %q", id, got, err, want)
+		}
+	}
+}

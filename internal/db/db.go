@@ -89,6 +89,20 @@ func (d *DB) LookupConfig(ctx context.Context, id string) ([]byte, bool, error) 
 	return cfg, true, nil
 }
 
+// LookupLiercd returns the liercd instance connection id is on: "" for main
+// (a NULL column) or when there is no such connection.
+func (d *DB) LookupLiercd(ctx context.Context, id string) (string, error) {
+	var inst *string
+	err := d.Pool.QueryRow(ctx, `SELECT liercd FROM connection WHERE id=$1`, id).Scan(&inst)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", nil
+	}
+	if err != nil || inst == nil {
+		return "", err
+	}
+	return *inst, nil
+}
+
 func (d *DB) LookupOwner(ctx context.Context, id string) (string, bool, error) {
 	var user string
 	err := d.Pool.QueryRow(ctx, `SELECT "user" FROM connection WHERE id=$1`, id).Scan(&user)
