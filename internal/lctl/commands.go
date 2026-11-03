@@ -10,6 +10,7 @@ var Commands = []Command{
 	{Name: "delete-connections", Summary: "Delete connections and their data, keeping the users; dry run unless --delete", Run: deleteConnections},
 	{Name: "reset", Summary: "Set a user's password (prompted, or one line on stdin)", Run: reset},
 	{Name: "reconnect", Summary: "Restart a connection in liercd from its saved config", Run: reconnect},
+	{Name: "move-connection", Summary: "Move a connection to another liercd instance (main or next)", Run: moveConnection},
 	{Name: "revive", Summary: "Start saved connections liercd isn't running, for recently active users", Run: revive},
 	{Name: "stats", Summary: "Open event streams per user", Run: stats},
 	{Name: "users", Summary: "Open event streams for users (default all)", Run: users},

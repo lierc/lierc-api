@@ -136,3 +136,14 @@ func (d *DB) SaveLastLogin(ctx context.Context, user string) error {
 	_, err := d.Pool.Exec(ctx, `UPDATE "user" SET last_login=NOW() WHERE id=$1`, user)
 	return err
 }
+
+// SetLiercd records which liercd instance connection id is on; "" stores NULL
+// (main).
+func (d *DB) SetLiercd(ctx context.Context, id, instance string) error {
+	var inst *string
+	if instance != "" {
+		inst = &instance
+	}
+	_, err := d.Pool.Exec(ctx, `UPDATE connection SET liercd=$2 WHERE id=$1`, id, inst)
+	return err
+}
