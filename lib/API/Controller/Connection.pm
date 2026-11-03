@@ -75,6 +75,19 @@ sub edited_config {
   return $config;
 }
 
+# The settings liercd connects with, as one string to compare: a saved
+# config may have a string port, 0 or 1 for a flag, or "" for no username.
+my @SERVER_FIELDS = qw(Host Port User Pass Ssl SASL);
+sub server_key {
+  my $config = shift;
+  my %c = %$config;
+  $c{Host} = lc($c{Host} // "") =~ s/^\s+|\s+$//gr;
+  $c{Port} = ($c{Port} // "") =~ /^\s*(\d+)\s*$/ ? int $1 : $c{Port} // "";
+  $c{$_} = $c{$_} // "" for qw(User Pass);
+  $c{$_} = $c{$_} ? 1 : 0 for qw(Ssl SASL);
+  return join "\0", map { ref $c{$_} ? "" : $c{$_} } @SERVER_FIELDS;
+}
+
 sub valid_config_from {
   my $params = shift;
   my $config = API::ConnectionConfig->clean($params);
@@ -112,10 +125,27 @@ sub edit {
   # edit leaves it as it was
   my $config = edited_config($app, $req);
   my $id  = $req->captures->{id};
+  my $saved = eval { decode_json($app->lookup_config($id)) };
+
+  # nothing the IRC connection uses changed (the alias and highlights
+  # don't need it), so just save
+  if (ref $saved eq "HASH" && server_key($saved) eq server_key($config)) {
+    $app->update_connection($id, encode_json $config);
+    $app->dbh->do("NOTIFY highlights");
+    return $app->ok;
+  }
+
   my $res = $app->request(POST => "$id/destroy");
   die $res->decoded_content unless $res->code == 200 || $res->code == 404;
-  $app->delete_connection($id);
-  start($app, $id, $req->session->{user}, $config);
+
+  # the row stays put: the stream server sends a connection's events to
+  # whoever its row says owns it, so while it was deleted and reinserted
+  # the CREATE event could find no owner and be dropped
+  my $json = encode_json $config;
+  $app->update_connection($id, $json);
+  $res = $app->request(POST => "$id/create", $json);
+  die $res->decoded_content unless $res->code == 200;
+  $app->dbh->do("NOTIFY highlights");
 
   return $app->ok;
 }

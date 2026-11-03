@@ -29,10 +29,15 @@ is $name, "connection.edit", "PUT /connection/:id is still save and reconnect";
     bless { saved => $saved, updates => [], saves => [], deletes => [], notified => [], liercd => [] }, $class;
   }
   sub lookup_config { $_[0]{saved} }
-  sub update_connection { my ($self, @args) = @_; push @{ $self->{updates} }, [@args] }
-  sub save_connection { my ($self, @args) = @_; push @{ $self->{saves} }, [@args] }
-  sub delete_connection { my ($self, @args) = @_; push @{ $self->{deletes} }, [@args] }
-  sub request { my ($self, @args) = @_; push @{ $self->{liercd} }, [@args]; FakeRes->new(200) }
+  sub update_connection { my ($self, @args) = @_; push @{ $self->{updates} }, [@args]; push @{ $self->{log} }, "update" }
+  sub save_connection { my ($self, @args) = @_; push @{ $self->{saves} }, [@args]; push @{ $self->{log} }, "insert" }
+  sub delete_connection { my ($self, @args) = @_; push @{ $self->{deletes} }, [@args]; push @{ $self->{log} }, "delete" }
+  sub request {
+    my ($self, @args) = @_;
+    push @{ $self->{liercd} }, [@args];
+    push @{ $self->{log} }, "liercd " . ($args[1] =~ s{.*/}{}r);
+    FakeRes->new($self->{liercd_code}{ $args[1] =~ s{.*/}{}r } // 200);
+  }
   sub dbh { my $self = shift; bless { app => $self }, "FakeDBH" }
   sub ok { "ok" }
   sub json { $_[1] }
@@ -132,7 +137,58 @@ my $saved = encode_json { Host => "1.1.1.1", Port => 6667, Nick => "old", Channe
   ok $create, "edit restarts the connection in liercd";
   is_deeply decode_json($create->[2])->{Channels}, ["#a", "#key secret"], "with the saved channels";
   is decode_json($create->[2])->{Nick}, "old", "and nick";
-  is_deeply decode_json($app->{saves}[0][2])->{Channels}, ["#a", "#key secret"], "and saves them";
+  is_deeply decode_json($app->{updates}[0][1])->{Channels}, ["#a", "#key secret"], "and saves them";
+}
+
+{
+  # the stream server finds who to send a connection's events to by its
+  # row, so save and reconnect updates the row in place: deleting and
+  # reinserting it lost the CREATE event, and the UI never saw the
+  # connection come back
+  my $app = FakeApp->new($saved);
+  API::Controller::Connection::edit($app, FakeReq->new("abc", encode_json { Host => "2.2.2.2", Port => 6697 }));
+  is_deeply $app->{log}, ["liercd destroy", "update", "liercd create"],
+    "edit stops the connection, updates its row, then starts it";
+  is $app->{updates}[0][0], "abc", "updating the connection in the URL";
+  is decode_json($app->{updates}[0][1])->{Host}, "2.2.2.2", "with the new settings";
+
+  # a connection liercd had already lost is still started
+  $app = FakeApp->new($saved);
+  $app->{liercd_code}{destroy} = 404;
+  API::Controller::Connection::edit($app, FakeReq->new("abc", encode_json { Host => "2.2.2.2", Port => 6697 }));
+  is_deeply $app->{log}, ["liercd destroy", "update", "liercd create"], "even if liercd wasn't running it";
+}
+
+{
+  # save and reconnect only reconnects if a setting the IRC connection
+  # uses changed: address, port, username, password, TLS or SASL
+  my $server = encode_json { Host => "1.1.1.1", Port => "6697", Nick => "old", User => "u", Pass => "p",
+    Ssl => JSON::XS::true, SASL => JSON::XS::false, Channels => ["#a"], Highlight => ["x"] };
+  my %same = (Host => " 1.1.1.1 ", Port => 6697, User => "u", Pass => "p", Ssl => 1, SASL => 0);
+
+  my $app = FakeApp->new($server);
+  my $res = API::Controller::Connection::edit($app, FakeReq->new("abc", encode_json {
+    %same, Nick => "other", Channels => ["#b"], Highlight => ["y"], Alias => "home" }));
+  is $res, "ok", "unchanged server settings: edit returns ok";
+  is_deeply $app->{log}, ["update"], "and only updates the row, without reconnecting";
+  my $got = decode_json($app->{updates}[0][1]);
+  is_deeply [ @$got{qw(Alias Highlight Nick Channels)} ], ["home", ["y"], "old", ["#a"]],
+    "saving the alias and highlights, keeping the nick and channels";
+  is_deeply $app->{notified}, ["NOTIFY highlights"], "and telling the notifier";
+
+  for my $change ([Host => "8.8.8.8"], [Port => 6698], [User => "v"], [User => ""],
+                  [Pass => "q"], [Pass => ""], [Ssl => 0], [SASL => 1]) {
+    my ($field, $value) = @$change;
+    my $app = FakeApp->new($server);
+    API::Controller::Connection::edit($app, FakeReq->new("abc", encode_json { %same, $field => $value }));
+    is_deeply $app->{log}, ["liercd destroy", "update", "liercd create"],
+      "changing $field to '$value' reconnects";
+  }
+
+  # no username or password saved, and none given
+  $app = FakeApp->new(encode_json { Host => "1.1.1.1", Port => 6697, Nick => "old" });
+  API::Controller::Connection::edit($app, FakeReq->new("abc", encode_json { Host => "1.1.1.1", Port => 6697, User => "", Pass => "" }));
+  is_deeply $app->{log}, ["update"], "blank username and password match none saved";
 }
 
 {
