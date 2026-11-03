@@ -12,21 +12,21 @@ sub liercd_url {
   my ($self, $path) = @_;
 
   # The connection id is the first path segment; its row says which
-  # liercd instance it lives on (NULL is main).
+  # liercd instance it lives on (NULL or '' is main, as in Go).
   my ($id) = $path =~ m{^/*([^/]*)};
   my $instance = length $id ? $self->lookup_liercd($id) : undef;
 
   my $host;
-  if (!defined $instance) {
+  if (!defined $instance || $instance eq "") {
     $host = $self->host;
   }
   elsif ($instance eq "next") {
     $host = $self->next_host;
-    die 'liercd instance "next" has no host (LIERCD_NEXT_HOST)'
+    die qq{liercd instance "next" has no host (LIERCD_NEXT_HOST)\n}
       unless defined $host && length $host;
   }
   else {
-    die qq{unknown liercd instance "$instance"};
+    die qq{unknown liercd instance "$instance"\n};
   }
 
   sprintf "http://%s:5005/%s", $host, $path;

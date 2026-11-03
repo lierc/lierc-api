@@ -31,7 +31,7 @@ my $app = Stub::App->new;
 sub urls { my @u = @{ $app->{ua}{urls} }; $app->{ua}{urls} = []; @u }
 
 $Stub::App::NEXT = "next.example";
-%Stub::App::INST = (c1 => undef, n1 => "next", n2 => "next", b1 => "bogus", e1 => "next");
+%Stub::App::INST = (c1 => undef, n1 => "next", n2 => "next", b1 => "bogus", e1 => "next", z1 => "");
 
 $app->request(GET => "c1/status");
 is_deeply [urls()], ["http://main.example:5005/c1/status"], "NULL routes to main";
@@ -42,17 +42,20 @@ is_deeply [urls()], ["http://next.example:5005/n1/status"], "next routes to next
 $app->request(POST => "/n2/raw", "x");
 is_deeply [urls()], ["http://next.example:5005//n2/raw"], "leading slash id found";
 
+$app->request(GET => "z1/status");
+is_deeply [urls()], ["http://main.example:5005/z1/status"], "'' routes to main, as Go does";
+
 $app->request(GET => "unknown/status");
 is_deeply [urls()], ["http://main.example:5005/unknown/status"], "no row routes to main";
 
 eval { $app->request(GET => "b1/status") };
-like $@, qr/unknown liercd instance "bogus"/, "unknown instance dies";
+is $@, qq{unknown liercd instance "bogus"\n}, "unknown instance dies, without a file and line";
 is_deeply [urls()], [], "no request made";
 
 for my $v (undef, "") {
   $Stub::App::NEXT = $v;
   eval { $app->request(GET => "n1/status") };
-  like $@, qr/liercd instance "next" has no host \(LIERCD_NEXT_HOST\)/, "next without host dies";
+  is $@, qq{liercd instance "next" has no host (LIERCD_NEXT_HOST)\n}, "next without host dies, without a file and line";
   is_deeply [urls()], [], "no request made";
 }
 
