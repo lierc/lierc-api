@@ -46,6 +46,20 @@ sub connections {
   } @$rows ];
 }
 
+sub lookup_liercd {
+  my ($self, $id) = @_;
+  return undef unless defined $id;
+
+  my $sth = $self->dbh->prepare(
+    q{SELECT liercd FROM connection WHERE id=?}
+  );
+  $sth->execute($id);
+  my ($liercd) = $sth->fetchrow_array;
+  $sth->finish;
+
+  return $liercd;
+}
+
 sub lookup_config {
   my ($self, $id) = @_;
   return () unless defined $id;

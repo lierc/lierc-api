@@ -25,6 +25,7 @@ sub new {
 sub base     { $ENV{API_BASE}          || $DEFAULT{base}     }
 sub site_url { $ENV{API_URL}           || $DEFAULT{site_url} }
 sub host     { $ENV{LIERCD_HOST}       || $DEFAULT{host}     }
+sub next_host { $ENV{LIERCD_NEXT_HOST} }
 sub dbhost   { $ENV{POSTGRES_HOST}     || $DEFAULT{dbhost}   }
 sub dbuser   { $ENV{POSTGRES_USER}     || $DEFAULT{dbuser}   }
 sub dbpass   { $ENV{POSTGRES_PASSWORD} || $DEFAULT{dbpass}   }

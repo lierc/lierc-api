@@ -10,7 +10,26 @@ sub ua {
 
 sub liercd_url {
   my ($self, $path) = @_;
-  sprintf "http://%s:5005/%s", $self->host, $path;
+
+  # The connection id is the first path segment; its row says which
+  # liercd instance it lives on (NULL is main).
+  my ($id) = $path =~ m{^/*([^/]*)};
+  my $instance = length $id ? $self->lookup_liercd($id) : undef;
+
+  my $host;
+  if (!defined $instance) {
+    $host = $self->host;
+  }
+  elsif ($instance eq "next") {
+    $host = $self->next_host;
+    die 'liercd instance "next" has no host (LIERCD_NEXT_HOST)'
+      unless defined $host && length $host;
+  }
+  else {
+    die qq{unknown liercd instance "$instance"};
+  }
+
+  sprintf "http://%s:5005/%s", $host, $path;
 }
 
 sub request {
