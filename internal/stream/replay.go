@@ -11,6 +11,17 @@ import (
 	"github.com/lierc/lierc-api/internal/db"
 )
 
+// The numerics the replay sends, named as irc-go names them.
+const (
+	rplWelcome       = "001"
+	rplISupport      = "005"
+	rplChannelModeIs = "324"
+	rplTopic         = "332"
+	rplTopicTime     = "333"
+	rplNamReply      = "353"
+	rplEndOfNames    = "366"
+)
+
 // status is the part of liercd's GET /:id/status the stream reads. Values that
 // Perl copies into events stay raw so they pass through with their JSON type.
 type status struct {
@@ -126,9 +137,9 @@ func (s *Server) replay(ctx context.Context, st *stream, conns []db.Connection) 
 	// push_welcome. A missing Isupport would die in Perl; it is treated as empty.
 	for _, stat := range registered {
 		welcome := "Welcome to the Internet Relay Network " + perlString(stat.Nick)
-		emit(stat.Id, liercdPrefix, "001", stat.Nick, jsonString(welcome))
+		emit(stat.Id, liercdPrefix, rplWelcome, stat.Nick, jsonString(welcome))
 		if len(stat.Isupport) > 0 {
-			emit(stat.Id, liercdPrefix, "005", stat.Nick, jsonString(joinStrings(stat.Isupport)))
+			emit(stat.Id, liercdPrefix, rplISupport, stat.Nick, jsonString(joinStrings(stat.Isupport)))
 		}
 		if len(stat.CapsAcked) > 0 {
 			emit(stat.Id, liercdPrefix, "CAP", jsonString("*"), jsonString("ACK"), jsonString(joinStrings(stat.CapsAcked)))
@@ -144,8 +155,8 @@ func (s *Server) replay(ctx context.Context, st *stream, conns []db.Connection) 
 	for _, stat := range registered {
 		for _, ch := range stat.Channels {
 			if perlTrue(ch.Topic.Topic) {
-				emit(stat.Id, liercdPrefix, "332", stat.Nick, ch.Name, ch.Topic.Topic)
-				emit(stat.Id, liercdPrefix, "333", stat.Nick, ch.Name, ch.Topic.User, ch.Topic.Time)
+				emit(stat.Id, liercdPrefix, rplTopic, stat.Nick, ch.Name, ch.Topic.Topic)
+				emit(stat.Id, liercdPrefix, rplTopicTime, stat.Nick, ch.Name, ch.Topic.User, ch.Topic.Time)
 			}
 		}
 	}
@@ -158,17 +169,17 @@ func (s *Server) replay(ctx context.Context, st *stream, conns []db.Connection) 
 			nicks := *ch.Nicks
 			for len(nicks) > 0 {
 				n := min(50, len(nicks))
-				emit(stat.Id, liercdPrefix, "353", stat.Nick, jsonString("="), ch.Name, jsonString(joinStrings(nicks[:n])))
+				emit(stat.Id, liercdPrefix, rplNamReply, stat.Nick, jsonString("="), ch.Name, jsonString(joinStrings(nicks[:n])))
 				nicks = nicks[n:]
 			}
-			emit(stat.Id, liercdPrefix, "366", stat.Nick, ch.Name, jsonString("End of /NAMES list."))
+			emit(stat.Id, liercdPrefix, rplEndOfNames, stat.Nick, ch.Name, jsonString("End of /NAMES list."))
 		}
 	}
 	// push_modes
 	for _, stat := range registered {
 		for _, ch := range stat.Channels {
 			if perlTrue(ch.Mode) {
-				emit(stat.Id, liercdPrefix, "324", ch.Name, ch.Mode)
+				emit(stat.Id, liercdPrefix, rplChannelModeIs, ch.Name, ch.Mode)
 			}
 		}
 	}
