@@ -2,8 +2,13 @@ package lctl
 
 import (
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/lierc/lierc-api/internal/liercd"
 )
 
 const cfg = `{"Host":"ergo","Port":6667,"Nick":"x"}`
@@ -114,5 +119,108 @@ func TestReviveBadSince(t *testing.T) {
 	var ue *UsageError
 	if err := h.run("revive", "--since", "soon"); !errors.As(err, &ue) {
 		t.Fatalf("got %v", err)
+	}
+}
+
+// Starts are paced in batches; connections already running don't count
+// toward a batch.
+func TestRevivePaced(t *testing.T) {
+	h := newHarness(t)
+	seedRevive(h)
+	u := h.user("more")
+	for _, id := range []string{"m1", "m2", "m3", "m4"} {
+		testenv_conn(h, id, u, cfg)
+	}
+	if err := h.run("revive", "--batch", "2", "--pause", "10s"); err != nil {
+		t.Fatal(err)
+	}
+	// m1..m4 and stopped are five starts in batches of two: two pauses
+	if len(h.slept) != 2 || h.slept[0] != 10*time.Second || h.slept[1] != 10*time.Second {
+		t.Errorf("slept %v, want two 10s pauses", h.slept)
+	}
+	h.has("pausing 10s\n", "started 5, failed 0\n")
+}
+
+// --instance starts only that liercd's connections; main is a NULL or
+// empty column.
+func TestReviveInstance(t *testing.T) {
+	m := newMoveHarness(t)
+	u := m.user("alice")
+	for _, id := range []string{"a", "b", "n"} {
+		m.conn(id, u, cfg)
+	}
+	m.exec(`UPDATE connection SET liercd = 'next' WHERE id = 'n'`)
+	m.exec(`UPDATE connection SET liercd = '' WHERE id = 'b'`)
+	if err := m.run("revive", "--instance", "next"); err != nil {
+		t.Fatal(err)
+	}
+	if !m.next.Running("n") || m.main.Running("a") || m.main.Running("b") {
+		t.Errorf("next: started %v; main a %v b %v", m.next.Running("n"), m.main.Running("a"), m.main.Running("b"))
+	}
+	m.has("started n\n", "started 1, failed 0\n")
+	if err := m.run("revive", "--instance", "main"); err != nil {
+		t.Fatal(err)
+	}
+	if !m.main.Running("a") || !m.main.Running("b") {
+		t.Errorf("main: a %v b %v", m.main.Running("a"), m.main.Running("b"))
+	}
+	m.has("started a\n", "started b\n", "started 2, failed 0\n")
+}
+
+// --wait retries until the instance answers, then revives; if it never
+// answers, it fails without starting anything.
+func TestReviveWait(t *testing.T) {
+	h := newHarness(t)
+	seedRevive(h)
+	// a liercd still starting: the first probes get no answer
+	probes := 0
+	starting := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/portmap" {
+			if probes++; probes <= 2 {
+				conn, _, _ := w.(http.Hijacker).Hijack()
+				conn.Close()
+				return
+			}
+		}
+		h.liercd.ServeHTTP(w, r)
+	}))
+	t.Cleanup(starting.Close)
+	h.env.Liercd = &liercd.Client{BaseURL: starting.URL, HTTP: http.DefaultClient}
+	if err := h.run("revive", "--instance", "main", "--wait", "1m"); err != nil {
+		t.Fatal(err)
+	}
+	if probes != 3 || len(h.slept) != 2 {
+		t.Errorf("%d probes, slept %v; want 3 and two 2s waits", probes, h.slept)
+	}
+	h.has("started stopped\n")
+
+	h = newHarness(t)
+	seedRevive(h)
+	h.env.Liercd = &liercd.Client{BaseURL: "http://127.0.0.1:1", HTTP: http.DefaultClient}
+	err := h.run("revive", "--instance", "main", "--wait", "6s")
+	if err == nil || !strings.Contains(err.Error(), "didn't answer within 6s") {
+		t.Fatalf("err = %v", err)
+	}
+	if len(h.slept) != 3 {
+		t.Errorf("slept %v, want three 2s tries", h.slept)
+	}
+	if got := h.calls("POST", "/create"); len(got) != 1 {
+		t.Errorf("created %v; only seedRevive's", got)
+	}
+}
+
+func TestReviveUsageErrors(t *testing.T) {
+	h := newHarness(t)
+	for _, args := range [][]string{
+		{"--instance", "other"},
+		{"--batch", "0"},
+		{"--pause", "-1s"},
+		{"--wait", "-1s"},
+		{"--wait", "1m"},
+	} {
+		var ue *UsageError
+		if err := h.run("revive", args...); !errors.As(err, &ue) {
+			t.Errorf("%v: got %v", args, err)
+		}
 	}
 }
