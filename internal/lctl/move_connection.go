@@ -30,6 +30,12 @@ func moveConnection(ctx context.Context, env *Env, args []string) error {
 	if target != "main" && target != "next" {
 		return &UsageError{Msg: fmt.Sprintf("target must be main or next, not %q", target)}
 	}
+	return moveOne(ctx, env, id, target)
+}
+
+// moveOne moves connection id to liercd instance target ("main" or
+// "next"), printing what it did.
+func moveOne(ctx context.Context, env *Env, id, target string) error {
 	config, ok, err := env.DB.LookupConfig(ctx, id)
 	if err != nil {
 		return err
