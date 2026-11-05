@@ -131,3 +131,24 @@ func TestDeleteUsersNeedsIDs(t *testing.T) {
 		t.Fatalf("got %v", err)
 	}
 }
+
+// A QUIT the logger writes after a user's delete commits is swept up at the
+// end; the sweep only looks at rows newer than the command's start.
+func TestDeleteUsersSweepsLateLogRows(t *testing.T) {
+	h := newHarness(t)
+	u := seedUser(h, "ann")
+	// stands in for the logger: a log row for ann1 lands as ann's delete commits
+	h.exec(`CREATE FUNCTION late_quit() RETURNS trigger AS $$
+	  BEGIN
+	    INSERT INTO log (connection, "user", channel, time, message) VALUES ('ann1', OLD.id, 'status', now(), '{"Command":"QUIT"}');
+	    RETURN OLD;
+	  END $$ LANGUAGE plpgsql`)
+	h.exec(`CREATE TRIGGER late_quit AFTER DELETE ON "user" FOR EACH ROW EXECUTE FUNCTION late_quit()`)
+	if err := h.run("delete-users", "--delete", "--settle", "0", u); err != nil {
+		t.Fatal(err)
+	}
+	h.has(u+": deleted\n", u+": removed 1 late log row(s)\n", "deleted 1 user(s), skipped 0\n")
+	if n := h.count(`SELECT count(*) FROM log WHERE connection IN ('ann1', 'ann2')`); n != 0 {
+		t.Errorf("%d log rows left", n)
+	}
+}

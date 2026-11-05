@@ -21,7 +21,8 @@ of theirs is deleted. Destroying a connection makes it QUIT, and that
 message reaches the log through NSQ a moment later, so the command waits
 --settle seconds before deleting. Each user's rows are then deleted in one
 transaction: a user is either fully deleted or left as they were. A last
-sweep removes any log rows that still arrived late.`
+sweep removes any log rows that still arrived late (it looks only at rows
+written after the command started, so it takes moments).`
 
 // What each table holds for a user, in delete order. A where clause uses
 // the user id, their connection ids, or both ($1 user, $2 connections).
@@ -120,6 +121,13 @@ func deleteUsers(ctx context.Context, env *Env, args []string) error {
 		return nil
 	}
 
+	// log rows from here on are new: the last sweep looks only at those,
+	// not at each user's whole (just deleted) history
+	var lastLogID int64
+	if err := pool.QueryRow(ctx, `SELECT coalesce(max(id), 0) FROM log`).Scan(&lastLogID); err != nil {
+		return err
+	}
+
 	// stop every connection first, so nothing keeps running for these users
 	var ready []foundUser
 	wait := false
@@ -161,9 +169,11 @@ func deleteUsers(ctx context.Context, env *Env, args []string) error {
 		deleted = append(deleted, u)
 	}
 
-	// anything the logger still wrote after the deletes
+	// anything the logger still wrote after the deletes: only rows newer than
+	// the start, by id (the primary key), so this reads seconds of log
+	// rather than walking every row just deleted
 	for _, u := range deleted {
-		tag, err := pool.Exec(ctx, `DELETE FROM log WHERE connection = ANY($1)`, u.conns)
+		tag, err := pool.Exec(ctx, `DELETE FROM log WHERE id > $1 AND connection = ANY($2)`, lastLogID, u.conns)
 		if err != nil {
 			return err
 		}
