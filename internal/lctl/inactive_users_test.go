@@ -15,6 +15,7 @@ func TestInactiveUsers(t *testing.T) {
 	}
 	old := h.user("old")
 	login(old, 400*24*time.Hour, true)
+	h.exec(`UPDATE "user" SET registered = $2 WHERE id = $1`, old, now.Add(-700*24*time.Hour))
 	h.conn("o1", old, `{"Host":"a.com","Port":6667,"Nick":"o"}`)
 	h.conn("o2", old, `{"Host":"b.com","Port":6667,"Nick":"o"}`)
 	older := h.user("older")
@@ -27,8 +28,8 @@ func TestInactiveUsers(t *testing.T) {
 	if err := h.run("inactive-users", "--since", "90d"); err != nil {
 		t.Fatal(err)
 	}
-	want := older + "  older  older@example.com (unverified)  last login 2025-06-20 12:00 UTC (500 days ago)  0 connections\n" +
-		old + "  old  old@example.com  last login 2025-09-28 12:00 UTC (400 days ago)  2 connections\n"
+	want := older + "  older  older@example.com (unverified)  last login 2025-06-20 12:00 UTC (500 days ago)  registered unknown  0 connections\n" +
+		old + "  old  old@example.com  last login 2025-09-28 12:00 UTC (400 days ago)  registered 2024-12-02 12:00 UTC (700 days ago)  2 connections\n"
 	if h.out() != want {
 		t.Fatalf("stdout:\n%s\nwant:\n%s", h.out(), want)
 	}
@@ -96,7 +97,7 @@ func TestInactiveUsersNeverLoggedIn(t *testing.T) {
 	if len(lines) != 2 {
 		t.Fatalf("got %q, want two users", h.out())
 	}
-	if want := never + "  nel  nel@example.com  last login never  0 connections"; lines[0] != want {
+	if want := never + "  nel  nel@example.com  last login never  registered unknown  0 connections"; lines[0] != want {
 		t.Errorf("first line %q, want %q", lines[0], want)
 	}
 	if !strings.HasPrefix(lines[1], old+"  old  ") {

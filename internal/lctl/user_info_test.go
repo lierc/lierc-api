@@ -11,8 +11,8 @@ func TestUserInfo(t *testing.T) {
 	now := time.Date(2026, 11, 2, 12, 0, 0, 0, time.UTC)
 	h.env.Now = func() time.Time { return now }
 	u := h.user("Ann")
-	h.exec(`UPDATE "user" SET last_login = $2, verified = true, password = NULL, password_hash = '$2a$12$x' WHERE id = $1`,
-		u, now.Add(-3*24*time.Hour-2*time.Hour))
+	h.exec(`UPDATE "user" SET last_login = $2, verified = true, password = NULL, password_hash = '$2a$12$x', registered = $3 WHERE id = $1`,
+		u, now.Add(-3*24*time.Hour-2*time.Hour), now.Add(-40*24*time.Hour))
 	h.conn("c1", u, `{"Host":"irc.libera.chat","Port":6697,"Nick":"ann","Ssl":true,"SASL":true,"User":"ann","Pass":"hunter2","Alias":"Libera","Channels":["#a","#b"]}`)
 	h.conn("c2", u, `{"Host":"irc.relaychat.party","Port":6667,"Nick":"ann_"}`)
 	h.conn("c3", u, `"not an object"`)
@@ -35,6 +35,7 @@ func TestUserInfo(t *testing.T) {
 			"Ann ("+u+")\n",
 			"  email:       Ann@example.com (verified)\n",
 			"  last login:  2026-10-30 10:00 UTC (3 days ago)\n",
+			"  registered:  2026-09-23 12:00 UTC (40 days ago)\n",
 			"  password:    bcrypt\n",
 			"  connections: 3\n",
 			"    c1  irc.libera.chat:6697  nick ann  ssl sasl  alias Libera  2 channels  server password set  connected as ann\n      liercd: main\n",
@@ -109,5 +110,5 @@ func TestUserInfoNeverLoggedIn(t *testing.T) {
 	if err := h.run("user-info", u); err != nil {
 		t.Fatal(err)
 	}
-	h.has("  last login:  never\n")
+	h.has("  last login:  never\n", "  registered:  unknown\n")
 }

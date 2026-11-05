@@ -33,13 +33,14 @@ func userInfo(ctx context.Context, env *Env, args []string) error {
 			fmt.Fprintln(out)
 		}
 		var id, username, email string
-		var verified *bool       // NULL: grandfathered
-		var lastLogin *time.Time // NULL on some old accounts
+		var verified *bool        // NULL: grandfathered
+		var lastLogin *time.Time  // NULL on some old accounts
+		var registered *time.Time // NULL for accounts from before the column
 		var legacy, hash *string
-		err := env.DB.Pool.QueryRow(ctx, `SELECT id, username, email, verified, last_login, password, password_hash
+		err := env.DB.Pool.QueryRow(ctx, `SELECT id, username, email, verified, last_login, registered, password, password_hash
 		  FROM "user" WHERE id = $1 OR lower(username) = lower($1) OR lower(email) = lower($1)
 		  ORDER BY id = $1 DESC LIMIT 1`, who).
-			Scan(&id, &username, &email, &verified, &lastLogin, &legacy, &hash)
+			Scan(&id, &username, &email, &verified, &lastLogin, &registered, &legacy, &hash)
 		if isNoRows(err) {
 			fmt.Fprintf(out, "%s: no such user\n", who)
 			missing++
@@ -59,11 +60,8 @@ func userInfo(ctx context.Context, env *Env, args []string) error {
 		}
 		fmt.Fprintf(out, "%s (%s)\n", username, id)
 		fmt.Fprintf(out, "  email:       %s (%s)\n", email, state)
-		if lastLogin == nil {
-			fmt.Fprintf(out, "  last login:  never\n")
-		} else {
-			fmt.Fprintf(out, "  last login:  %s UTC (%s)\n", lastLogin.UTC().Format("2006-01-02 15:04"), ago(env.now(), *lastLogin))
-		}
+		fmt.Fprintf(out, "  last login:  %s\n", when(env.now(), lastLogin, "never"))
+		fmt.Fprintf(out, "  registered:  %s\n", when(env.now(), registered, "unknown"))
 		fmt.Fprintf(out, "  password:    %s\n", password)
 
 		conns, err := env.DB.Connections(ctx, id)
@@ -144,6 +142,14 @@ func liercdState(ctx context.Context, env *Env, id string) string {
 		return "connected as " + s.Nick
 	}
 	return "running, not connected"
+}
+
+// when is t as "2006-01-02 15:04 UTC (3 days ago)", or none if it's NULL.
+func when(now time.Time, t *time.Time, none string) string {
+	if t == nil {
+		return none
+	}
+	return fmt.Sprintf("%s UTC (%s)", t.UTC().Format("2006-01-02 15:04"), ago(now, *t))
 }
 
 // ago is how long before now t was, roughly.

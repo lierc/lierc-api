@@ -12,9 +12,10 @@ const inactiveUsersUsage = `inactive-users --since DURATION
 
 Lists users who haven't logged in within DURATION (days such as 90d, or a
 Go duration such as 48h), oldest login first: id, username, email, last
-login ("never" for an account with none, listed first) and how many
-connections they have. Changes nothing. Each line starts with the id, so
-the list can be fed to delete-users:
+login ("never" for an account with none, listed first), when they
+registered ("unknown" for accounts from before that was recorded) and
+how many connections they have. Changes nothing. Each line starts with
+the id, so the list can be fed to delete-users:
 
   lctl inactive-users --since 365d | awk '{print $1}' | lctl delete-users
 
@@ -40,7 +41,7 @@ func inactiveUsers(ctx context.Context, env *Env, args []string) error {
 	cutoff := env.now().Add(-d).UTC()
 	// last_login is a timestamp without a zone, stored in UTC; it's NULL on
 	// some old accounts, listed first as the least recently seen
-	rows, err := env.DB.Pool.Query(ctx, `SELECT u.id, u.username, u.email, u.verified, u.last_login,
+	rows, err := env.DB.Pool.Query(ctx, `SELECT u.id, u.username, u.email, u.verified, u.last_login, u.registered,
 	    (SELECT count(*) FROM connection c WHERE c."user" = u.id)
 	  FROM "user" u WHERE u.last_login IS NULL OR u.last_login < ($1::timestamptz AT TIME ZONE 'UTC')
 	  ORDER BY u.last_login NULLS FIRST, u.id`, cutoff)
@@ -52,19 +53,16 @@ func inactiveUsers(ctx context.Context, env *Env, args []string) error {
 	for rows.Next() {
 		var id, username, email string
 		var verified *bool
-		var lastLogin *time.Time
+		var lastLogin, registered *time.Time
 		var conns int
-		if err := rows.Scan(&id, &username, &email, &verified, &lastLogin, &conns); err != nil {
+		if err := rows.Scan(&id, &username, &email, &verified, &lastLogin, &registered, &conns); err != nil {
 			return err
 		}
 		if state := verifiedState(verified); state != "verified" {
 			email += " (" + state + ")"
 		}
-		login := "never"
-		if lastLogin != nil {
-			login = fmt.Sprintf("%s UTC (%s)", lastLogin.UTC().Format("2006-01-02 15:04"), ago(env.now(), *lastLogin))
-		}
-		fmt.Fprintf(env.Stdout, "%s  %s  %s  last login %s  %d connections\n", id, username, email, login, conns)
+		fmt.Fprintf(env.Stdout, "%s  %s  %s  last login %s  registered %s  %d connections\n", id, username, email,
+			when(env.now(), lastLogin, "never"), when(env.now(), registered, "unknown"), conns)
 		n++
 	}
 	if err := rows.Err(); err != nil {
