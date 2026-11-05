@@ -64,3 +64,16 @@ func TestInactiveUsersUsage(t *testing.T) {
 		}
 	}
 }
+
+func TestInactiveUsersGrandfathered(t *testing.T) {
+	h := newHarness(t)
+	now := time.Date(2026, 11, 2, 12, 0, 0, 0, time.UTC)
+	h.env.Now = func() time.Time { return now }
+	g := h.user("gus")
+	h.exec(`UPDATE "user" SET last_login = $2, verified = NULL WHERE id = $1`, g, now.Add(-200*24*time.Hour))
+	if err := h.run("inactive-users", "--since", "90d"); err != nil {
+		t.Fatal(err)
+	}
+	h.has("  gus  gus@example.com (grandfathered)  last login ")
+	h.lacks("(unverified)")
+}

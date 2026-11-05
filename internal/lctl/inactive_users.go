@@ -49,14 +49,14 @@ func inactiveUsers(ctx context.Context, env *Env, args []string) error {
 	n := 0
 	for rows.Next() {
 		var id, username, email string
-		var verified bool
+		var verified *bool
 		var lastLogin time.Time
 		var conns int
 		if err := rows.Scan(&id, &username, &email, &verified, &lastLogin, &conns); err != nil {
 			return err
 		}
-		if !verified {
-			email += " (unverified)"
+		if state := verifiedState(verified); state != "verified" {
+			email += " (" + state + ")"
 		}
 		fmt.Fprintf(env.Stdout, "%s  %s  %s  last login %s UTC (%s)  %d connections\n",
 			id, username, email, lastLogin.UTC().Format("2006-01-02 15:04"), ago(env.now(), lastLogin), conns)

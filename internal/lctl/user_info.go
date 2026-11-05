@@ -33,7 +33,7 @@ func userInfo(ctx context.Context, env *Env, args []string) error {
 			fmt.Fprintln(out)
 		}
 		var id, username, email string
-		var verified bool
+		var verified *bool // NULL: grandfathered
 		var lastLogin time.Time
 		var legacy, hash *string
 		err := env.DB.Pool.QueryRow(ctx, `SELECT id, username, email, verified, last_login, password, password_hash
@@ -49,10 +49,7 @@ func userInfo(ctx context.Context, env *Env, args []string) error {
 			return err
 		}
 
-		state := "unverified"
-		if verified {
-			state = "verified"
-		}
+		state := verifiedState(verified)
 		password := "none"
 		switch {
 		case hash != nil && *hash != "":
@@ -157,4 +154,18 @@ func ago(now, t time.Time) string {
 		return fmt.Sprintf("%d hours ago", int(d.Hours()))
 	}
 	return fmt.Sprintf("%d days ago", int(d.Hours()/24))
+}
+
+// verifiedState describes a user's verified column. NULL is an account from
+// before signups had to verify their email, which is let in like a verified
+// one.
+func verifiedState(v *bool) string {
+	switch {
+	case v == nil:
+		return "grandfathered"
+	case *v:
+		return "verified"
+	default:
+		return "unverified"
+	}
 }

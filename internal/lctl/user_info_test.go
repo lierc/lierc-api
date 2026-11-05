@@ -88,3 +88,13 @@ func TestUserInfoUsage(t *testing.T) {
 		t.Fatalf("got %v", err)
 	}
 }
+
+func TestUserInfoGrandfathered(t *testing.T) {
+	h := newHarness(t)
+	u := h.user("Gus")
+	h.exec(`UPDATE "user" SET verified = NULL WHERE id = $1`, u)
+	if err := h.run("user-info", u); err != nil {
+		t.Fatal(err)
+	}
+	h.has("  email:       Gus@example.com (grandfathered)\n")
+}
