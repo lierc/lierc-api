@@ -108,7 +108,8 @@ sub add_user {
   my $id = Util->uuid;
 
   my $sth = $self->dbh->prepare(
-    q{INSERT INTO "user" (id, username, email, password_hash) VALUES(?,?,?,?)},
+    # verify_sent: signup sends the first verify email
+    q{INSERT INTO "user" (id, username, email, password_hash, verify_sent) VALUES(?,?,?,?,now())},
   );
   $sth->execute($id, $user, $email, $hashed);
   $sth->finish;

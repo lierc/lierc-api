@@ -65,9 +65,20 @@ is $name, "auth.resend_verify", "POST /verify/resend routes to auth.resend_verif
   sub selectrow_hashref { $_[0]{app}{user} }
   # whether the user already has a connection saved
   sub selectrow_array { $_[1] =~ /FROM connection/ && $_[0]{app}{has_connection} ? (1) : () }
+  # the user table's verify_sent, by user id, shared like the database
+  our %verify_sent;
   sub do {
-    my ($self, $sql) = @_;
+    my ($self, $sql, $attr, @bind) = @_;
     push @{ $self->{app}{sql} }, $sql;
+    # resend's update: changes the row only for an unverified account last
+    # sent to a minute or more ago
+    if ($sql =~ /SET verify_sent/) {
+      my $user = $self->{app}{user};
+      return "0E0" unless defined $user->{verified} && !$user->{verified};
+      return "0E0" if exists $verify_sent{ $bind[0] } && $verify_sent{ $bind[0] } > time - 60;
+      $verify_sent{ $bind[0] } = time;
+      return 1;
+    }
     # the first verification's update changes a row, a later one doesn't
     return $self->{app}{first} ? 1 : "0E0" if $sql =~ /verified\s*=\s*false/;
     return 1;
@@ -141,32 +152,34 @@ for my $first (1, 0) {
   is_deeply $app->{saves}, [], "a first verification with a connection already saved adds none";
 }
 
-# resend: one email a minute per session (every API worker sees the session
-# cookie), only while unverified
+# resend: one email a minute per user, kept in the database, only while
+# unverified
 {
   my @sent;
   no warnings 'redefine';
   local *API::Controller::Auth::send_verify_email = sub { push @sent, $_[1] };
   my $resend = sub {
-    my ($user, $session) = @_;
+    my ($user) = @_;
     my $app = AuthApp->new(user => $user);
-    my $res = API::Controller::Auth::resend_verify($app, FakeReq->new(session => $session));
+    # a fresh session each time: the limit doesn't live in it
+    my $res = API::Controller::Auth::resend_verify($app, FakeReq->new(session => { user => $user->{id} }));
     my $got;
     if (ref $res eq "CODE") { $res->(sub { $got = shift }) } else { $got = $res }
-    return $got;
+    return ($got, $app);
   };
   my $ann = { id => "u1", username => "ann", email => 'ann@example.com', verified => 0 };
-  my $session = { user => "u1" };
-  is $resend->($ann, $session), "ok", "resend answers ok";
+  my ($got, $app) = $resend->($ann);
+  is $got, "ok", "resend answers ok";
   is_deeply \@sent, ["u1"], "and sends";
-  ok $session->{verify_resent}, "and notes the time in the session";
-  is $resend->($ann, $session), "ok", "a second resend within a minute answers ok";
-  is_deeply \@sent, ["u1"], "but doesn't send";
-  $session->{verify_resent} = time - 61;
-  $resend->($ann, $session);
+  ok scalar(grep { /SET verify_sent/ } @{ $app->{sql} }), "and records the time in the user row";
+  ($got) = $resend->($ann);
+  is $got, "ok", "a second resend within a minute answers ok";
+  is_deeply \@sent, ["u1"], "but doesn't send, even from another session";
+  $FakeDBH::verify_sent{u1} = time - 61;
+  $resend->($ann);
   is_deeply \@sent, ["u1", "u1"], "a minute later it sends again";
-  $resend->({ id => "u3", username => "cy", email => 'cy@example.com', verified => 1 }, { user => "u3" });
-  $resend->({ id => "u4", username => "di", email => 'di@example.com', verified => undef }, { user => "u4" });
+  $resend->({ id => "u3", username => "cy", email => 'cy@example.com', verified => 1 });
+  $resend->({ id => "u4", username => "di", email => 'di@example.com', verified => undef });
   is_deeply \@sent, ["u1", "u1"], "verified and grandfathered accounts get no email";
 }
 

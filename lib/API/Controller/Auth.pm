@@ -278,18 +278,22 @@ sub add_first_network {
 my $resend_every = 60;
 
 # Sends a signed-in user who hasn't verified a new confirmation link, at
-# most once a minute. The time of the last one is kept in the session,
-# which every API worker sees. The response is the same whether or not it
-# sent.
+# most once a minute (counting the one sent at signup). The update both
+# checks and records that, so two resends at once send one email. The
+# response is the same whether or not it sent.
 sub resend_verify {
   my ($app, $req) = @_;
   my $user = $app->lookup_user($req->session->{user});
   my $res = $app->ok;
-  return $res unless $user && defined $user->{verified} && !$user->{verified};
+  return $res unless $user;
 
-  my $now = time;
-  return $res if ($req->session->{verify_resent} // 0) > $now - $resend_every;
-  $req->session->{verify_resent} = $now;
+  my $due = $app->dbh->do(
+    q{UPDATE "user" SET verify_sent = now()
+      WHERE id = ? AND verified = false
+        AND (verify_sent IS NULL OR verify_sent < now() - make_interval(secs => ?))},
+    {}, $user->{id}, $resend_every
+  );
+  return $res unless $due == 1;
 
   # sent after the response, as at signup
   return sub {
