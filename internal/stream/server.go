@@ -87,19 +87,26 @@ var pingPath = regexp.MustCompile(`^/+([^/]+)/ping$`)
 // writes the error response and reports false.
 func (s *Server) user(w http.ResponseWriter, r *http.Request) (string, bool) {
 	user := session.User(r, s.cfg.Secret)
-	ok := false
+	ok, unverified := false, false
 	if user != "" {
 		var err error
-		if ok, err = s.db.UserExists(r.Context(), user); err != nil {
+		if ok, unverified, err = s.db.UserState(r.Context(), user); err != nil {
 			log.Printf("stream: lookup user: %v", err)
 			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 			return "", false
 		}
 	}
-	if !ok {
+	switch {
+	case !ok:
 		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return "", false
+	case unverified:
+		// API::Responses unverified: signed up, but hasn't confirmed its
+		// email address yet
+		writeJSON(w, http.StatusForbidden, unverifiedBody{"error", "Confirm your email address first", true})
+		return "", false
 	}
-	return user, ok
+	return user, true
 }
 
 // servePing pings user's stream id at once, so a client waking from sleep
@@ -319,6 +326,12 @@ func writeJSON(w http.ResponseWriter, code int, v any) {
 type errorBody struct {
 	Status string `json:"status"`
 	Error  string `json:"error"`
+}
+
+type unverifiedBody struct {
+	Status     string `json:"status"`
+	Error      string `json:"error"`
+	Unverified bool   `json:"unverified"`
 }
 
 // writeError is API::Responses error.

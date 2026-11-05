@@ -54,10 +54,18 @@ func Open(ctx context.Context, cfg config.Config) (*DB, error) {
 
 func (d *DB) Close() { d.Pool.Close() }
 
-func (d *DB) UserExists(ctx context.Context, id string) (bool, error) {
-	var ok bool
-	err := d.Pool.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM "user" WHERE id=$1)`, id).Scan(&ok)
-	return ok, err
+// UserState is whether the user exists, and whether it has yet to verify
+// its email address (and so can't use the app). A NULL verified is an
+// account from before signups had to verify, and is let in.
+func (d *DB) UserState(ctx context.Context, id string) (exists, unverified bool, err error) {
+	err = d.Pool.QueryRow(ctx, `SELECT verified IS NOT DISTINCT FROM false FROM "user" WHERE id=$1`, id).Scan(&unverified)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return false, false, nil
+	}
+	if err != nil {
+		return false, false, err
+	}
+	return true, unverified, nil
 }
 
 func (d *DB) Connections(ctx context.Context, user string) ([]Connection, error) {

@@ -390,6 +390,37 @@ func TestUnauthorized(t *testing.T) {
 	}
 }
 
+func TestUnverifiedForbidden(t *testing.T) {
+	e := setup(t)
+	u := e.addUser("newbie")
+	setVerified := func(v any) {
+		if _, err := e.db.Pool.Exec(context.Background(), `UPDATE "user" SET verified=$2 WHERE id=$1`, u, v); err != nil {
+			t.Fatal(err)
+		}
+	}
+	setVerified(false)
+	res := e.get("/", u)
+	if res.StatusCode != 403 {
+		res.Body.Close() // a stream: don't read it
+		t.Fatalf("unverified: %d, want 403", res.StatusCode)
+	}
+	body, _ := io.ReadAll(res.Body)
+	res.Body.Close()
+	if string(body) != `{"status":"error","error":"Confirm your email address first","unverified":true}` {
+		t.Errorf("unverified: %s", body)
+	}
+
+	// verified, and grandfathered (NULL), are let in
+	for _, v := range []any{true, nil} {
+		setVerified(v)
+		res = e.get("/", u)
+		res.Body.Close()
+		if res.StatusCode != 200 {
+			t.Errorf("verified %v: %d", v, res.StatusCode)
+		}
+	}
+}
+
 func TestHandshake(t *testing.T) {
 	e := setup(t)
 	u := e.addUser("alice")

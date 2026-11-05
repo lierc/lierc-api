@@ -5,7 +5,9 @@ create table "user" (
   password_hash varchar(60),
   username varchar(256) not null,
   last_login timestamp not null default NOW(),
-  verified bool default false not null,
+  -- false: signed up but hasn't confirmed its email, so can't use the app;
+  -- NULL: an account from before that, allowed in
+  verified bool default false,
   primary  key (id),
   -- the API's signup rule, enforced for every writer
   constraint user_username_valid check (username ~ '^[a-zA-Z0-9_.]{1,32}$')

@@ -22,11 +22,24 @@ var ctx = context.Background()
 func TestUsers(t *testing.T) {
 	d := testenv.Postgres(t)
 	id := testenv.AddUser(t, d, "alice")
-	if ok, err := d.UserExists(ctx, id); err != nil || !ok {
-		t.Fatalf("UserExists = %v %v", ok, err)
+	for _, c := range []struct {
+		verified   any
+		unverified bool
+	}{
+		{nil, false}, // grandfathered
+		{false, true},
+		{true, false},
+	} {
+		if _, err := d.Pool.Exec(ctx, `UPDATE "user" SET verified=$2 WHERE id=$1`, id, c.verified); err != nil {
+			t.Fatal(err)
+		}
+		exists, unverified, err := d.UserState(ctx, id)
+		if err != nil || !exists || unverified != c.unverified {
+			t.Errorf("verified %v: UserState = %v %v %v", c.verified, exists, unverified, err)
+		}
 	}
-	if ok, _ := d.UserExists(ctx, "nope"); ok {
-		t.Fatal("unexpected user")
+	if exists, unverified, err := d.UserState(ctx, "nope"); err != nil || exists || unverified {
+		t.Fatalf("missing user: UserState = %v %v %v", exists, unverified, err)
 	}
 	if _, err := d.Pool.Exec(ctx, `UPDATE "user" SET last_login='2000-01-01' WHERE id=$1`, id); err != nil {
 		t.Fatal(err)
@@ -97,7 +110,7 @@ func TestErrorsAreWrapped(t *testing.T) {
 	if !errors.As(err, &de) || !errors.As(err, &ce) {
 		t.Fatalf("Exec: %T %v", err, err)
 	}
-	if _, err := d.UserExists(ctx, "x"); !errors.As(err, &de) {
+	if _, _, err := d.UserState(ctx, "x"); !errors.As(err, &de) {
 		t.Fatalf("QueryRow: %T %v", err, err)
 	}
 

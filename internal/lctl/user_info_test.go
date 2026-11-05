@@ -60,6 +60,7 @@ func TestUserInfoAges(t *testing.T) {
 func TestUserInfoUnknownAndLegacy(t *testing.T) {
 	h := newHarness(t)
 	u := h.user("bob") // testenv users have a legacy plain password
+	h.exec(`UPDATE "user" SET verified = false WHERE id = $1`, u)
 	if err := h.run("user-info", "bob", "nobody"); err == nil {
 		t.Fatal("no error for an unknown user")
 	}
