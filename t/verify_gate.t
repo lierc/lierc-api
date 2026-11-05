@@ -63,6 +63,8 @@ is $name, "auth.resend_verify", "POST /verify/resend routes to auth.resend_verif
 
   package FakeDBH;
   sub selectrow_hashref { $_[0]{app}{user} }
+  # whether the user already has a connection saved
+  sub selectrow_array { $_[1] =~ /FROM connection/ && $_[0]{app}{has_connection} ? (1) : () }
   sub do {
     my ($self, $sql) = @_;
     push @{ $self->{app}{sql} }, $sql;
@@ -129,6 +131,14 @@ for my $first (1, 0) {
   else {
     is_deeply $app->{saves}, [], "a later verification adds no network";
   }
+}
+
+# an account from before this change, which got the default network at
+# signup, gets no second one when it first verifies
+{
+  my $app = AuthApp->new(first => 1, has_connection => 1, user => { id => "u1", username => "ann", email => 'ann@example.com' });
+  API::Controller::Auth::verify($app, FakeReq->new(params => { token => verify_token() }));
+  is_deeply $app->{saves}, [], "a first verification with a connection already saved adds none";
 }
 
 # resend: one email a minute per session (every API worker sees the session

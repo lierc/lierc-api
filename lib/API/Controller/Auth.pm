@@ -262,9 +262,15 @@ sub mark_verified {
   return $first == 1;
 }
 
-# A failed default network shouldn't fail the verification.
+# A failed default network shouldn't fail the verification. An account that
+# signed up before verifying was required got the network then, so one that
+# already has a connection gets none.
 sub add_first_network {
   my ($app, $user) = @_;
+  my ($has) = $app->dbh->selectrow_array(
+    q{SELECT 1 FROM connection WHERE "user"=? LIMIT 1}, {}, $user->{id}
+  );
+  return if $has;
   eval { add_default_network($app, $user->{id}, $user->{username}); 1 }
     or warn "Unable to add default network for $user->{username}: $@";
 }
