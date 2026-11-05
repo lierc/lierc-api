@@ -4,6 +4,7 @@ package lctl
 var Commands = []Command{
 	{Name: "user-info", Summary: "Show a user: email, last login, password storage, connections", Run: userInfo},
 	{Name: "inactive-users", Summary: "List users who haven't logged in within --since (e.g. 90d)", Run: inactiveUsers},
+	{Name: "stop-inactive", Summary: "Stop the running liercd connections of users who haven't logged in within --since; dry run unless --stop", Run: stopInactive},
 	{Name: "connection-info", Summary: "Show a connection: owner, saved config, validity, and its live state in liercd", Run: connectionInfo},
 	{Name: "connection-list", Summary: "List connections, one line each: id, instance, owner, host:port, live state; --instance main|next filters", Run: connectionList},
 	{Name: "check-connections", Summary: "Check saved connections against the connection rules; --delete removes invalid ones", Run: checkConnections},
