@@ -131,29 +131,33 @@ for my $first (1, 0) {
   }
 }
 
-# resend: one email a minute, only while unverified
+# resend: one email a minute per session (every API worker sees the session
+# cookie), only while unverified
 {
   my @sent;
   no warnings 'redefine';
   local *API::Controller::Auth::send_verify_email = sub { push @sent, $_[1] };
   my $resend = sub {
-    my ($user) = @_;
+    my ($user, $session) = @_;
     my $app = AuthApp->new(user => $user);
-    my $res = API::Controller::Auth::resend_verify($app, FakeReq->new(session => { user => $user->{id} }));
+    my $res = API::Controller::Auth::resend_verify($app, FakeReq->new(session => $session));
     my $got;
     if (ref $res eq "CODE") { $res->(sub { $got = shift }) } else { $got = $res }
     return $got;
   };
   my $ann = { id => "u1", username => "ann", email => 'ann@example.com', verified => 0 };
-  is $resend->($ann), "ok", "resend answers ok";
+  my $session = { user => "u1" };
+  is $resend->($ann, $session), "ok", "resend answers ok";
   is_deeply \@sent, ["u1"], "and sends";
-  is $resend->($ann), "ok", "a second resend within a minute answers ok";
+  ok $session->{verify_resent}, "and notes the time in the session";
+  is $resend->($ann, $session), "ok", "a second resend within a minute answers ok";
   is_deeply \@sent, ["u1"], "but doesn't send";
-  $resend->({ id => "u2", username => "bob", email => 'bob@example.com', verified => 0 });
-  is_deeply \@sent, ["u1", "u2"], "another user's resend sends";
-  $resend->({ id => "u3", username => "cy", email => 'cy@example.com', verified => 1 });
-  $resend->({ id => "u4", username => "di", email => 'di@example.com', verified => undef });
-  is_deeply \@sent, ["u1", "u2"], "verified and grandfathered accounts get no email";
+  $session->{verify_resent} = time - 61;
+  $resend->($ann, $session);
+  is_deeply \@sent, ["u1", "u1"], "a minute later it sends again";
+  $resend->({ id => "u3", username => "cy", email => 'cy@example.com', verified => 1 }, { user => "u3" });
+  $resend->({ id => "u4", username => "di", email => 'di@example.com', verified => undef }, { user => "u4" });
+  is_deeply \@sent, ["u1", "u1"], "verified and grandfathered accounts get no email";
 }
 
 done_testing;

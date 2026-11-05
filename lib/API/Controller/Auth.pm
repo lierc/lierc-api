@@ -269,13 +269,12 @@ sub add_first_network {
     or warn "Unable to add default network for $user->{username}: $@";
 }
 
-# when each user was last sent a verify email by resend_verify, in this
-# process
-my %last_resend;
 my $resend_every = 60;
 
 # Sends a signed-in user who hasn't verified a new confirmation link, at
-# most once a minute. The response is the same whether or not it sent.
+# most once a minute. The time of the last one is kept in the session,
+# which every API worker sees. The response is the same whether or not it
+# sent.
 sub resend_verify {
   my ($app, $req) = @_;
   my $user = $app->lookup_user($req->session->{user});
@@ -283,9 +282,8 @@ sub resend_verify {
   return $res unless $user && defined $user->{verified} && !$user->{verified};
 
   my $now = time;
-  delete @last_resend{ grep { $last_resend{$_} <= $now - $resend_every } keys %last_resend };
-  return $res if exists $last_resend{ $user->{id} };
-  $last_resend{ $user->{id} } = $now;
+  return $res if ($req->session->{verify_resent} // 0) > $now - $resend_every;
+  $req->session->{verify_resent} = $now;
 
   # sent after the response, as at signup
   return sub {
