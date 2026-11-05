@@ -156,6 +156,35 @@ sub save_connection {
   $sth->finish;
 }
 
+# save_connection_limited saves the connection only if the user has fewer
+# than $max, and says whether it did. The user's row is locked while it
+# counts, so two creates at once are counted one after the other; a user
+# that's gone saves nothing.
+sub save_connection_limited {
+  my ($self, $id, $user, $config, $max) = @_;
+
+  my $dbh = $self->dbh;
+  $dbh->begin_work;
+  my $saved = eval {
+    my $ok = 0;
+    my ($exists) = $dbh->selectrow_array(q{SELECT 1 FROM "user" WHERE id=? FOR UPDATE}, undef, $user);
+    if ($exists) {
+      my ($count) = $dbh->selectrow_array(q{SELECT count(*) FROM connection WHERE "user"=?}, undef, $user);
+      if ($count < $max) {
+        $dbh->do(q{INSERT INTO connection (id, "user", config) VALUES(?,?,?)}, undef, $id, $user, $config);
+        $ok = 1;
+      }
+    }
+    $dbh->commit;
+    $ok;
+  };
+  if (my $err = $@) {
+    $dbh->rollback;
+    die $err;
+  }
+  return $saved;
+}
+
 sub update_connection {
   my ($self, $id, $config) = @_;
   my $sth = $self->dbh->prepare(q{UPDATE connection SET config=? WHERE id=?});

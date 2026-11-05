@@ -32,6 +32,7 @@ is $name, "connection.edit", "PUT /connection/:id is still save and reconnect";
   sub lookup_config { $_[0]{saved} }
   sub update_connection { my ($self, @args) = @_; push @{ $self->{updates} }, [@args]; push @{ $self->{log} }, "update" }
   sub save_connection { my ($self, @args) = @_; push @{ $self->{saves} }, [@args]; push @{ $self->{log} }, "insert" }
+  sub save_connection_limited { my ($self, @args) = @_; push @{ $self->{saves} }, [@args[0..2]]; push @{ $self->{log} }, "insert"; 1 }
   sub delete_connection { my ($self, @args) = @_; push @{ $self->{deletes} }, [@args]; push @{ $self->{log} }, "delete" }
   sub request {
     my ($self, @args) = @_;

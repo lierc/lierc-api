@@ -4,6 +4,7 @@ use parent 'API::Controller';
 
 use Util;
 use API::ConnectionConfig;
+use API::Limits;
 use JSON::XS;
 
 API->register("connection.list",   __PACKAGE__);
@@ -36,7 +37,9 @@ sub create {
 
   my $config = valid_config($req);
   my $id = Util->uuid;
-  start($app, $id, $req->session->{user}, $config);
+  my $user = $req->session->{user};
+  my $max = API::Limits::limit($app, $user, "connections");
+  start($app, $id, $user, $config, $max);
   return $app->json({success => "ok", "id" => $id});
 }
 
@@ -102,11 +105,13 @@ sub valid_config_from {
 # goes to is looked up from the row (the column's default can send new
 # connections to liercd-next), and the stream sends the connection's
 # first events to whoever the row says owns it. If the create fails,
-# the row is deleted again.
+# the row is deleted again. A user who already has $max connections gets
+# no new one, and liercd isn't asked.
 sub start {
-  my ($app, $id, $user, $config) = @_;
+  my ($app, $id, $user, $config, $max) = @_;
   my $json = encode_json $config;
-  $app->save_connection($id, $user, $json);
+  $app->save_connection_limited($id, $user, $json, $max)
+    or die "You can have at most $max connections\n";
 
   my $res = eval { $app->request(POST => "$id/create", $json) };
   my $err = $@ || ($res->code == 200 ? undef : $res->decoded_content);
