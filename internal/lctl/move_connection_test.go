@@ -95,6 +95,7 @@ func TestMoveNextToMain(t *testing.T) {
 	m := newMoveHarness(t)
 	m.conn("c1", m.user("alice"), `{}`)
 	m.exec(`UPDATE connection SET liercd='next' WHERE id='c1'`)
+	m.next.MarkRunning("c1")
 	if err := m.run("move-connection", "c1", "main"); err != nil {
 		t.Fatal(err)
 	}
@@ -165,6 +166,7 @@ func TestMoveDestroyFailureStops(t *testing.T) {
 func TestMoveCreateFailure(t *testing.T) {
 	m := newMoveHarness(t)
 	m.conn("c1", m.user("alice"), `{}`)
+	m.main.MarkRunning("c1")
 	m.next.Respond("POST", "/c1/create", 500, "boom")
 	err := m.run("move-connection", "c1", "next")
 	if err == nil {
@@ -267,4 +269,50 @@ func TestMoveTargetAlreadyRunning(t *testing.T) {
 	if got := m.column("c1"); got != "" {
 		t.Errorf("column = %q", got)
 	}
+}
+
+// A connection that isn't running stays dormant: the column moves, but
+// nothing is created on the target; it starts there when its user's stream
+// next opens.
+func TestMoveDormant(t *testing.T) {
+	m := newMoveHarness(t)
+	m.conn("c1", m.user("alice"), `{}`)
+	if err := m.run("move-connection", "c1", "next"); err != nil {
+		t.Fatal(err)
+	}
+	want := "next GET /c1/status|main POST /c1/destroy|main POST /c1/destroy"
+	if got := m.calls(); got != want {
+		t.Errorf("calls = %q, want %q", got, want)
+	}
+	if got := m.column("c1"); got != "next" {
+		t.Errorf("column = %q", got)
+	}
+	if m.next.Running("c1") {
+		t.Error("started on next")
+	}
+	m.has("moved c1 from main to next; it wasn't running, so it will start there when its user's stream next opens\n")
+}
+
+// A stream that opens during the move of a dormant connection makes it
+// live: the second destroy finds it running on the old instance, so it is
+// created on the new one.
+func TestMoveDormantRecreateSlipsIn(t *testing.T) {
+	m := newMoveHarness(t)
+	m.conn("c1", m.user("alice"), `{}`)
+	destroys := 0
+	m.after = func(name, method, path string) {
+		if name == "main" && method == "POST" && path == "/c1/destroy" {
+			if destroys++; destroys == 1 {
+				m.main.MarkRunning("c1")
+			}
+		}
+	}
+	if err := m.run("move-connection", "c1", "next"); err != nil {
+		t.Fatal(err)
+	}
+	if m.main.Running("c1") || !m.next.Running("c1") {
+		t.Errorf("running: main %v, next %v", m.main.Running("c1"), m.next.Running("c1"))
+	}
+	m.has("slipped in", "moved c1 from main to next\n")
+	m.lacks("wasn't running")
 }
