@@ -2,6 +2,7 @@ package API::Liercd;
 
 use LWP::UserAgent;
 use Role::Tiny;
+use Encode ();
 
 sub ua {
   my $self = shift;
@@ -54,7 +55,8 @@ sub find_or_recreate_connection {
   my $res = $self->request(GET => "$id/status");
   return $res if $res->code == 200;
 
-  $res = $self->request(POST => "$id/create", $config);
+  # the column is text (characters); liercd reads UTF-8
+  $res = $self->request(POST => "$id/create", Encode::encode_utf8($config));
 
   die "Unable to create new connection: " . $res->status_line
     unless $res->code == 200;

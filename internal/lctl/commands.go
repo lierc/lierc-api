@@ -7,6 +7,7 @@ var Commands = []Command{
 	{Name: "stop-inactive", Summary: "Stop the running liercd connections of users who haven't logged in within --since; dry run unless --stop", Run: stopInactive},
 	{Name: "connection-info", Summary: "Show a connection: owner, saved config, validity, and its live state in liercd", Run: connectionInfo},
 	{Name: "connection-list", Summary: "List connections, one line each: id, instance, owner, host:port, live state; --instance main|next filters", Run: connectionList},
+	{Name: "fix-config-encoding", Summary: "Repair saved configs whose non-ASCII text the Perl API stored encoded twice; dry run unless --fix", Run: fixConfigEncoding},
 	{Name: "check-connections", Summary: "Check saved connections against the connection rules; --delete removes invalid ones", Run: checkConnections},
 	{Name: "delete-users", Summary: "Delete users and all their data; dry run unless --delete", Run: deleteUsers},
 	{Name: "delete-connections", Summary: "Delete connections and their data, keeping the users; dry run unless --delete", Run: deleteConnections},

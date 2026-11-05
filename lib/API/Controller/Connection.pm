@@ -5,6 +5,7 @@ use parent 'API::Controller';
 use Util;
 use API::ConnectionConfig;
 use API::Limits;
+use API::StoredJSON;
 use JSON::XS;
 
 API->register("connection.list",   __PACKAGE__);
@@ -27,7 +28,7 @@ sub show {
 
   my $id = $req->captures->{id};
   my $data = $app->lookup_config($id);
-  my $config = decode_json $data;
+  my $config = API::StoredJSON::decode($data);
 
   return $app->json({ Id => $id, Config => $config });
 }
@@ -64,7 +65,7 @@ sub edited_config {
   my ($app, $req) = @_;
   my $params = eval { decode_json $req->content };
   die "Invalid connection settings\n" unless ref $params eq "HASH";
-  my $saved = eval { decode_json($app->lookup_config($req->captures->{id})) };
+  my $saved = eval { API::StoredJSON::decode($app->lookup_config($req->captures->{id})) };
   $saved = {} unless ref $saved eq "HASH";
   my $nick = $saved->{Nick};
   $nick = undef if ref $nick || !defined $nick || $nick eq "";
@@ -109,11 +110,10 @@ sub valid_config_from {
 # no new one, and liercd isn't asked.
 sub start {
   my ($app, $id, $user, $config, $max) = @_;
-  my $json = encode_json $config;
-  $app->save_connection_limited($id, $user, $json, $max)
+  $app->save_connection_limited($id, $user, API::StoredJSON::encode($config), $max)
     or die "You can have at most $max connections\n";
 
-  my $res = eval { $app->request(POST => "$id/create", $json) };
+  my $res = eval { $app->request(POST => "$id/create", encode_json $config) };
   my $err = $@ || ($res->code == 200 ? undef : $res->decoded_content);
   if (defined $err) {
     $app->delete_connection($id);
@@ -144,12 +144,12 @@ sub edit {
   # edit leaves it as it was
   my $config = edited_config($app, $req);
   my $id  = $req->captures->{id};
-  my $saved = eval { decode_json($app->lookup_config($id)) };
+  my $saved = eval { API::StoredJSON::decode($app->lookup_config($id)) };
 
   # nothing the IRC connection uses changed (the alias and highlights
   # don't need it), so just save
   if (ref $saved eq "HASH" && server_key($saved) eq server_key($config)) {
-    $app->update_connection($id, encode_json $config);
+    $app->update_connection($id, API::StoredJSON::encode($config));
     $app->dbh->do("NOTIFY highlights");
     return $app->ok;
   }
@@ -160,9 +160,8 @@ sub edit {
   # the row stays put: the stream server sends a connection's events to
   # whoever its row says owns it, so while it was deleted and reinserted
   # the CREATE event could find no owner and be dropped
-  my $json = encode_json $config;
-  $app->update_connection($id, $json);
-  $res = $app->request(POST => "$id/create", $json);
+  $app->update_connection($id, API::StoredJSON::encode($config));
+  $res = $app->request(POST => "$id/create", encode_json $config);
   die $res->decoded_content unless $res->code == 200;
   $app->dbh->do("NOTIFY highlights");
 
@@ -181,12 +180,12 @@ sub save {
 
   # the rest of the saved config is kept as it is: it's what liercd is
   # running, and an old value or a DNS failure can't block this
-  my $config = eval { decode_json($app->lookup_config($req->captures->{id})) };
+  my $config = eval { API::StoredJSON::decode($app->lookup_config($req->captures->{id})) };
   die "Invalid connection settings\n" unless ref $config eq "HASH";
   delete $config->{Alias};
   %$config = (%$config, %$names);
 
-  $app->update_connection($req->captures->{id}, encode_json $config);
+  $app->update_connection($req->captures->{id}, API::StoredJSON::encode($config));
   $app->dbh->do("NOTIFY highlights");
 
   return $app->ok;

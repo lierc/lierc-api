@@ -5,6 +5,7 @@ use parent 'API::Controller';
 use Util;
 use API::SignedToken;
 use JSON::XS;
+use API::StoredJSON;
 use Data::Validate::Email;
 use MIME::Lite;
 use Net::SMTP;
@@ -171,7 +172,7 @@ sub add_default_network {
 
   my $id = Util->uuid;
   my $nick = Util->irc_nick($username);
-  my $config = encode_json {
+  my $config = {
     %$network,
     Nick      => $nick,
     User      => $nick,
@@ -181,10 +182,10 @@ sub add_default_network {
   # Saved before liercd connects, so the connection's first events can be
   # routed to the user. If liercd fails, the stream re-creates the
   # connection from this row when the user next connects.
-  $app->save_connection($id, $user_id, $config);
+  $app->save_connection($id, $user_id, API::StoredJSON::encode($config));
   $app->dbh->do("NOTIFY highlights");
 
-  my $res = $app->request(POST => "$id/create", $config);
+  my $res = $app->request(POST => "$id/create", encode_json $config);
   die $res->status_line . "\n" unless $res->code == 200;
 }
 

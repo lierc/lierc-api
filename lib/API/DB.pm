@@ -2,6 +2,7 @@ package API::DB;
 
 use Util;
 use JSON::XS;
+use API::StoredJSON;
 use DBIx::Connector;
 use Encode;
 
@@ -42,7 +43,7 @@ sub connections {
   $sth->finish;
 
   return [ map {
-    { Id => $_->[0], Config => decode_json($_->[1]) }
+    { Id => $_->[0], Config => API::StoredJSON::decode($_->[1]) }
   } @$rows ];
 }
 
