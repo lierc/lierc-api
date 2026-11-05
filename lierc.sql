@@ -5,6 +5,9 @@ create table "user" (
   password_hash varchar(60),
   username varchar(256) not null,
   last_login timestamp not null default NOW(),
+  -- when the account signed up (set by signup); NULL for accounts from
+  -- before the column
+  registered timestamp,
   -- false: signed up but hasn't confirmed its email, so can't use the app;
   -- NULL: an account from before that, allowed in
   verified bool default false,
