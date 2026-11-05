@@ -33,8 +33,8 @@ func userInfo(ctx context.Context, env *Env, args []string) error {
 			fmt.Fprintln(out)
 		}
 		var id, username, email string
-		var verified *bool // NULL: grandfathered
-		var lastLogin time.Time
+		var verified *bool       // NULL: grandfathered
+		var lastLogin *time.Time // NULL on some old accounts
 		var legacy, hash *string
 		err := env.DB.Pool.QueryRow(ctx, `SELECT id, username, email, verified, last_login, password, password_hash
 		  FROM "user" WHERE id = $1 OR lower(username) = lower($1) OR lower(email) = lower($1)
@@ -59,7 +59,11 @@ func userInfo(ctx context.Context, env *Env, args []string) error {
 		}
 		fmt.Fprintf(out, "%s (%s)\n", username, id)
 		fmt.Fprintf(out, "  email:       %s (%s)\n", email, state)
-		fmt.Fprintf(out, "  last login:  %s UTC (%s)\n", lastLogin.UTC().Format("2006-01-02 15:04"), ago(env.now(), lastLogin))
+		if lastLogin == nil {
+			fmt.Fprintf(out, "  last login:  never\n")
+		} else {
+			fmt.Fprintf(out, "  last login:  %s UTC (%s)\n", lastLogin.UTC().Format("2006-01-02 15:04"), ago(env.now(), *lastLogin))
+		}
 		fmt.Fprintf(out, "  password:    %s\n", password)
 
 		conns, err := env.DB.Connections(ctx, id)

@@ -77,3 +77,29 @@ func TestInactiveUsersGrandfathered(t *testing.T) {
 	h.has("  gus  gus@example.com (grandfathered)  last login ")
 	h.lacks("(unverified)")
 }
+
+// A user with no last_login (old accounts in production) is listed first,
+// as the least recently seen, rather than left out.
+func TestInactiveUsersNeverLoggedIn(t *testing.T) {
+	h := newHarness(t)
+	now := time.Date(2026, 11, 2, 12, 0, 0, 0, time.UTC)
+	h.env.Now = func() time.Time { return now }
+	h.exec(`ALTER TABLE "user" ALTER COLUMN last_login DROP NOT NULL`)
+	old := h.user("old")
+	h.exec(`UPDATE "user" SET last_login = $2 WHERE id = $1`, old, now.Add(-400*24*time.Hour))
+	never := h.user("nel")
+	h.exec(`UPDATE "user" SET last_login = NULL WHERE id = $1`, never)
+	if err := h.run("inactive-users", "--since", "90d"); err != nil {
+		t.Fatal(err)
+	}
+	lines := strings.Split(strings.TrimSuffix(h.out(), "\n"), "\n")
+	if len(lines) != 2 {
+		t.Fatalf("got %q, want two users", h.out())
+	}
+	if want := never + "  nel  nel@example.com  last login never  0 connections"; lines[0] != want {
+		t.Errorf("first line %q, want %q", lines[0], want)
+	}
+	if !strings.HasPrefix(lines[1], old+"  old  ") {
+		t.Errorf("second line %q, want old", lines[1])
+	}
+}

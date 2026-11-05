@@ -98,3 +98,16 @@ func TestUserInfoGrandfathered(t *testing.T) {
 	}
 	h.has("  email:       Gus@example.com (grandfathered)\n")
 }
+
+// Production has users with no last_login (from before the column was
+// NOT NULL); user-info shows them rather than failing.
+func TestUserInfoNeverLoggedIn(t *testing.T) {
+	h := newHarness(t)
+	u := h.user("Nel")
+	h.exec(`ALTER TABLE "user" ALTER COLUMN last_login DROP NOT NULL`)
+	h.exec(`UPDATE "user" SET last_login = NULL WHERE id = $1`, u)
+	if err := h.run("user-info", u); err != nil {
+		t.Fatal(err)
+	}
+	h.has("  last login:  never\n")
+}
