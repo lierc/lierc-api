@@ -94,7 +94,7 @@ sub lookup_user {
 
   # named columns: callers use only these, and SELECT * changes shape with
   # every schema change
-  my $sth = $self->dbh->prepare(q{SELECT id, username, email FROM "user" WHERE id=?});
+  my $sth = $self->dbh->prepare(q{SELECT id, username, email, verified FROM "user" WHERE id=?});
   $sth->execute($id);
   my $user = $sth->fetchrow_hashref;
   $sth->finish;
@@ -136,12 +136,13 @@ sub replace_password_hash {
   );
 }
 
+# logged_in is the session's user row (id, username, email, verified), or
+# nothing when logged out or the user is gone.
 sub logged_in {
   my ($self, $session) = @_;
 
   return () unless defined $session && defined $session->{user};
-  return () unless $self->lookup_user($session->{user});
-  return 1;
+  return $self->lookup_user($session->{user});
 }
 
 sub save_connection {

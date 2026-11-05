@@ -28,9 +28,17 @@ sub handle {
   # verify, reset and reset_confirm find their user by the signed token in
   # the request body, so they don't need (or use) a session; a link may be
   # opened logged out, or forwarded to someone else.
+  my $user = $self->logged_in($req->session);
   return $self->unauthorized
     unless ($name && $name =~ /^auth\.(?:login|register|logout|verify|reset|reset_confirm)$/)
-      or $self->logged_in($req->session);
+      or $user;
+
+  # A signup that hasn't confirmed its email yet (verified false) gets only
+  # what the check-your-email page needs. NULL is an account from before
+  # signups had to verify, and is let in.
+  return $self->unverified
+    if $user && defined $user->{verified} && !$user->{verified}
+      && !($name && $name =~ /^auth\.(?:show|logout|resend_verify|login|register|verify|reset|reset_confirm)$/);
 
   if ($req->captures->{id}) {
     return $self->unauthorized("Invalid connection id '$req->captures->{id}'")

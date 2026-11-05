@@ -10,6 +10,13 @@ sub unauthorized {
   $self->error($msg || "unauthorized", 401);
 }
 
+# for a user who hasn't confirmed their email address yet: not a 401, so the
+# UI doesn't take it for logged out
+sub unverified {
+  my $self = shift;
+  $self->json({ status => "error", error => "Confirm your email address first", unverified => JSON::XS::true }, 403);
+}
+
 sub json {
   my ($self, $data, $code) = @_;
   my $json = encode_json $data;

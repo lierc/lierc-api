@@ -15,6 +15,7 @@ API->register("auth.login",    __PACKAGE__);
 API->register("auth.register", __PACKAGE__);
 API->register("auth.logout",   __PACKAGE__);
 API->register("auth.verify",   __PACKAGE__);
+API->register("auth.resend_verify", __PACKAGE__);
 API->register("auth.reset",    __PACKAGE__);
 API->register("auth.reset_confirm", __PACKAGE__);
 
@@ -47,6 +48,11 @@ sub show {
     email => $user->{email},
     user => $user->{username},
     id => $user->{id},
+    # false: hasn't confirmed their email, so can't use the app yet; null:
+    # an account from before signups had to
+    verified => defined $user->{verified}
+      ? ($user->{verified} ? JSON::XS::true : JSON::XS::false)
+      : undef,
   });
 }
 
@@ -113,10 +119,7 @@ sub register {
 
   my $id = $app->add_user($user, $email, $pass);
   $req->session->{user} = $id;
-
-  # A failed default network shouldn't fail the signup.
-  eval { add_default_network($app, $id, $user); 1 }
-    or warn "Unable to add default network for $user: $@";
+  # the default network comes when the email address is confirmed (verify)
 
   # a streaming response: the server writes it in full when it's passed to
   # $respond, so the email (and any SMTP failure) can't hold up or fail
@@ -232,7 +235,7 @@ sub verify {
 
   my $id = API::SignedToken->user($token);
   my $user = defined $id && $app->dbh->selectrow_hashref(
-    q{SELECT id, email FROM "user" WHERE id=?}, {}, $id
+    q{SELECT id, username, email FROM "user" WHERE id=?}, {}, $id
   );
 
   return $app->error($verify_invalid)
@@ -244,8 +247,52 @@ sub verify {
       now         => time,
     );
 
-  $app->dbh->do(q{UPDATE "user" SET verified=true WHERE id=?}, {}, $user->{id});
+  add_first_network($app, $user) if mark_verified($app, $user->{id});
   return $app->ok;
+}
+
+# mark_verified sets a user verified, and reports whether this is a signup's
+# first verification (verified was false), which earns the default network.
+# NULL, an account from before signups had to verify, becomes true too.
+sub mark_verified {
+  my ($app, $id) = @_;
+  my $dbh = $app->dbh;
+  my $first = $dbh->do(q{UPDATE "user" SET verified=true WHERE id=? AND verified=false}, {}, $id);
+  $dbh->do(q{UPDATE "user" SET verified=true WHERE id=? AND verified IS NULL}, {}, $id);
+  return $first == 1;
+}
+
+# A failed default network shouldn't fail the verification.
+sub add_first_network {
+  my ($app, $user) = @_;
+  eval { add_default_network($app, $user->{id}, $user->{username}); 1 }
+    or warn "Unable to add default network for $user->{username}: $@";
+}
+
+# when each user was last sent a verify email by resend_verify, in this
+# process
+my %last_resend;
+my $resend_every = 60;
+
+# Sends a signed-in user who hasn't verified a new confirmation link, at
+# most once a minute. The response is the same whether or not it sent.
+sub resend_verify {
+  my ($app, $req) = @_;
+  my $user = $app->lookup_user($req->session->{user});
+  my $res = $app->ok;
+  return $res unless $user && defined $user->{verified} && !$user->{verified};
+
+  my $now = time;
+  delete @last_resend{ grep { $last_resend{$_} <= $now - $resend_every } keys %last_resend };
+  return $res if exists $last_resend{ $user->{id} };
+  $last_resend{ $user->{id} } = $now;
+
+  # sent after the response, as at signup
+  return sub {
+    my $respond = shift;
+    $respond->($res);
+    send_verify_email($app, $user->{id}, $user->{username}, $user->{email});
+  };
 }
 
 # Emails a reset link to the account with this address, if there is one.
@@ -316,7 +363,7 @@ sub reset_confirm {
 
   my $id = API::SignedToken->user($token);
   my $user = defined $id && $app->dbh->selectrow_hashref(
-    q{SELECT id, password, password_hash FROM "user" WHERE id=?}, {}, $id
+    q{SELECT id, username, password, password_hash FROM "user" WHERE id=?}, {}, $id
   );
 
   return $app->error($reset_expired)
@@ -334,13 +381,13 @@ sub reset_confirm {
   # link at once, one wins and the other gets the expired error.
   my $hash = Util->new_password_hash($pass);
   my $dbh = $app->dbh;
+  my $first;
   $dbh->begin_work;
   my $changed = eval {
     my $rows = $app->replace_password_hash(
       $user->{id}, $hash, $user->{password_hash}, $user->{password}
     );
-    $dbh->do(q{UPDATE "user" SET verified=true WHERE id=?}, {}, $user->{id})
-      if $rows;
+    $first = mark_verified($app, $user->{id}) if $rows;
     $dbh->commit;
     $rows;
   };
@@ -349,6 +396,7 @@ sub reset_confirm {
     die $err;
   }
   return $app->error($reset_expired) unless $changed;
+  add_first_network($app, $user) if $first;
 
   $req->session->{user} = $user->{id};
   return $app->handle("auth.show", $req);
