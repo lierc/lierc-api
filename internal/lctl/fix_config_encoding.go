@@ -136,7 +136,7 @@ func fixConfigEncoding(ctx context.Context, env *Env, args []string) error {
 	// liercd runs these with the mangled values, and the logger and the
 	// stream save its channels and nick back into the row
 	if len(reconnects) > 0 {
-		fmt.Fprintf(out, "reconnect them now, before liercd's live state is saved over the repair:\n  for id in %s; do lctl reconnect $id; done\n", strings.Join(reconnects, " "))
+		fmt.Fprintf(out, "reconnect them now, before liercd's live state is saved over the repair:\n  lctl reconnect %s\n", strings.Join(reconnects, " "))
 	}
 	if skipped > 0 {
 		return fmt.Errorf("%d connection(s) changed while being fixed; run again", skipped)

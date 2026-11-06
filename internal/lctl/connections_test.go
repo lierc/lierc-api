@@ -20,10 +20,45 @@ func TestReconnect(t *testing.T) {
 	if err := h.run("reconnect", "c1"); err != nil {
 		t.Fatal(err)
 	}
-	h.has("reconnected c1\n")
+	h.has("reconnected c1\n", "reconnected 1, failed 0\n")
 	calls := h.liercd.Calls()
 	if len(calls) != 2 || calls[0].Path != "/c1/destroy" || calls[1].Path != "/c1/create" || calls[1].Body != cfg {
 		t.Fatalf("calls %+v", calls)
+	}
+}
+
+// Several ids are reconnected in order, each destroyed before it's
+// created again.
+func TestReconnectSeveral(t *testing.T) {
+	h := newHarness(t)
+	u := h.user("ann")
+	testenv_conn(h, "c1", u, cfg)
+	testenv_conn(h, "c2", u, `{"Host":"ergo","Port":6667,"Nick":"y"}`)
+	if err := h.run("reconnect", "c1", "c2"); err != nil {
+		t.Fatal(err)
+	}
+	h.has("reconnected c1\n", "reconnected c2\n", "reconnected 2, failed 0\n")
+	var got []string
+	for _, c := range h.liercd.Calls() {
+		got = append(got, c.Path)
+	}
+	if strings.Join(got, " ") != "/c1/destroy /c1/create /c2/destroy /c2/create" {
+		t.Fatalf("calls %v", got)
+	}
+}
+
+func TestReconnectIDsFromStdin(t *testing.T) {
+	h := newHarness(t)
+	u := h.user("ann")
+	testenv_conn(h, "c1", u, cfg)
+	testenv_conn(h, "c2", u, cfg)
+	h.env.StdinIsTerminal = false
+	h.env.Stdin = strings.NewReader("c1\n\nc2\n")
+	if err := h.run("reconnect"); err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Join(h.calls("POST", "/create"), ","); got != "c1,c2" {
+		t.Fatalf("created %s", got)
 	}
 }
 
@@ -35,31 +70,25 @@ func TestReconnectNotRunning(t *testing.T) {
 	}
 }
 
-func TestReconnectUnknown(t *testing.T) {
+// A connection that fails is reported and the rest are still reconnected.
+func TestReconnectCarriesOn(t *testing.T) {
 	h := newHarness(t)
-	if err := h.run("reconnect", "nope"); err == nil || err.Error() != "unknown connection nope" {
-		t.Fatalf("got %v", err)
-	}
-}
-
-func TestReconnectDestroyFails(t *testing.T) {
-	h := newHarness(t)
-	testenv_conn(h, "c1", h.user("ann"), cfg)
+	u := h.user("ann")
+	testenv_conn(h, "c1", u, cfg)
+	testenv_conn(h, "c2", u, cfg)
+	testenv_conn(h, "c3", u, cfg)
 	h.liercd.Respond("POST", "/c1/destroy", 500, "nok")
-	if err := h.run("reconnect", "c1"); err == nil || !strings.Contains(err.Error(), "500") {
+	h.liercd.Respond("POST", "/c2/create", 400, "nok")
+	err := h.run("reconnect", "c1", "nope", "c2", "c3")
+	if err == nil || err.Error() != "3 of 4 connection(s) failed" {
 		t.Fatalf("got %v", err)
 	}
-	if len(h.calls("POST", "/create")) != 0 {
-		t.Error("created after a failed destroy")
-	}
-}
-
-func TestReconnectCreateFails(t *testing.T) {
-	h := newHarness(t)
-	testenv_conn(h, "c1", h.user("ann"), cfg)
-	h.liercd.Respond("POST", "/c1/create", 400, "nok")
-	if err := h.run("reconnect", "c1"); err == nil || !strings.Contains(err.Error(), "400 Bad Request: nok") {
-		t.Fatalf("got %v", err)
+	h.has("destroying c1: liercd said 500 Internal Server Error\n",
+		"unknown connection nope\n",
+		"creating c2: liercd said 400 Bad Request: nok\n",
+		"reconnected c3\n", "reconnected 1, failed 3\n")
+	if got := strings.Join(h.calls("POST", "/create"), ","); got != "c2,c3" {
+		t.Errorf("created %s; not c1 after its failed destroy", got)
 	}
 }
 
@@ -68,6 +97,11 @@ func TestReconnectUsage(t *testing.T) {
 	var ue *UsageError
 	if err := h.run("reconnect"); !errors.As(err, &ue) {
 		t.Fatalf("got %v", err)
+	}
+	h.env.StdinIsTerminal = false
+	h.env.Stdin = strings.NewReader("\n")
+	if err := h.run("reconnect"); !errors.As(err, &ue) {
+		t.Fatalf("empty stdin: got %v", err)
 	}
 }
 

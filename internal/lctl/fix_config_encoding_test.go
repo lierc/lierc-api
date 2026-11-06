@@ -77,7 +77,7 @@ func TestFixConfigEncodingFix(t *testing.T) {
 	if c3 := configOf(t, h, "c3"); c3["Highlight"].([]any)[0] != "ann🍰" || c3["Highlight"].([]any)[1] != "café" {
 		t.Errorf("c3 changed: %v", c3)
 	}
-	h.has("fixed 2 connection(s)\n", "reconnect them now, before liercd's live state is saved over the repair:\n  for id in c2; do lctl reconnect $id; done\n")
+	h.has("fixed 2 connection(s)\n", "reconnect them now, before liercd's live state is saved over the repair:\n  lctl reconnect c2\n")
 
 	// run again: nothing left to fix
 	h.stdout.Reset()

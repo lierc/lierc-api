@@ -2,6 +2,7 @@ package lctl
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -9,23 +10,52 @@ import (
 	"github.com/lierc/lierc-api/internal/liercd"
 )
 
-const reconnectUsage = `reconnect ID
+const reconnectUsage = `reconnect ID...
 
-Restarts a connection in liercd from its saved config: destroys it (fine if
-it isn't running), then creates it again.`
+Restarts connections in liercd from their saved configs, given connection
+ids as arguments or one per line on stdin: each is destroyed (fine if it
+isn't running), then created again, one after another. A connection that
+fails is reported and the rest carry on; the command fails if any did.`
 
 func reconnect(ctx context.Context, env *Env, args []string) error {
 	fs := NewFlags(env, "reconnect", reconnectUsage)
 	if err := Parse(fs, args); err != nil {
 		return err
 	}
-	if fs.NArg() != 1 {
-		return &UsageError{Msg: "give one connection id"}
+	ids, err := ReadIDs(env, fs.Args())
+	if err != nil && !errors.Is(err, ErrNoIDsOnStdin) {
+		return err
 	}
-	id := fs.Arg(0)
+	if len(ids) == 0 {
+		return &UsageError{Msg: "give connection ids as arguments or on stdin"}
+	}
+	out := env.Stdout
+	done, failed := 0, 0
+	for _, id := range ids {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if err := reconnectOne(ctx, env, id); err != nil {
+			fmt.Fprintln(out, err)
+			failed++
+			continue
+		}
+		fmt.Fprintf(out, "reconnected %s\n", id)
+		done++
+	}
+	fmt.Fprintf(out, "reconnected %d, failed %d\n", done, failed)
+	if failed > 0 {
+		return fmt.Errorf("%d of %d connection(s) failed", failed, len(ids))
+	}
+	return nil
+}
+
+// reconnectOne destroys connection id in liercd and creates it again from
+// its saved config. A failed destroy leaves it alone.
+func reconnectOne(ctx context.Context, env *Env, id string) error {
 	config, ok, err := env.DB.LookupConfig(ctx, id)
 	if err != nil {
-		return err
+		return fmt.Errorf("looking up %s: %v", id, err)
 	}
 	if !ok {
 		return fmt.Errorf("unknown connection %s", id)
@@ -33,11 +63,7 @@ func reconnect(ctx context.Context, env *Env, args []string) error {
 	if problem := destroy(ctx, env, id); problem != "" {
 		return fmt.Errorf("destroying %s: liercd said %s", id, problem)
 	}
-	if err := create(ctx, env, id, config); err != nil {
-		return err
-	}
-	fmt.Fprintf(env.Stdout, "reconnected %s\n", id)
-	return nil
+	return create(ctx, env, id, config)
 }
 
 // create starts a connection in liercd from its config.
