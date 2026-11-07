@@ -32,17 +32,19 @@ sub list {
   $app->json($channels);
 }
 
-# False when from..to is more than 31 days inclusive. Dates that don't
-# parse are let through, as before.
+# Epoch seconds of a strict YYYY-MM-DD real calendar date, else undef.
+# Postgres accepts far more (infinity, 20260101, Jan 5 2020), so anything
+# else is refused rather than passed on.
+sub _day {
+  my ($d) = @_;
+  return undef unless defined $d && $d =~ /\A(\d{4})-(\d\d)-(\d\d)\z/;
+  return eval { timegm(0, 0, 0, $3, $2 - 1, $1) };
+}
+
+# False when from..to is more than 31 days inclusive.
 sub _within_range {
   my ($from, $to) = @_;
-  my @days = map {
-    my $d = $_;
-    my ($y, $m, $dd) = defined $d && $d =~ /\A(\d{4})-(\d\d)-(\d\d)\z/ ? ($1, $2, $3) : ();
-    defined $y ? eval { timegm(0, 0, 0, $dd, $m - 1, $y) } : undef;
-  } ($from, $to);
-  return 1 unless defined $days[0] && defined $days[1];
-  return ($days[1] - $days[0]) / 86400 <= 30;
+  return (_day($to) - _day($from)) / 86400 <= 30;
 }
 
 sub date {
@@ -56,6 +58,11 @@ sub date {
   return sub  {
     my $respond = shift;
     my $writer = $respond->($app->event_stream);
+    if (!defined _day($from) || !defined _day($to)) {
+      $writer->write(Util->event(search_error => '{"error":"Dates must be YYYY-MM-DD"}'));
+      $writer->close;
+      return;
+    }
     if (!_within_range($from, $to)) {
       $writer->write(Util->event(search_error => '{"error":"Search at most 31 days at a time"}'));
       $writer->close;

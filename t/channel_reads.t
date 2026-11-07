@@ -104,9 +104,14 @@ unlike API::Queries::sql("channel_date"), qr/^--/m, "comment lines are stripped"
   is scalar @{ $app->{prepared} }, 0, "a long search with text is refused too";
 }
 
-{
-  my ($app) = run_date({ from => "nonsense", to => "2026-01-01" }, {});
-  is scalar @{ $app->{prepared} }, 1, "dates that don't parse still run the query as before";
+for my $pair (["-infinity", "infinity"], ["20200101", "20200105"], ["2026-1-1", "2026-1-5"],
+              ["2026-02-31", "2026-03-01"], ["2026-01-01", "infinity"], ["nonsense", "2026-01-01"], [undef, "2026-01-01"]) {
+  my ($app, $w) = run_date({ from => $pair->[0], to => $pair->[1] }, { text => "foo" });
+  my $label = join "..", map { defined $_ ? $_ : "undef" } @$pair;
+  is scalar @{ $app->{prepared} }, 0, "$label never prepares";
+  is_deeply $w->{out}, [qq{event: search_error\ndata: {"error":"Dates must be YYYY-MM-DD"}\n\n}],
+    "$label writes the date error event";
+  is $w->{closed}, 1, "$label closes";
 }
 
 done_testing;
