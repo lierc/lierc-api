@@ -5,9 +5,6 @@ import (
 	"errors"
 	"strings"
 	"testing"
-	"time"
-
-	"github.com/lierc/lierc-api/internal/archive"
 )
 
 // addArchive adds an archive row for a connection.
@@ -174,36 +171,34 @@ func TestDeleteUsersArchiveAfterLog(t *testing.T) {
 	h := newHarness(t)
 	u := seedUser(h, "ann")
 	addOld(h, u, "ann1", "#a", 6)
-	// the archiver moves a block while the command waits, after it read the
-	// user's connections: the block must still be deleted with the user
-	h.beforeSleep = func() {
-		o := archive.Options{Keep: 2, Block: 2, MinAge: time.Hour, Now: time.Now()}
-		chans, err := archive.Candidates(context.Background(), h.db.Pool.Pool, o)
-		if err != nil {
-			t.Fatal(err)
-		}
-		moved := 0
-		for _, c := range chans {
-			if c.Connection != "ann1" || c.Channel != "#a" {
-				continue
-			}
-			if _, ok, err := archive.MoveBlock(context.Background(), h.db.Pool.Pool, c, o); err != nil {
-				t.Fatal(err)
-			} else if ok {
-				moved++
-			}
-		}
-		if moved == 0 {
-			t.Fatal("no block moved")
-		}
-		if n := h.count(`SELECT count(*) FROM log_archive`); n == 0 {
-			t.Fatal("no archive row to delete")
-		}
-	}
-	if err := h.run("delete-users", "--delete", "--settle", "1", u); err != nil {
+	// stands in for the archiver: a block lands in the archive just after the
+	// user's log rows are deleted (once), and every trigger notes its transaction
+	h.exec(`CREATE TABLE trace (kind text, tx bigint)`)
+	h.exec(`CREATE FUNCTION move_block() RETURNS trigger AS $$
+	  BEGIN
+	    IF NOT EXISTS (SELECT 1 FROM trace WHERE kind = 'moved') THEN
+	      INSERT INTO trace VALUES ('moved', txid_current());
+	      INSERT INTO log_archive (connection, "user", channel, first_id, last_id, min_time, max_time, count, messages)
+	        VALUES ('ann1', '` + u + `', '#a', 1, 2, now(), now(), 2, '[]');
+	    END IF;
+	    RETURN NULL;
+	  END $$ LANGUAGE plpgsql`)
+	h.exec(`CREATE TRIGGER move_block AFTER DELETE ON log FOR EACH STATEMENT EXECUTE FUNCTION move_block()`)
+	h.exec(`CREATE FUNCTION note_delete() RETURNS trigger AS $$
+	  BEGIN
+	    INSERT INTO trace VALUES ('deleted', txid_current());
+	    RETURN OLD;
+	  END $$ LANGUAGE plpgsql`)
+	h.exec(`CREATE TRIGGER note_delete BEFORE DELETE ON log_archive FOR EACH ROW EXECUTE FUNCTION note_delete()`)
+	if err := h.run("delete-users", "--delete", "--settle", "0", u); err != nil {
 		t.Fatal(err)
 	}
 	if n := h.count(`SELECT count(*) FROM log_archive`); n != 0 {
 		t.Errorf("%d archive rows left", n)
+	}
+	// the block must be deleted by the same transaction that deleted the log
+	// rows, after them, not by a later sweep
+	if n := h.count(`SELECT count(*) FROM trace d JOIN trace m ON m.kind = 'moved' AND m.tx = d.tx WHERE d.kind = 'deleted'`); n != 1 {
+		t.Errorf("the moved block was not deleted in the transaction that deleted the log rows (%d)", n)
 	}
 }
