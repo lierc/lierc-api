@@ -4,12 +4,13 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/lierc/lierc-api/internal/archive"
 )
 
 const archiveUsage = `archive [--move] [--keep N] [--block N] [--min-age DURATION] [--connection ID[,ID...]]
-        [--pause DURATION] [--budget DURATION] [--max-blocks N]
+        [--pause DURATION (1s)] [--budget DURATION (30m)] [--max-blocks N]
 
 Moves old log rows into compressed archive blocks (log_archive). Per
 connection and channel it keeps the newest --keep messages and everything
@@ -20,8 +21,8 @@ are deleted, in batches of --block, and never archived. Without --move it's
 a dry run that lists what it would do.
 
 --connection limits it to these connections (default all). --pause waits
-between blocks. --budget stops starting new blocks after that long (0: no
-limit) and --max-blocks after that many blocks, status batches included
+between blocks (default 1s; 0: no wait). --budget stops starting new blocks
+after that long (default 30m; 0: no limit) and --max-blocks after that many blocks, status batches included
 (0: no limit); run it again to carry on. Ctrl-C stops between blocks.
 
 Each block gets a line: connection, channel, first-last message id, count
@@ -33,8 +34,8 @@ func archiveCmd(ctx context.Context, env *Env, args []string) error {
 	keep := fs.Int("keep", 5000, "newest messages to keep in each channel")
 	block := fs.Int("block", 500, "messages per block")
 	minAge := fs.String("min-age", "30d", "leave messages newer than this (30d, 720h)")
-	pause := fs.Duration("pause", 0, "how long to wait between blocks")
-	budget := fs.Duration("budget", 0, "stop starting new blocks after this long (0: no limit)")
+	pause := fs.Duration("pause", time.Second, "how long to wait between blocks (0: none)")
+	budget := fs.Duration("budget", 30*time.Minute, "stop starting new blocks after this long (0: no limit)")
 	maxBlocks := fs.Int("max-blocks", 0, "stop after this many blocks (0: no limit)")
 	conns := fs.String("connection", "", "only these connection ids, comma separated (default all)")
 	if err := Parse(fs, args); err != nil {

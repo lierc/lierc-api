@@ -91,6 +91,44 @@ func TestArchivePauses(t *testing.T) {
 	}
 }
 
+func TestArchiveDefaultPause(t *testing.T) {
+	h := newHarness(t)
+	seedArchive(h)
+	if err := h.run("archive", "--move", "--keep", "3", "--block", "2", "--connection", "c1"); err != nil {
+		t.Fatal(err)
+	}
+	if len(h.slept) != 2 || h.slept[0] != time.Second || h.slept[1] != time.Second {
+		t.Errorf("slept %v, want two 1s pauses for three blocks", h.slept)
+	}
+}
+
+func TestArchiveDefaultBudget(t *testing.T) {
+	h := newHarness(t)
+	seedArchive(h)
+	clock := time.Now()
+	h.env.Now = func() time.Time { return clock }
+	h.beforeSleep = func() { clock = clock.Add(20 * time.Minute) }
+	if err := h.run("archive", "--move", "--keep", "3", "--block", "2", "--connection", "c1"); err != nil {
+		t.Fatal(err)
+	}
+	h.has("moved 2 block(s), 4 message(s)", "budget")
+}
+
+func TestArchiveNoPauseNoBudget(t *testing.T) {
+	h := newHarness(t)
+	seedArchive(h)
+	clock := time.Now()
+	h.env.Now = func() time.Time { return clock }
+	h.beforeSleep = func() { clock = clock.Add(20 * time.Minute) }
+	if err := h.run("archive", "--move", "--keep", "3", "--block", "2", "--connection", "c1", "--pause", "0", "--budget", "0"); err != nil {
+		t.Fatal(err)
+	}
+	h.has("moved 3 block(s), 6 message(s)")
+	if len(h.slept) != 0 {
+		t.Errorf("slept %v, want none", h.slept)
+	}
+}
+
 func TestArchiveMaxBlocks(t *testing.T) {
 	h := newHarness(t)
 	seedArchive(h)
