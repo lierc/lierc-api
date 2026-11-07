@@ -219,14 +219,15 @@ func TestMovePerConnection(t *testing.T) {
 		}
 		id++
 	}
-	// c1: 5 messages, keep 3 → 2 movable; c2: 10 messages → 7 movable.
+	// c1: 5 messages, keep 3 → 2 movable; c2: 10 messages → 7 movable, but
+	// Candidates counts only up to a block (2).
 	cs, err := Candidates(context.Background(), d.pool, opts())
 	if err != nil {
 		t.Fatal(err)
 	}
 	want := []Channel{
 		{Connection: "c1", Channel: "#chan", Movable: 2},
-		{Connection: "c2", Channel: "#chan", Movable: 7},
+		{Connection: "c2", Channel: "#chan", Movable: 2},
 	}
 	if !reflect.DeepEqual(cs, want) {
 		t.Fatalf("candidates %+v, want %+v", cs, want)
@@ -388,7 +389,8 @@ func TestDropStatus(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	st := Channel{Connection: "c1", Channel: "status", Movable: 7, Status: true}
+	// 7 below the cutoff, counted up to a block (2)
+	st := Channel{Connection: "c1", Channel: "status", Movable: 2, Status: true}
 	if !reflect.DeepEqual(cs, []Channel{st}) {
 		t.Fatalf("candidates %+v", cs)
 	}

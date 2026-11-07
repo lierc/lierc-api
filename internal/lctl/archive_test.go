@@ -31,8 +31,11 @@ func TestArchiveDryRun(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Log("\n" + h.out())
-	h.has("c1 #a 7\n", "c1 status 5 to delete\n",
-		"would move 3 block(s), 6 message(s); would delete 5 status message(s)\n")
+	// no counts: a dry run only says which channels have a block or more to
+	// move and which status windows have old messages to delete
+	h.has("c1 #a\n", "c1 status to delete\n",
+		"would archive 1 channel(s); would delete from 1 status window(s)\n")
+	h.lacks("c1 #a 7", "block(s)")
 	if n := h.count(`SELECT count(*) FROM log_archive`); n != 0 {
 		t.Errorf("%d archive rows after a dry run", n)
 	}
@@ -86,8 +89,9 @@ func TestArchivePauses(t *testing.T) {
 	if err := h.run("archive", "--move", "--keep", "3", "--block", "2", "--connection", "c1", "--pause", "7s"); err != nil {
 		t.Fatal(err)
 	}
-	if len(h.slept) != 2 || h.slept[0] != 7*time.Second || h.slept[1] != 7*time.Second {
-		t.Errorf("slept %v, want two 7s pauses for three blocks", h.slept)
+	// a pause after every block moved: it can't know which is the last
+	if len(h.slept) != 3 || h.slept[0] != 7*time.Second || h.slept[2] != 7*time.Second {
+		t.Errorf("slept %v, want a 7s pause after each of three blocks", h.slept)
 	}
 }
 
@@ -97,8 +101,8 @@ func TestArchiveDefaultPause(t *testing.T) {
 	if err := h.run("archive", "--move", "--keep", "3", "--block", "2", "--connection", "c1"); err != nil {
 		t.Fatal(err)
 	}
-	if len(h.slept) != 2 || h.slept[0] != time.Second || h.slept[1] != time.Second {
-		t.Errorf("slept %v, want two 1s pauses for three blocks", h.slept)
+	if len(h.slept) != 3 || h.slept[0] != time.Second || h.slept[2] != time.Second {
+		t.Errorf("slept %v, want a 1s pause after each of three blocks", h.slept)
 	}
 }
 
@@ -147,7 +151,7 @@ func TestArchiveConnection(t *testing.T) {
 	if err := h.run("archive", "--keep", "3", "--block", "2", "--connection", "c1"); err != nil {
 		t.Fatal(err)
 	}
-	h.has("c1 #a 7\n")
+	h.has("c1 #a\n")
 	h.lacks("c2")
 	if err := h.run("archive", "--move", "--keep", "3", "--block", "2", "--connection", "c1"); err != nil {
 		t.Fatal(err)
@@ -207,5 +211,47 @@ func TestArchiveUsage(t *testing.T) {
 		if err := h.run("archive", args...); err == nil || !asUsage(err, &ue) {
 			t.Errorf("%v: got %v, want a usage error", args, err)
 		}
+	}
+}
+
+// By default messages older than 7 days can be archived; newer ones stay.
+func TestArchiveDefaultMinAge(t *testing.T) {
+	h := newHarness(t)
+	u := h.user("ann")
+	testenv_conn(h, "c1", u, cfg)
+	for _, ch := range []struct {
+		name string
+		age  string
+	}{{"#old", "10 days"}, {"#new", "3 days"}} {
+		h.exec(`INSERT INTO log (connection, "user", channel, time, message)
+		  SELECT 'c1', $1, $2, now() - $3::interval + g * interval '1 second', '{}' FROM generate_series(1, 10) g`,
+			u, ch.name, ch.age)
+	}
+	if err := h.run("archive", "--move", "--keep", "3", "--block", "2", "--connection", "c1"); err != nil {
+		t.Fatal(err)
+	}
+	if n := h.count(`SELECT count(*) FROM log_archive WHERE channel = '#old'`); n != 3 {
+		t.Errorf("%d #old blocks archived, want 3 (10-day-old messages are past the default age)", n)
+	}
+	if n := h.count(`SELECT count(*) FROM log_archive WHERE channel = '#new'`); n != 0 {
+		t.Errorf("%d #new blocks archived, want 0 (3-day-old messages are within the default age)", n)
+	}
+}
+
+// By default a channel keeps its newest 1,000 messages: of 1,600 old ones,
+// one block of 500 is archived and 1,100 stay.
+func TestArchiveDefaultKeep(t *testing.T) {
+	h := newHarness(t)
+	u := h.user("ann")
+	testenv_conn(h, "c1", u, cfg)
+	addOld(h, u, "c1", "#a", 1600)
+	if err := h.run("archive", "--move", "--connection", "c1", "--pause", "0"); err != nil {
+		t.Fatal(err)
+	}
+	if n := h.count(`SELECT coalesce(sum(count), 0) FROM log_archive WHERE connection = 'c1'`); n != 500 {
+		t.Errorf("%d messages archived, want 500", n)
+	}
+	if n := h.count(`SELECT count(*) FROM log WHERE connection = 'c1'`); n != 1100 {
+		t.Errorf("%d messages left in log, want 1100", n)
 	}
 }

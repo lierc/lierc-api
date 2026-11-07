@@ -30,7 +30,8 @@ type Options struct {
 
 type Channel struct {
 	Connection, Channel string
-	// Movable is the number of messages below the cutoff.
+	// Movable is the number of messages below the cutoff, counted only up
+	// to a block.
 	Movable int
 	Status  bool
 }
@@ -90,10 +91,10 @@ pairs AS (
 	) n
 )`
 
-// pairsSome walks the channels of the connections in $3 the same way.
+// pairsSome walks the channels of the connections in $4 the same way.
 const pairsSome = `
 pairs AS (
-	SELECT f.connection, f.channel FROM unnest($3::text[]) c(id)
+	SELECT f.connection, f.channel FROM unnest($4::text[]) c(id)
 	CROSS JOIN LATERAL (
 		SELECT connection, channel FROM log WHERE connection = c.id
 		ORDER BY channel LIMIT 1
@@ -107,8 +108,10 @@ pairs AS (
 	) n
 )`
 
-// candidates counts, for each pair, the messages below its cutoff, given
-// $1 = keep and $2 = the age cutoff.
+// candidates counts, for each pair, the messages below its cutoff, up to
+// $3 = a block, given $1 = keep and $2 = the age cutoff. Counting all of
+// them would read every archivable row, which on a large backlog takes
+// minutes; a block is all a caller needs to know.
 const candidates = `
 SELECT p.connection, p.channel, m.n
 FROM pairs p
@@ -121,8 +124,11 @@ LEFT JOIN LATERAL (
 	ORDER BY id DESC LIMIT 1
 ) a ON true
 CROSS JOIN LATERAL (
-	SELECT count(*)::int AS n FROM log
-	WHERE connection = p.connection AND channel = p.channel AND id < k.id AND id <= a.id
+	SELECT count(*)::int AS n FROM (
+		SELECT 1 FROM log
+		WHERE connection = p.connection AND channel = p.channel AND id < k.id AND id <= a.id
+		LIMIT $3::int
+	) b
 ) m
 WHERE m.n > 0
 ORDER BY p.connection, p.channel`
@@ -134,7 +140,7 @@ func Candidates(ctx context.Context, db *pgxpool.Pool, o Options) ([]Channel, er
 		return nil, err
 	}
 	sql := "WITH RECURSIVE " + pairsAll + candidates
-	args := []any{o.Keep, o.ageCutoff()}
+	args := []any{o.Keep, o.ageCutoff(), o.Block}
 	if len(o.Connections) > 0 {
 		sql = "WITH RECURSIVE " + pairsSome + candidates
 		args = append(args, o.Connections)

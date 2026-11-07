@@ -13,15 +13,17 @@ const archiveUsage = `archive [--move] [--keep N] [--block N] [--min-age DURATIO
         [--pause DURATION (1s)] [--budget DURATION (30m)] [--max-blocks N]
 
 Moves old log rows into compressed archive blocks (log_archive). Per
-connection and channel it keeps the newest --keep messages and everything
-newer than --min-age (days such as 30d, or a Go duration such as 720h), and
+connection and channel it keeps the newest --keep (default 1000) messages and everything
+newer than --min-age (default 7d; days such as 7d, or a Go duration such as 168h), and
 moves the rest, oldest first, in full blocks of --block messages; fewer than
 a block are left for later. A status window is different: its old messages
 are deleted, in batches of --block, and never archived. Without --move it's
-a dry run that lists what it would do.
+a dry run that lists the channels with a block or more to move and the
+status windows with old messages to delete, without counting them (counting
+reads every archivable row, which is slow on a large backlog).
 
 --connection limits it to these connections (default all). --pause waits
-between blocks (default 1s; 0: no wait). --budget stops starting new blocks
+after each block (default 1s; 0: no wait). --budget stops starting new blocks
 after that long (default 30m; 0: no limit) and --max-blocks after that many blocks, status batches included
 (0: no limit); run it again to carry on. Ctrl-C stops between blocks.
 
@@ -31,9 +33,9 @@ Each block gets a line: connection, channel, first-last message id, count
 func archiveCmd(ctx context.Context, env *Env, args []string) error {
 	fs := NewFlags(env, "archive", archiveUsage)
 	move := fs.Bool("move", false, "move the rows (otherwise only list what would move)")
-	keep := fs.Int("keep", 5000, "newest messages to keep in each channel")
+	keep := fs.Int("keep", 1000, "newest messages to keep in each channel")
 	block := fs.Int("block", 500, "messages per block")
-	minAge := fs.String("min-age", "30d", "leave messages newer than this (30d, 720h)")
+	minAge := fs.String("min-age", "7d", "leave messages newer than this (7d, 168h)")
 	pause := fs.Duration("pause", time.Second, "how long to wait between blocks (0: none)")
 	budget := fs.Duration("budget", 30*time.Minute, "stop starting new blocks after this long (0: no limit)")
 	maxBlocks := fs.Int("max-blocks", 0, "stop after this many blocks (0: no limit)")
@@ -46,7 +48,7 @@ func archiveCmd(ctx context.Context, env *Env, args []string) error {
 	case fs.NArg() != 0:
 		return &UsageError{Msg: "archive takes no arguments"}
 	case !ok:
-		return &UsageError{Msg: "--min-age needs a duration such as 30d or 720h"}
+		return &UsageError{Msg: "--min-age needs a duration such as 7d or 168h"}
 	case *keep < 1:
 		return &UsageError{Msg: "--keep must be at least 1"}
 	case *block < 1:
@@ -89,18 +91,17 @@ func archiveCmd(ctx context.Context, env *Env, args []string) error {
 	out := env.Stdout
 
 	if !*move {
-		blocks, msgs, status := 0, 0, 0
+		channels, windows := 0, 0
 		for _, c := range cands {
 			if c.Status {
-				fmt.Fprintf(out, "%s status %d to delete\n", c.Connection, c.Movable)
-				status += c.Movable
+				fmt.Fprintf(out, "%s status to delete\n", c.Connection)
+				windows++
 				continue
 			}
-			fmt.Fprintf(out, "%s %s %d\n", c.Connection, c.Channel, c.Movable)
-			blocks += c.Movable / *block
-			msgs += c.Movable / *block * *block
+			fmt.Fprintf(out, "%s %s\n", c.Connection, c.Channel)
+			channels++
 		}
-		fmt.Fprintf(out, "would move %d block(s), %d message(s); would delete %d status message(s)\n", blocks, msgs, status)
+		fmt.Fprintf(out, "would archive %d channel(s); would delete from %d status window(s)\n", channels, windows)
 		if len(cands) > 0 {
 			fmt.Fprintln(out, "run again with --move to do it")
 		}
@@ -116,8 +117,7 @@ func archiveCmd(ctx context.Context, env *Env, args []string) error {
 	var stopErr error
 	stopped := ""
 loop:
-	for i, c := range cands {
-		expected := c.Movable // messages this channel should still give
+	for _, c := range cands {
 		for {
 			if err := ctx.Err(); err != nil {
 				stopErr, stopped = err, "interrupted"
@@ -147,7 +147,6 @@ loop:
 				break
 			}
 			done++
-			expected -= b.Count
 			if c.Status {
 				fmt.Fprintf(out, "%s status %d-%d %d deleted\n", b.Connection, b.FirstID, b.LastID, b.Count)
 				status += b.Count
@@ -160,8 +159,9 @@ loop:
 				stopped = fmt.Sprintf("--max-blocks %d reached", *maxBlocks)
 				break loop
 			}
-			// pause only if another block is expected
-			if *pause > 0 && ((c.Status && expected > 0) || (!c.Status && expected >= *block) || i < len(cands)-1) {
+			// counts are capped at a block, so it can't tell which block
+			// is the last; it pauses after each one
+			if *pause > 0 {
 				if err := env.Sleep(ctx, *pause); err != nil {
 					stopErr, stopped = err, "interrupted"
 					break loop
