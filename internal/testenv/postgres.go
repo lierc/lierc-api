@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -79,10 +80,13 @@ func adminConn(ctx context.Context) (*pgx.Conn, error) {
 		"postgres://postgres:postgres@127.0.0.1:%d/postgres?sslmode=disable", pgPort))
 }
 
+// schema is lierc.sql without its lz4 column compression: the embedded
+// Postgres is built without lz4, and the compression method changes no
+// results.
 func schema() (string, error) {
 	_, file, _, _ := runtime.Caller(0)
 	b, err := os.ReadFile(filepath.Join(filepath.Dir(file), "..", "..", "lierc.sql"))
-	return string(b), err
+	return strings.ReplaceAll(string(b), " compression lz4", ""), err
 }
 
 func createTemplate() error {

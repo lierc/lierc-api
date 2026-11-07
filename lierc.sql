@@ -62,7 +62,7 @@ create table log_archive (
   min_time    timestamp not null,
   max_time    timestamp not null,
   count       int not null,
-  messages    json not null
+  messages    json compression lz4 not null
 );
 
 create index on log_archive (connection, channel, last_id DESC);
