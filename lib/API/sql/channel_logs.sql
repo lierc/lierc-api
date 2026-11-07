@@ -37,6 +37,7 @@ SELECT * FROM (
     (e->>'highlight')::bool AS highlight
   FROM log_archive a
   JOIN blocks b ON b.id = a.id
+  AND a.connection = $2 AND a.channel = $1
   CROSS JOIN LATERAL json_array_elements(a.messages) e
   ORDER BY 1 DESC
   LIMIT (SELECT n FROM need)
