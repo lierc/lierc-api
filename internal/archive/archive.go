@@ -11,6 +11,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -19,6 +20,14 @@ import (
 
 // statusChannel is the channel name the logger uses for status windows.
 const statusChannel = "status"
+
+// IsStatus reports whether a channel is connection noise rather than a
+// conversation: the status window, or a name starting with * (ZNC's
+// *status and other modules, server notices like *.freenode.net), which no
+// nick can start with. Their old messages are deleted, never archived.
+func IsStatus(channel string) bool {
+	return channel == statusChannel || strings.HasPrefix(channel, "*")
+}
 
 type Options struct {
 	Keep, Block int
@@ -156,7 +165,7 @@ func Candidates(ctx context.Context, db *pgxpool.Pool, o Options) ([]Channel, er
 		if err := rows.Scan(&c.Connection, &c.Channel, &c.Movable); err != nil {
 			return nil, err
 		}
-		c.Status = c.Channel == statusChannel
+		c.Status = IsStatus(c.Channel)
 		if c.Movable >= o.Block || c.Status {
 			cs = append(cs, c)
 		}
@@ -171,8 +180,8 @@ func MoveBlock(ctx context.Context, db *pgxpool.Pool, c Channel, o Options) (Blo
 	if err := o.check(); err != nil {
 		return Block{}, false, err
 	}
-	if c.Channel == statusChannel {
-		return Block{}, false, errors.New("archive: status windows are dropped, not archived")
+	if IsStatus(c.Channel) {
+		return Block{}, false, fmt.Errorf("archive: %s is a status window: dropped, not archived", c.Channel)
 	}
 	b := Block{Connection: c.Connection, Channel: c.Channel}
 	err := db.QueryRow(ctx, `WITH `+below+`,
@@ -210,7 +219,7 @@ func DropStatus(ctx context.Context, db *pgxpool.Pool, c Channel, o Options) (Bl
 	if err := o.check(); err != nil {
 		return Block{}, false, err
 	}
-	if c.Channel != statusChannel {
+	if !IsStatus(c.Channel) {
 		return Block{}, false, fmt.Errorf("archive: %s is not a status window", c.Channel)
 	}
 	b := Block{Connection: c.Connection, Channel: c.Channel}

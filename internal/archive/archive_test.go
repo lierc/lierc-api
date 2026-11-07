@@ -509,3 +509,45 @@ func TestMoveConcurrentInsert(t *testing.T) {
 		t.Fatalf("ids across both tables %v", all)
 	}
 }
+
+// Names starting with * (ZNC's *status and other modules, server notices
+// like *.freenode.net) are never people: no nick can start with *. They're
+// handled like the status window: deleted below the cutoff, never archived.
+func TestStarNamesAreStatus(t *testing.T) {
+	d := newDB(t)
+	id := 1
+	for _, ch := range []string{"*status", "*.freenode.net"} {
+		for i := 0; i < 10; i++ {
+			d.insert(id, "c1", ch, old.Add(time.Duration(id)*time.Minute))
+			id++
+		}
+	}
+	o := opts()
+	cs, err := Candidates(context.Background(), d.pool, o)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cs) != 2 || !cs[0].Status || !cs[1].Status {
+		t.Fatalf("candidates %+v, want both as status windows", cs)
+	}
+	if _, _, err := MoveBlock(context.Background(), d.pool, cs[0], o); err == nil {
+		t.Fatalf("MoveBlock on %s succeeded", cs[0].Channel)
+	}
+	for _, c := range cs {
+		for {
+			_, ok, err := DropStatus(context.Background(), d.pool, c, o)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !ok {
+				break
+			}
+		}
+	}
+	if n := d.count(`SELECT count(*) FROM log_archive`); n != 0 {
+		t.Fatalf("%d archive rows", n)
+	}
+	if n := d.count(`SELECT count(*) FROM log`); n != 6 {
+		t.Fatalf("%d log rows left, want 3 per name", n)
+	}
+}

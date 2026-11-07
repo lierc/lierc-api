@@ -94,7 +94,7 @@ func archiveCmd(ctx context.Context, env *Env, args []string) error {
 		channels, windows := 0, 0
 		for _, c := range cands {
 			if c.Status {
-				fmt.Fprintf(out, "%s status to delete\n", c.Connection)
+				fmt.Fprintf(out, "%s %s to delete\n", c.Connection, c.Channel)
 				windows++
 				continue
 			}
@@ -148,7 +148,7 @@ loop:
 			}
 			done++
 			if c.Status {
-				fmt.Fprintf(out, "%s status %d-%d %d deleted\n", b.Connection, b.FirstID, b.LastID, b.Count)
+				fmt.Fprintf(out, "%s %s %d-%d %d deleted\n", b.Connection, b.Channel, b.FirstID, b.LastID, b.Count)
 				status += b.Count
 			} else {
 				fmt.Fprintf(out, "%s %s %d-%d %d\n", b.Connection, b.Channel, b.FirstID, b.LastID, b.Count)

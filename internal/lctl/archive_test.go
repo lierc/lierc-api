@@ -255,3 +255,22 @@ func TestArchiveDefaultKeep(t *testing.T) {
 		t.Errorf("%d messages left in log, want 1100", n)
 	}
 }
+
+// ZNC's *status is deleted like the status window, and named in the output.
+func TestArchiveStarStatus(t *testing.T) {
+	h := newHarness(t)
+	u := h.user("ann")
+	testenv_conn(h, "c1", u, cfg)
+	addOld(h, u, "c1", "*status", 10)
+	if err := h.run("archive", "--keep", "3", "--block", "3", "--connection", "c1"); err != nil {
+		t.Fatal(err)
+	}
+	h.has("c1 *status to delete\n", "would delete from 1 status window(s)\n")
+	if err := h.run("archive", "--move", "--keep", "3", "--block", "3", "--connection", "c1", "--pause", "0"); err != nil {
+		t.Fatal(err)
+	}
+	h.has("c1 *status 1-3 3 deleted\n", "deleted 7 status message(s)\n")
+	if n := h.count(`SELECT count(*) FROM log_archive`); n != 0 {
+		t.Errorf("%d archive rows from *status", n)
+	}
+}
