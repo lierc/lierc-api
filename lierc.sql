@@ -52,6 +52,22 @@ create index log_user_highlight on log ("user", highlight, id DESC);
 create index log_tag_msgid on log USING gin ((message->'Tags'->'msgid'));
 create index on log (time);
 
+create table log_archive (
+  id          serial primary key,
+  connection  varchar(24) not null,
+  "user"      varchar(24) not null,
+  channel     varchar(32) not null,
+  first_id    int not null,
+  last_id     int not null,
+  min_time    timestamp not null,
+  max_time    timestamp not null,
+  count       int not null,
+  messages    json compression lz4 not null
+);
+
+create index on log_archive (connection, channel, last_id DESC);
+create index on log_archive (connection, channel, min_time);
+
 create table pref (
   "user"  varchar(24) not null,
   name    varchar(128) not null,
