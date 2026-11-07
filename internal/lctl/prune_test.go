@@ -47,6 +47,9 @@ func seedLogs(h *harness) {
 	for i := 0; i < 5; i++ {
 		h.exec(`INSERT INTO log (connection, "user", channel, time, message) VALUES ('gone', $1, '#a', now(), '{}')`, u)
 	}
+	addArchive(h, u, "gone")
+	addArchive(h, u, "gone")
+	addArchive(h, u, "live")
 }
 
 func TestPruneLogsDryRun(t *testing.T) {
@@ -55,7 +58,10 @@ func TestPruneLogsDryRun(t *testing.T) {
 	if err := h.run("prune-logs"); err != nil {
 		t.Fatal(err)
 	}
-	h.has("5 log row(s) to delete; run with --delete to delete them\n")
+	h.has("5 log row(s) to delete; run with --delete to delete them\n", "2 archive row(s) to delete\n")
+	if n := h.count(`SELECT count(*) FROM log_archive`); n != 3 {
+		t.Errorf("%d archive rows, want 3", n)
+	}
 	if n := h.count(`SELECT count(*) FROM log`); n != 7 {
 		t.Errorf("%d rows, want 7", n)
 	}
@@ -67,7 +73,10 @@ func TestPruneLogsDeleteInBatches(t *testing.T) {
 	if err := h.run("prune-logs", "--delete", "--batch", "2"); err != nil {
 		t.Fatal(err)
 	}
-	h.has("deleted 5 log row(s)\n")
+	h.has("deleted 5 log row(s)\n", "deleted 2 archive row(s)\n")
+	if n := h.count(`SELECT count(*) FROM log_archive WHERE connection = 'live'`); n != 1 || h.count(`SELECT count(*) FROM log_archive`) != 1 {
+		t.Error("wrong archive rows deleted")
+	}
 	if n := h.count(`SELECT count(*) FROM log WHERE connection = 'live'`); n != 2 || h.count(`SELECT count(*) FROM log`) != 2 {
 		t.Error("wrong rows deleted")
 	}

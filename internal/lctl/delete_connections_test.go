@@ -30,6 +30,8 @@ func TestDeleteConnectionsDelete(t *testing.T) {
 	u := h.user("ann")
 	h.conn("c1", u, cfg)
 	h.conn("c2", u, cfg)
+	addArchive(h, u, "c1")
+	addArchive(h, u, "c2")
 	h.liercd.Respond("POST", "/*/destroy", 200, "ok")
 	if err := h.run("delete-connections", "--delete", "--settle", "3", "c1"); err != nil {
 		t.Fatal(err)
@@ -41,7 +43,7 @@ func TestDeleteConnectionsDelete(t *testing.T) {
 	if len(h.slept) != 1 || h.slept[0].Seconds() != 3 {
 		t.Errorf("slept %v", h.slept)
 	}
-	for _, table := range []string{"log", "seen", "private"} {
+	for _, table := range []string{"log", "seen", "private", "log_archive"} {
 		if n := h.count(`SELECT count(*) FROM ` + table + ` WHERE connection = 'c1'`); n != 0 {
 			t.Errorf("%s: %d rows left", table, n)
 		}

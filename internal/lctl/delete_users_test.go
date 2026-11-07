@@ -5,7 +5,16 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/lierc/lierc-api/internal/archive"
 )
+
+// addArchive adds an archive row for a connection.
+func addArchive(h *harness, user, conn string) {
+	h.exec(`INSERT INTO log_archive (connection, "user", channel, first_id, last_id, min_time, max_time, count, messages)
+	  VALUES ($1, $2, '#a', 1, 2, now(), now(), 2, '[]')`, conn, user)
+}
 
 // seedUser adds a user with two connections and a row in every table.
 func seedUser(h *harness, name string) string {
@@ -48,8 +57,16 @@ func TestDeleteUsersDelete(t *testing.T) {
 	h := newHarness(t)
 	u := seedUser(h, "ann")
 	other := seedUser(h, "bob")
+	addArchive(h, u, "ann1")
+	addArchive(h, other, "bob1")
 	if err := h.run("delete-users", "--delete", "--settle", "2", u); err != nil {
 		t.Fatal(err)
+	}
+	if n := h.count(`SELECT count(*) FROM log_archive WHERE connection IN ('ann1', 'ann2')`); n != 0 {
+		t.Errorf("%d archive rows left for the deleted user", n)
+	}
+	if n := h.count(`SELECT count(*) FROM log_archive WHERE connection = 'bob1'`); n != 1 {
+		t.Errorf("other user has %d archive rows, want 1", n)
 	}
 	h.has(u+": deleted\n", "deleted 1 user(s), skipped 0\n")
 	if n := h.userRows(u, "ann1", "ann2"); n != 0 {
@@ -150,5 +167,43 @@ func TestDeleteUsersSweepsLateLogRows(t *testing.T) {
 	h.has(u+": deleted\n", u+": removed 1 late log row(s)\n", "deleted 1 user(s), skipped 0\n")
 	if n := h.count(`SELECT count(*) FROM log WHERE connection IN ('ann1', 'ann2')`); n != 0 {
 		t.Errorf("%d log rows left", n)
+	}
+}
+
+func TestDeleteUsersArchiveAfterLog(t *testing.T) {
+	h := newHarness(t)
+	u := seedUser(h, "ann")
+	addOld(h, u, "ann1", "#a", 6)
+	// the archiver moves a block while the command waits, after it read the
+	// user's connections: the block must still be deleted with the user
+	h.beforeSleep = func() {
+		o := archive.Options{Keep: 2, Block: 2, MinAge: time.Hour, Now: time.Now()}
+		chans, err := archive.Candidates(context.Background(), h.db.Pool.Pool, o)
+		if err != nil {
+			t.Fatal(err)
+		}
+		moved := 0
+		for _, c := range chans {
+			if c.Connection != "ann1" || c.Channel != "#a" {
+				continue
+			}
+			if _, ok, err := archive.MoveBlock(context.Background(), h.db.Pool.Pool, c, o); err != nil {
+				t.Fatal(err)
+			} else if ok {
+				moved++
+			}
+		}
+		if moved == 0 {
+			t.Fatal("no block moved")
+		}
+		if n := h.count(`SELECT count(*) FROM log_archive`); n == 0 {
+			t.Fatal("no archive row to delete")
+		}
+	}
+	if err := h.run("delete-users", "--delete", "--settle", "1", u); err != nil {
+		t.Fatal(err)
+	}
+	if n := h.count(`SELECT count(*) FROM log_archive`); n != 0 {
+		t.Errorf("%d archive rows left", n)
 	}
 }

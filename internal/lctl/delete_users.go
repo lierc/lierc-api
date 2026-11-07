@@ -180,6 +180,9 @@ func deleteUsers(ctx context.Context, env *Env, args []string) error {
 		if n := tag.RowsAffected(); n > 0 {
 			fmt.Fprintf(out, "%s: removed %d late log row(s)\n", u.id, n)
 		}
+		if _, err := pool.Exec(ctx, `DELETE FROM log_archive WHERE connection = ANY($1)`, u.conns); err != nil {
+			return err
+		}
 	}
 
 	fmt.Fprintf(out, "deleted %d user(s), skipped %d\n", len(deleted), skipped)
@@ -198,6 +201,12 @@ func deleteUser(ctx context.Context, env *Env, u foundUser) error {
 	for _, t := range userTables {
 		if _, err := tx.Exec(ctx, `DELETE FROM `+t.name+` WHERE `+t.where, tableArgs(t.kind, u.id, u.conns)...); err != nil {
 			return err
+		}
+		if t.name == "log" {
+			// after the log delete, so a block the archiver moved in between is caught
+			if _, err := tx.Exec(ctx, `DELETE FROM log_archive WHERE `+t.where, tableArgs(t.kind, u.id, u.conns)...); err != nil {
+				return err
+			}
 		}
 	}
 	return tx.Commit(ctx)

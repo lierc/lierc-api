@@ -220,6 +220,9 @@ func destroyAndDelete(ctx context.Context, env *Env, ids []string, settle time.D
 		if n := tag.RowsAffected(); n > 0 {
 			fmt.Fprintf(out, "removed %d late log row(s)\n", n)
 		}
+		if _, err := env.DB.Pool.Exec(ctx, `DELETE FROM log_archive WHERE connection = ANY($1)`, done); err != nil {
+			return len(done), skipped, err
+		}
 	}
 	return len(done), skipped, nil
 }
@@ -237,6 +240,12 @@ func deleteRows(ctx context.Context, env *Env, id string, tables []string, where
 			return nil, err
 		}
 		counts[i] = tag.RowsAffected()
+		if t == "log" {
+			// after the log delete, so a block the archiver moved in between is caught
+			if _, err := tx.Exec(ctx, `DELETE FROM log_archive WHERE `+where(t), id); err != nil {
+				return nil, err
+			}
+		}
 	}
 	return counts, tx.Commit(ctx)
 }

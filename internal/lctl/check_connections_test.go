@@ -119,7 +119,9 @@ func TestCheckDisplaysRawHostPort(t *testing.T) {
 
 func TestCheckDeleteKeepsUnresolved(t *testing.T) {
 	h := newHarness(t)
-	seedConnections(h)
+	u := seedConnections(h)
+	addArchive(h, u, "ba")
+	addArchive(h, u, "good")
 	h.liercd.Respond("POST", "/*/destroy", 200, "ok")
 	if err := h.run("check-connections", "--delete", "--settle", "7"); err != nil {
 		t.Fatal(err)
@@ -146,6 +148,12 @@ func TestCheckDeleteKeepsUnresolved(t *testing.T) {
 	}
 	if n := h.count(`SELECT count(*) FROM connection WHERE id IN ('good', 'bu')`); n != 2 {
 		t.Errorf("valid or unresolved connection deleted")
+	}
+	if n := h.count(`SELECT count(*) FROM log_archive WHERE connection = 'ba'`); n != 0 {
+		t.Errorf("%d archive rows left for a deleted connection", n)
+	}
+	if n := h.count(`SELECT count(*) FROM log_archive WHERE connection = 'good'`); n != 1 {
+		t.Errorf("kept connection has %d archive rows, want 1", n)
 	}
 }
 

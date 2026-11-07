@@ -8,6 +8,8 @@ import (
 const staleSeen = `NOT EXISTS (SELECT 1 FROM connection c WHERE c.id = seen.connection)
 	OR updated < now() - interval '1 month'`
 
+const orphanArchive = `NOT EXISTS (SELECT 1 FROM connection c WHERE c.id = log_archive.connection)`
+
 const orphanLog = `NOT EXISTS (SELECT 1 FROM connection c WHERE c.id = log.connection)`
 
 func pruneSeen(ctx context.Context, env *Env, args []string) error {
@@ -33,7 +35,7 @@ func pruneSeen(ctx context.Context, env *Env, args []string) error {
 }
 
 func pruneLogs(ctx context.Context, env *Env, args []string) error {
-	fs := NewFlags(env, "prune-logs", "prune-logs [--delete] [--batch N]\n\nCounts, or with --delete deletes, log rows whose connection no longer\nexists. Deletes in batches, each its own statement, so it never holds one\nhuge transaction; interrupting it keeps the batches already deleted.")
+	fs := NewFlags(env, "prune-logs", "prune-logs [--delete] [--batch N]\n\nCounts, or with --delete deletes, log rows and archive rows whose connection no longer\nexists. Deletes in batches, each its own statement, so it never holds one\nhuge transaction; interrupting it keeps the batches already deleted.")
 	del := fs.Bool("delete", false, "delete the rows")
 	batch := fs.Int("batch", 10000, "rows per delete")
 	if err := Parse(fs, args); err != nil {
@@ -48,6 +50,11 @@ func pruneLogs(ctx context.Context, env *Env, args []string) error {
 			return err
 		}
 		fmt.Fprintf(env.Stdout, "%d log row(s) to delete; run with --delete to delete them\n", n)
+		var na int
+		if err := env.DB.Pool.QueryRow(ctx, `SELECT count(*) FROM log_archive WHERE `+orphanArchive).Scan(&na); err != nil {
+			return err
+		}
+		fmt.Fprintf(env.Stdout, "%d archive row(s) to delete\n", na)
 		return nil
 	}
 	// find the deleted connections once, then delete each one's rows in
@@ -89,5 +96,24 @@ func pruneLogs(ctx context.Context, env *Env, args []string) error {
 		}
 	}
 	fmt.Fprintf(env.Stdout, "deleted %d log row(s)\n", total)
+
+	// archive rows of deleted connections, in the same batches
+	var archived int64
+	for {
+		if err := ctx.Err(); err != nil {
+			fmt.Fprintf(env.Stdout, "deleted %d archive row(s) before stopping\n", archived)
+			return err
+		}
+		tag, err := env.DB.Pool.Exec(ctx,
+			`DELETE FROM log_archive WHERE id IN (SELECT id FROM log_archive WHERE `+orphanArchive+` LIMIT $1)`, *batch)
+		if err != nil {
+			return err
+		}
+		archived += tag.RowsAffected()
+		if tag.RowsAffected() < int64(*batch) {
+			break
+		}
+	}
+	fmt.Fprintf(env.Stdout, "deleted %d archive row(s)\n", archived)
 	return nil
 }
