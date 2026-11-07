@@ -6,6 +6,8 @@ use Util;
 use JSON::XS;
 use List::Util qw(min);
 use Encode;
+use Time::Local qw(timegm);
+use API::Queries;
 
 API->register("channel.logs",     __PACKAGE__);
 API->register("channel.logs_id",  __PACKAGE__);
@@ -30,6 +32,19 @@ sub list {
   $app->json($channels);
 }
 
+# False when from..to is more than 31 days inclusive. Dates that don't
+# parse are let through, as before.
+sub _within_range {
+  my ($from, $to) = @_;
+  my @days = map {
+    my $d = $_;
+    my ($y, $m, $dd) = defined $d && $d =~ /\A(\d{4})-(\d\d)-(\d\d)\z/ ? ($1, $2, $3) : ();
+    defined $y ? eval { timegm(0, 0, 0, $dd, $m - 1, $y) } : undef;
+  } ($from, $to);
+  return 1 unless defined $days[0] && defined $days[1];
+  return ($days[1] - $days[0]) / 86400 <= 30;
+}
+
 sub date {
   my ($app, $req) = @_;
   my $user = $req->session->{user};
@@ -41,52 +56,22 @@ sub date {
   return sub  {
     my $respond = shift;
     my $writer = $respond->($app->event_stream);
-    my @bind;
-
-    my $sql;
-    if (defined $req->parameters->{text} || defined $req->parameters->{sender}) {
-      $sql = qq!
-        SELECT id,
-          message, connection, highlight
-        FROM log
-        WHERE connection=\$1
-          AND channel=\$2
-          AND time >= date(\$3)
-          AND time < (date(\$4) + '1 day'::interval)
-      !;
-
-      push @bind, ($id, $chan, $from, $to);
-
-      if ( defined $req->parameters->{text} ) {
-          $sql .= q! AND to_tsvector('english', message->'Params'->1) @@ to_tsquery($5)!;
-          push @bind, decode utf8 => $req->parameters->{text};
-      }
-
-      if ( defined $req->parameters->{sender} ) {
-          push @bind, decode utf8 => $req->parameters->{sender};
-          $sql .= sprintf q! AND message->'Prefix'->>'Name'=$%d!, scalar(@bind);
-      }
-
-      $sql .= ' ORDER BY id ASC';
-    }
-    else {
-      $sql = q!
-        SELECT id, message, connection, highlight
-        FROM log
-        WHERE connection=$1
-          AND channel=$2
-          AND time >= date($3)
-          AND time < (date($4) + '1 day'::interval)
-        ORDER BY id ASC
-      !;
-      push @bind, ($id, $chan, $from, $to);
+    if (!_within_range($from, $to)) {
+      $writer->write(Util->event(search_error => '{"error":"Search at most 31 days at a time"}'));
+      $writer->close;
+      return;
     }
 
-    my $sth = $app->dbh->prepare($sql, {
+    my $text   = $req->parameters->{text};
+    my $sender = $req->parameters->{sender};
+    $text   = decode utf8 => $text   if defined $text;
+    $sender = decode utf8 => $sender if defined $sender;
+
+    my $sth = $app->dbh->prepare(API::Queries::sql("channel_date"), {
       pg_placeholder_dollaronly => 1
     });
 
-    $sth->execute(@bind);
+    $sth->execute($id, $chan, $from, $to, $text, $sender);
 
     my $json = JSON::XS->new;
 
@@ -155,10 +140,8 @@ sub logs {
   my $chan = lc decode utf8 => $req->captures->{channel};
   my $limit = min($req->parameters->{limit} || 50, 150);
 
-  my $sth = $app->dbh->prepare(q{
-    SELECT id, message, connection, highlight FROM log
-      WHERE channel=? AND connection=?
-      ORDER BY id DESC LIMIT ?
+  my $sth = $app->dbh->prepare(API::Queries::sql("channel_logs"), {
+    pg_placeholder_dollaronly => 1
   });
   $sth->execute($chan, $id, $limit);
 
@@ -185,10 +168,8 @@ sub logs_id {
   my $limit = min($req->parameters->{limit} || 50, 150);
   my $event = $req->captures->{event};
 
-  my $sth = $app->dbh->prepare(q{
-    SELECT id, message, connection, highlight FROM log
-      WHERE channel=? AND connection=? AND id < ?
-      ORDER BY id DESC LIMIT ?
+  my $sth = $app->dbh->prepare(API::Queries::sql("channel_logs_before"), {
+    pg_placeholder_dollaronly => 1
   });
   $sth->execute($chan, $id, $event, $limit);
 
