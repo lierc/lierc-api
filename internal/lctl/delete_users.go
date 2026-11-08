@@ -27,7 +27,9 @@ written after the command started, so it takes moments).`
 // What each table holds for a user, in delete order. A where clause uses
 // the user id, their connection ids, or both ($1 user, $2 connections).
 var userTables = []struct{ name, where, kind string }{
-	{"log", `connection = ANY($1)`, "conns"},
+	// log (and log_archive, deleted with it) also by user id: rows of a
+	// connection deleted before the user still carry the user's id
+	{"log", `"user" = $1 OR connection = ANY($2)`, "both"},
 	{"seen", `"user" = $1 OR connection = ANY($2)`, "both"},
 	{"private", `connection = ANY($1)`, "conns"},
 	{"pref", `"user" = $1`, "user"},
@@ -173,14 +175,14 @@ func deleteUsers(ctx context.Context, env *Env, args []string) error {
 	// the start, by id (the primary key), so this reads seconds of log
 	// rather than walking every row just deleted
 	for _, u := range deleted {
-		tag, err := pool.Exec(ctx, `DELETE FROM log WHERE id > $1 AND connection = ANY($2)`, lastLogID, u.conns)
+		tag, err := pool.Exec(ctx, `DELETE FROM log WHERE id > $1 AND ("user" = $2 OR connection = ANY($3))`, lastLogID, u.id, u.conns)
 		if err != nil {
 			return err
 		}
 		if n := tag.RowsAffected(); n > 0 {
 			fmt.Fprintf(out, "%s: removed %d late log row(s)\n", u.id, n)
 		}
-		if _, err := pool.Exec(ctx, `DELETE FROM log_archive WHERE connection = ANY($1)`, u.conns); err != nil {
+		if _, err := pool.Exec(ctx, `DELETE FROM log_archive WHERE "user" = $1 OR connection = ANY($2)`, u.id, u.conns); err != nil {
 			return err
 		}
 	}

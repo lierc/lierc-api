@@ -202,3 +202,54 @@ func TestDeleteUsersArchiveAfterLog(t *testing.T) {
 		t.Errorf("the moved block was not deleted in the transaction that deleted the log rows (%d)", n)
 	}
 }
+
+// Logs and archive rows are also found by user id: a connection deleted
+// before the user (or never in the connection table) leaves rows whose
+// connection is gone but whose "user" is still theirs.
+func TestDeleteUsersLogsOfGoneConnections(t *testing.T) {
+	h := newHarness(t)
+	u := seedUser(h, "ann")
+	other := seedUser(h, "bob")
+	for owner, gone := range map[string]string{u: "gone-ann", other: "gone-bob"} {
+		h.exec(`INSERT INTO log (connection, "user", channel, time, message) VALUES ($1, $2, '#a', now(), '{}')`, gone, owner)
+		addArchive(h, owner, gone)
+	}
+	if err := h.run("delete-users", u); err != nil {
+		t.Fatal(err)
+	}
+	h.has(u + " (ann, ann@example.com): log=3 ")
+	if err := h.run("delete-users", "--delete", "--settle", "0", u); err != nil {
+		t.Fatal(err)
+	}
+	if n := h.count(`SELECT count(*) FROM log WHERE "user" = $1`, u); n != 0 {
+		t.Errorf("%d log rows left with the deleted user's id", n)
+	}
+	if n := h.count(`SELECT count(*) FROM log_archive WHERE "user" = $1`, u); n != 0 {
+		t.Errorf("%d archive rows left with the deleted user's id", n)
+	}
+	if n := h.count(`SELECT count(*) FROM log WHERE "user" = $1`, other); n != 3 {
+		t.Errorf("other user has %d log rows, want 3", n)
+	}
+	if n := h.count(`SELECT count(*) FROM log_archive WHERE "user" = $1`, other); n != 1 {
+		t.Errorf("other user has %d archive rows, want 1", n)
+	}
+}
+
+// The late sweep also goes by user id.
+func TestDeleteUsersSweepsLateRowsByUser(t *testing.T) {
+	h := newHarness(t)
+	u := seedUser(h, "ann")
+	h.exec(`CREATE FUNCTION late_row() RETURNS trigger AS $$
+	  BEGIN
+	    INSERT INTO log (connection, "user", channel, time, message) VALUES ('gone', OLD.id, 'status', now(), '{}');
+	    RETURN OLD;
+	  END $$ LANGUAGE plpgsql`)
+	h.exec(`CREATE TRIGGER late_row AFTER DELETE ON "user" FOR EACH ROW EXECUTE FUNCTION late_row()`)
+	if err := h.run("delete-users", "--delete", "--settle", "0", u); err != nil {
+		t.Fatal(err)
+	}
+	h.has(u + ": removed 1 late log row(s)\n")
+	if n := h.count(`SELECT count(*) FROM log WHERE "user" = $1`, u); n != 0 {
+		t.Errorf("%d log rows left", n)
+	}
+}
