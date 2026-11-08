@@ -106,3 +106,35 @@ func TestPruneLogsBadBatch(t *testing.T) {
 		t.Fatalf("got %v", err)
 	}
 }
+
+// Rows whose user is gone are orphans too, even when their connection row
+// still exists (a connection whose owner was deleted without it).
+func TestPruneLogsDeletedUsers(t *testing.T) {
+	h := newHarness(t)
+	u := h.user("ann")
+	testenv_conn(h, "live", u, cfg)
+	testenv_conn(h, "ownerless", "nouser", cfg)
+	for _, r := range []struct{ conn, user string }{
+		{"live", u}, {"live", u},
+		{"ownerless", "nouser"}, {"ownerless", "nouser"}, {"ownerless", "nouser"},
+		{"live", "ghost"},
+	} {
+		h.exec(`INSERT INTO log (connection, "user", channel, time, message) VALUES ($1, $2, '#a', now(), '{}')`, r.conn, r.user)
+	}
+	addArchive(h, "nouser", "ownerless")
+	addArchive(h, u, "live")
+	if err := h.run("prune-logs"); err != nil {
+		t.Fatal(err)
+	}
+	h.has("4 log row(s) to delete; run with --delete to delete them\n", "1 archive row(s) to delete\n")
+	if err := h.run("prune-logs", "--delete", "--batch", "2"); err != nil {
+		t.Fatal(err)
+	}
+	h.has("deleted 4 log row(s)\n", "deleted 1 archive row(s)\n")
+	if n := h.count(`SELECT count(*) FROM log WHERE "user" = $1`, u); n != 2 || h.count(`SELECT count(*) FROM log`) != 2 {
+		t.Error("wrong log rows deleted")
+	}
+	if n := h.count(`SELECT count(*) FROM log_archive WHERE "user" = $1`, u); n != 1 || h.count(`SELECT count(*) FROM log_archive`) != 1 {
+		t.Error("wrong archive rows deleted")
+	}
+}
