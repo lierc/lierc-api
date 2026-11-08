@@ -19,6 +19,6 @@ var Commands = []Command{
 	{Name: "stats", Summary: "Open event streams per user", Run: stats},
 	{Name: "users", Summary: "Open event streams for users (default all)", Run: users},
 	{Name: "prune-seen", Summary: "Count or delete seen rows for deleted connections or not updated in a month", Run: pruneSeen},
-	{Name: "prune-logs", Summary: "Count or delete log rows for deleted connections", Run: pruneLogs},
+	{Name: "delete-orphan-logs", Summary: "Find or delete log rows of deleted connections and users", Run: deleteOrphanLogs},
 	{Name: "archive", Summary: "Move old log rows into compressed archive blocks; dry run unless --move", Run: archiveCmd},
 }
