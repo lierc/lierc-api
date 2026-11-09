@@ -52,4 +52,65 @@ sub delete_req {
   is_deeply $deleted, [], "and nothing deleted";
 }
 
+# Saving a subscription: only https endpoints on the browsers' push
+# services, with a P-256 key and auth secret of the right size.
+use MIME::Base64 qw(encode_base64url);
+my $key  = encode_base64url("\x04" . ("k" x 64));
+my $auth = encode_base64url("a" x 16);
+my $check = \&API::Controller::WebPush::check_subscription;
+
+for my $ok (
+  "https://fcm.googleapis.com/fcm/send/abc:APA91b-x_y",
+  "https://updates.push.services.mozilla.com/wpush/v2/gAAAAA",
+  "https://wns2-par02p.notify.windows.com/w/?token=BQYAAA%3d",
+  "https://web.push.apple.com/QGuQyavXutnMH",
+  "https://FCM.googleapis.com:443/fcm/send/abc",
+) {
+  is $check->($ok, $key, $auth), undef, "accepts $ok";
+}
+
+for (
+  ["http://fcm.googleapis.com/fcm/send/abc", "endpoint must be an https URL"],
+  ["https://127.0.0.1:5005/abc/destroy",      "endpoint must be an https URL"],
+  ["https://127.0.0.1/abc/destroy",           "endpoint is not a known push service"],
+  ["https://localhost/push",                  "endpoint is not a known push service"],
+  ["https://fcm.googleapis.com.evil.example/x", "endpoint is not a known push service"],
+  ["https://evil.example/fcm.googleapis.com", "endpoint is not a known push service"],
+  ["https://notify.windows.com/x",            "endpoint is not a known push service"],
+  ["https://fcm.googleapis.com:4151/pub",     "endpoint must be an https URL"],
+  ['https://user@fcm.googleapis.com/x',       "endpoint must be an https URL"],
+  ["https://fcm.googleapis.com/a b",          "endpoint must be an https URL"],
+  ["https://fcm.googleapis.com/" . ("x" x 250), "endpoint is too long"],
+  ["",                                        "endpoint is required"],
+) {
+  my ($endpoint, $error) = @$_;
+  is $check->($endpoint, $key, $auth), $error, "rejects $endpoint";
+}
+
+my $fcm = "https://fcm.googleapis.com/fcm/send/abc";
+is $check->($fcm, undef, $auth), "key is required", "no key";
+is $check->($fcm, "not base64!", $auth), "key is not base64url", "bad key encoding";
+is $check->($fcm, encode_base64url("\x04" . ("k" x 10)), $auth), "key has the wrong length", "short key";
+is $check->($fcm, encode_base64url("\x02" . ("k" x 64)), $auth), "key is not an uncompressed P-256 key", "compressed key";
+is $check->($fcm, $key, encode_base64url("a" x 8)), "auth has the wrong length", "short auth";
+is $check->($fcm, $key, ""), "auth is required", "no auth";
+
+{
+  package FakeUpsertReq;
+  sub new { my ($c, %p) = @_; bless { p => \%p }, $c }
+  sub parameters { $_[0]{p} }
+  sub session { { user => "u1" } }
+}
+
+{
+  my $app = FakeApp->new;
+  my $res = API::Controller::WebPush::upsert($app, FakeUpsertReq->new(endpoint => "http://127.0.0.1:5005/x/destroy", key => $key, auth => $auth));
+  is $res->[0], 400, "upsert refuses a bad endpoint";
+  is_deeply $app->{deleted}, [], "without touching the database";
+
+  $res = API::Controller::WebPush::upsert($app, FakeUpsertReq->new(endpoint => $fcm, key => $key, auth => $auth));
+  is $res->[0], 204, "and saves a good one";
+  is $app->{deleted}[0][0], $fcm, "with its endpoint";
+}
+
 done_testing;
