@@ -11,7 +11,6 @@ our %DEFAULT = (
   dbpass   => undef,
   dbname   => "lierc",
   secret   => "changeme",
-  key      => "changeme",
   secure   => 0,
   smtp_opts => { Host => 'localhost' },
   from_address => 'do-not-reply@relaychat.party',
@@ -32,7 +31,6 @@ sub dbpass   { $ENV{POSTGRES_PASSWORD} || $DEFAULT{dbpass}   }
 sub dbname   { $ENV{POSTGRES_DB}       || $DEFAULT{dbname}   }
 sub secret   { $ENV{API_SECRET}        || $DEFAULT{secret}   }
 sub secure   { $ENV{API_SECURE}        || $DEFAULT{secure}   }
-sub key      { $ENV{API_KEY}           || $DEFAULT{key}      }
 
 # Key/value pairs for Net::SMTP->new, plus AuthUser/AuthPass for the optional
 # AUTH exchange, eg
