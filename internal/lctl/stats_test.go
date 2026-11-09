@@ -9,13 +9,12 @@ import (
 	"time"
 )
 
-// statsServer stands in for the stream server's /stats.
+// statsServer stands in for the stream server's admin /stats.
 func statsServer(h *harness, counts map[string]int, streams map[string][]map[string]any) {
-	h.env.Config.Key = "the-key"
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Header.Get("Lierc-Key") != "the-key" {
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte(`{"error":"Invalid key"}`))
+		if r.URL.Path != "/stats" {
+			w.WriteHeader(http.StatusNotFound)
+			w.Write([]byte("404 page not found"))
 			return
 		}
 		if u := r.URL.Query().Get("user"); u != "" {
@@ -45,11 +44,11 @@ func TestStats(t *testing.T) {
 	}
 }
 
-func TestStatsBadKey(t *testing.T) {
+func TestStatsError(t *testing.T) {
 	h := newHarness(t)
 	statsServer(h, nil, nil)
-	h.env.Config.Key = "wrong"
-	if err := h.run("stats"); err == nil || !strings.Contains(err.Error(), "400") {
+	h.env.StatsURL = strings.TrimSuffix(h.env.StatsURL, "/stats") + "/nope"
+	if err := h.run("stats"); err == nil || !strings.Contains(err.Error(), "404") {
 		t.Fatalf("got %v", err)
 	}
 }

@@ -12,9 +12,12 @@ issuing and refreshing `chats`.
 
 See also `docs/lierc-api.md`, "Event stream":
 
-- `GET /stats` with a matching `lierc-key` header: stream counts per user, or
-  one user's streams with `?user=<id>`. Otherwise 400 `Invalid key`.
-- Any other path: 401 unless the `chats` cookie verifies and names an existing
+- On the admin listener (`ADMIN_LISTEN`) only, `GET /stats`: stream counts
+  per user, or one user's streams with `?user=<id>`. It has no
+  authentication, so the admin listener must stay on loopback and must not
+  be proxied by nginx. `lctl stats`/`users` and lierc's notifier use it
+  (`API_STATS`).
+- Any path on the main listener: 401 unless the `chats` cookie verifies and names an existing
   user. Then 2 KB of comment padding, a `stream` event with the stream's
   id (`{"id":"…"}`), a `ping`, the replay of each connection's state
   (recreating it in liercd if needed), and live messages from NSQ topic
@@ -42,12 +45,12 @@ default command is `stream`).
 | Variable | Default | Notes |
 |----------|---------|-------|
 | `API_SECRET` | `changeme` | Must match `bin/api.psgi`, or no cookie verifies. |
-| `API_KEY` | `changeme` | The `/stats` key. |
 | `LIERCD_HOST` | `127.0.0.1` | liercd at `http://<host>:5005/`. |
 | `POSTGRES_HOST` | `127.0.0.1` | May carry a port (`db:5433`). |
 | `POSTGRES_USER`, `POSTGRES_PASSWORD` | empty | |
 | `NSQD_HOST` | `127.0.0.1` | nsqd TCP; port 4150 unless given (`nsq:4160`). |
 | `LISTEN` | `:5003` | |
+| `ADMIN_LISTEN` | `127.0.0.1:5009` | The admin listener (`/stats`). Keep it on loopback. |
 | `TRUSTED_PROXIES` | `127.0.0.1,::1` | `X-Forwarded-For` is honoured from these peers. |
 | `DB_MAX_CONNS` | `20` | Postgres pool size. |
 

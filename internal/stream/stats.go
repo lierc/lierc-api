@@ -8,15 +8,18 @@ type streamInfo struct {
 	Created int64   `json:"created"`
 }
 
+// Admin is the handler for the internal admin listener (ADMIN_LISTEN), which
+// must only be reachable from the host: it has no authentication of its own.
+// It serves GET /stats.
+func (s *Server) Admin() http.Handler {
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /stats", s.serveStats)
+	return mux
+}
+
 // serveStats answers /stats (bin/stream.psgi, Events.pm stats): stream counts
 // per user, or one user's stream details with ?user=.
 func (s *Server) serveStats(w http.ResponseWriter, r *http.Request) {
-	key, ok := r.Header["Lierc-Key"]
-	if !ok || key[0] != s.cfg.Key {
-		writeError(w, http.StatusBadRequest, "Invalid key")
-		return
-	}
-
 	writeJSON(w, http.StatusOK, s.stats(r.URL.Query().Get("user")))
 }
 

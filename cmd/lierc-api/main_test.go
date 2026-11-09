@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"io"
 	"net"
 	"net/http"
 	"strconv"
@@ -40,6 +41,7 @@ func TestServesStreamUnauthorized(t *testing.T) {
 		"POSTGRES_USER":     cc.User,
 		"POSTGRES_PASSWORD": cc.Password,
 		"LISTEN":            "127.0.0.1:0",
+		"ADMIN_LISTEN":      "127.0.0.1:0",
 		"NSQD_HOST":         nsqAddr,
 	}
 	ctx, cancel := context.WithCancel(context.Background())
@@ -48,7 +50,7 @@ func TestServesStreamUnauthorized(t *testing.T) {
 	done := make(chan int, 1)
 	var logs bytes.Buffer
 	go func() {
-		done <- run(ctx, []string{"stream"}, func(k string) string { return env[k] }, &logs, func(a net.Addr) { addr <- a })
+		done <- run(ctx, []string{"stream"}, func(k string) string { return env[k] }, &logs, func(a, _ net.Addr) { addr <- a })
 	}()
 
 	var a net.Addr
@@ -84,6 +86,7 @@ func TestStreamServesWithoutNSQ(t *testing.T) {
 	env := map[string]string{
 		"POSTGRES_HOST": "127.0.0.1:1", // never queried without a cookie
 		"LISTEN":        "127.0.0.1:0",
+		"ADMIN_LISTEN":  "127.0.0.1:0",
 		"NSQD_HOST":     "127.0.0.2:1", // nothing listens here
 	}
 	ctx, cancel := context.WithCancel(context.Background())
@@ -92,7 +95,7 @@ func TestStreamServesWithoutNSQ(t *testing.T) {
 	done := make(chan int, 1)
 	var logs syncBuffer
 	go func() {
-		done <- run(ctx, []string{"stream"}, func(k string) string { return env[k] }, &logs, func(a net.Addr) { addr <- a })
+		done <- run(ctx, []string{"stream"}, func(k string) string { return env[k] }, &logs, func(a, _ net.Addr) { addr <- a })
 	}()
 	var a net.Addr
 	select {
@@ -124,6 +127,82 @@ func TestStreamServesWithoutNSQ(t *testing.T) {
 		}
 	case <-time.After(15 * time.Second):
 		t.Fatal("no shutdown")
+	}
+}
+
+// /stats is served, without a key, on the admin listener only.
+func TestAdminListenerServesStats(t *testing.T) {
+	env := map[string]string{
+		"POSTGRES_HOST": "127.0.0.1:1", // never queried
+		"LISTEN":        "127.0.0.1:0",
+		"ADMIN_LISTEN":  "127.0.0.1:0",
+		"NSQD_HOST":     "127.0.0.2:1",
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	addrs := make(chan [2]net.Addr, 1)
+	done := make(chan int, 1)
+	var logs syncBuffer
+	go func() {
+		done <- run(ctx, []string{"stream"}, func(k string) string { return env[k] }, &logs,
+			func(s, a net.Addr) { addrs <- [2]net.Addr{s, a} })
+	}()
+	var a [2]net.Addr
+	select {
+	case a = <-addrs:
+	case code := <-done:
+		t.Fatalf("exited %d early: %s", code, logs.String())
+	case <-time.After(30 * time.Second):
+		t.Fatal("server did not start")
+	}
+
+	get := func(addr net.Addr) (int, string) {
+		t.Helper()
+		resp, err := http.Get("http://" + addr.String() + "/stats")
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
+		body, _ := io.ReadAll(resp.Body)
+		return resp.StatusCode, string(body)
+	}
+	if code, body := get(a[1]); code != 200 || body != "{}" {
+		t.Errorf("admin /stats = %d %q, want 200 {}", code, body)
+	}
+	if code, _ := get(a[0]); code != 401 {
+		t.Errorf("stream /stats = %d, want 401", code)
+	}
+
+	cancel()
+	select {
+	case code := <-done:
+		if code != 0 {
+			t.Errorf("exit %d: %s", code, logs.String())
+		}
+	case <-time.After(15 * time.Second):
+		t.Fatal("no shutdown")
+	}
+}
+
+// A taken admin address fails startup.
+func TestAdminListenInUse(t *testing.T) {
+	taken, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer taken.Close()
+	env := map[string]string{
+		"POSTGRES_HOST": "127.0.0.1:1",
+		"LISTEN":        "127.0.0.1:0",
+		"ADMIN_LISTEN":  taken.Addr().String(),
+		"NSQD_HOST":     "127.0.0.2:1",
+	}
+	var logs syncBuffer
+	if code := run(context.Background(), []string{"stream"}, func(k string) string { return env[k] }, &logs, nil); code != 1 {
+		t.Errorf("exit %d, want 1", code)
+	}
+	if !strings.Contains(logs.String(), "admin listen") {
+		t.Errorf("logs = %q", logs.String())
 	}
 }
 

@@ -38,8 +38,8 @@ func main() {
 }
 
 // run executes one command and returns the process exit code. onListen, if
-// non-nil, is called with the bound address once the server is accepting.
-func run(ctx context.Context, args []string, getenv func(string) string, stderr io.Writer, onListen func(net.Addr)) int {
+// non-nil, is called with the stream and admin addresses once both are bound.
+func run(ctx context.Context, args []string, getenv func(string) string, stderr io.Writer, onListen func(stream, admin net.Addr)) int {
 	if len(args) != 1 || args[0] != "stream" {
 		fmt.Fprintln(stderr, "usage: lierc-api stream | lierc-api lctl COMMAND")
 		return 2
@@ -69,22 +69,30 @@ func run(ctx context.Context, args []string, getenv func(string) string, stderr 
 			nsqErr <- err
 		}
 	}()
-	// As in stream.psgi, every path but /stats is the event stream.
+	// Every path is the event stream; /stats is on the admin listener.
 	srv := &http.Server{Handler: proxy.Wrap(cfg.TrustedProxies, s)}
 	srv.RegisterOnShutdown(s.CloseStreams)
+	admin := &http.Server{Handler: s.Admin()}
 
 	ln, err := net.Listen("tcp", cfg.Listen)
 	if err != nil {
 		logger.Printf("listen: %v", err)
 		return 1
 	}
-	logger.Printf("lierc-api stream listening on %s", ln.Addr())
+	adminLn, err := net.Listen("tcp", cfg.AdminListen)
+	if err != nil {
+		ln.Close()
+		logger.Printf("admin listen: %v", err)
+		return 1
+	}
+	logger.Printf("lierc-api stream listening on %s, admin on %s", ln.Addr(), adminLn.Addr())
 	if onListen != nil {
-		onListen(ln.Addr())
+		onListen(ln.Addr(), adminLn.Addr())
 	}
 
-	serveErr := make(chan error, 1)
+	serveErr := make(chan error, 2)
 	go func() { serveErr <- srv.Serve(ln) }()
+	go func() { serveErr <- admin.Serve(adminLn) }()
 
 	code := 0
 	select {
@@ -94,12 +102,13 @@ func run(ctx context.Context, args []string, getenv func(string) string, stderr 
 		code = 1
 	case err := <-serveErr:
 		logger.Printf("serve: %v", err)
-		return 1
+		code = 1
 	}
 	cancel()
 
 	sctx, scancel := context.WithTimeout(context.Background(), shutdownTimeout)
 	defer scancel()
+	admin.Close()
 	if err := srv.Shutdown(sctx); err != nil {
 		if !errors.Is(err, context.DeadlineExceeded) {
 			logger.Printf("shutdown: %v", err)

@@ -30,7 +30,6 @@ func TestMain(m *testing.M) {
 }
 
 const (
-	testKey    = "statskey"
 	testSecret = "testsecret"
 	waitFor    = 10 * time.Second
 )
@@ -41,7 +40,8 @@ type env struct {
 	fake   *testenv.LiercdServer
 	s      *Server
 	srv    *httptest.Server
-	replay chan struct{} // one value per finished replay
+	admin  *httptest.Server // s.Admin()
+	replay chan struct{}    // one value per finished replay
 }
 
 func noKeepAlive() *http.Client {
@@ -59,13 +59,15 @@ func setup(t *testing.T) *env {
 func setupWith(t *testing.T, d *db.DB, fake *testenv.LiercdServer, liercdURL string) *env {
 	t.Helper()
 	lc := &liercd.Client{BaseURL: liercdURL, HTTP: noKeepAlive()}
-	s := New(config.Config{Key: testKey, Secret: testSecret}, d, lc)
+	s := New(config.Config{Secret: testSecret}, d, lc)
 	s.PingInterval = time.Hour
 	s.WriteTimeout = 5 * time.Second
 	e := &env{t: t, db: d, fake: fake, s: s, replay: make(chan struct{}, 100)}
 	s.replayed = func() { e.replay <- struct{}{} }
 	e.srv = httptest.NewServer(s)
 	t.Cleanup(e.srv.Close)
+	e.admin = httptest.NewServer(s.Admin())
+	t.Cleanup(e.admin.Close)
 	return e
 }
 
@@ -110,6 +112,16 @@ func (e *env) get(path, user string, hdr ...string) *http.Response {
 		req.Header.Set(hdr[i], hdr[i+1])
 	}
 	res, err := noKeepAlive().Do(req)
+	if err != nil {
+		e.t.Fatal(err)
+	}
+	return res
+}
+
+// adminGet fetches path from the admin listener.
+func (e *env) adminGet(path string) *http.Response {
+	e.t.Helper()
+	res, err := noKeepAlive().Get(e.admin.URL + path)
 	if err != nil {
 		e.t.Fatal(err)
 	}
@@ -320,7 +332,7 @@ func (s *Server) count(user string) int {
 	return len(s.streams[user])
 }
 
-func TestStatsKey(t *testing.T) {
+func TestStats(t *testing.T) {
 	e := setup(t)
 	a, b := e.addUser("alice"), e.addUser("bob")
 	e.open(a)
@@ -337,7 +349,7 @@ func TestStatsKey(t *testing.T) {
 		return string(body)
 	}
 
-	res := e.get("/stats", "", "lierc-key", testKey)
+	res := e.adminGet("/stats")
 	if body := readJSON(res); res.StatusCode != 200 {
 		t.Fatalf("stats %d %s", res.StatusCode, body)
 	} else {
@@ -348,7 +360,7 @@ func TestStatsKey(t *testing.T) {
 		}
 	}
 
-	res = e.get("/stats?user="+a, "", "lierc-key", testKey)
+	res = e.adminGet("/stats?user=" + a)
 	body := readJSON(res)
 	var details []map[string]any
 	if err := json.Unmarshal([]byte(body), &details); err != nil || len(details) != 2 {
@@ -362,17 +374,23 @@ func TestStatsKey(t *testing.T) {
 		}
 	}
 
-	res = e.get("/stats?user=nobody", "", "lierc-key", testKey)
+	res = e.adminGet("/stats?user=nobody")
 	if body := readJSON(res); body != "[]" {
 		t.Errorf("unknown user stats = %s", body)
 	}
 
-	for _, hdr := range [][]string{{"lierc-key", "wrong"}, nil} {
-		// Logged in or not, a bad key is rejected before auth.
-		res := e.get("/stats", a, hdr...)
-		body := readJSON(res)
-		if res.StatusCode != 400 || body != `{"status":"error","error":"Invalid key"}` {
-			t.Errorf("bad key %v: %d %s", hdr, res.StatusCode, body)
+	// The public listener has no /stats: it is a stream path like any other.
+	res = e.get("/stats", "")
+	res.Body.Close()
+	if res.StatusCode != 401 {
+		t.Errorf("public /stats: %d, want 401", res.StatusCode)
+	}
+	// The admin listener serves nothing else.
+	for _, path := range []string{"/", "/stats/x"} {
+		res := e.adminGet(path)
+		res.Body.Close()
+		if res.StatusCode != 404 {
+			t.Errorf("admin %s: %d, want 404", path, res.StatusCode)
 		}
 	}
 }
@@ -1225,7 +1243,7 @@ func TestSlowClientDropped(t *testing.T) {
 	if len(st.out) != bufferSize {
 		t.Errorf("dropped with %d queued, want a full buffer (%d)", len(st.out), bufferSize)
 	}
-	res := e.get("/stats", "", "lierc-key", testKey)
+	res := e.adminGet("/stats")
 	body, _ := io.ReadAll(res.Body)
 	res.Body.Close()
 	if string(body) != "{}" {

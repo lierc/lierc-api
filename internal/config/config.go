@@ -10,10 +10,13 @@ import (
 )
 
 type Config struct {
-	LiercdHost, DBHost, DBUser, DBPass, DBName, Secret, Key string
-	NSQAddr                                                 string
-	Listen                                                  string
-	TrustedProxies                                          []string
+	LiercdHost, DBHost, DBUser, DBPass, DBName, Secret string
+	NSQAddr                                            string
+	Listen                                             string
+	// AdminListen is the internal admin listener (ADMIN_LISTEN), serving
+	// /stats without authentication; keep it on loopback.
+	AdminListen    string
+	TrustedProxies []string
 	// LiercdNextHost is the "next" liercd instance's host
 	// (LIERCD_NEXT_HOST); "" when there is none.
 	LiercdNextHost string
@@ -42,11 +45,11 @@ func Load(getenv func(string) string) (Config, error) {
 		DBPass:         or("POSTGRES_PASSWORD", ""),
 		// Stream's Postgres pool hard-codes dbname "lierc" (bin/stream.psgi),
 		// so POSTGRES_DB is ignored.
-		DBName:  "lierc",
-		Secret:  or("API_SECRET", "changeme"),
-		Key:     or("API_KEY", "changeme"),
-		NSQAddr: or("NSQD_HOST", "127.0.0.1"),
-		Listen:  or("LISTEN", ":5003"),
+		DBName:      "lierc",
+		Secret:      or("API_SECRET", "changeme"),
+		NSQAddr:     or("NSQD_HOST", "127.0.0.1"),
+		Listen:      or("LISTEN", ":5003"),
+		AdminListen: or("ADMIN_LISTEN", "127.0.0.1:5009"),
 	}
 	// NSQD_HOST may carry a port; without one nsqd's default 4150 is used.
 	if _, _, err := net.SplitHostPort(c.NSQAddr); err != nil {

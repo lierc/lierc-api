@@ -53,7 +53,7 @@ type Env struct {
 	Getenv          func(string) string
 	DB              *db.DB
 	Liercd          *liercd.Client
-	StatsURL        string // API_STATS, default http://127.0.0.1:5003/stats
+	StatsURL        string // API_STATS, default http://127.0.0.1:5009/stats
 	Stdin           io.Reader
 	Stdout, Stderr  io.Writer
 	StdinIsTerminal bool
@@ -165,7 +165,7 @@ func OpenEnv(ctx context.Context, sys System) (*Env, func(), error) {
 	}
 	stats := sys.Getenv("API_STATS")
 	if stats == "" {
-		stats = "http://127.0.0.1:5003/stats"
+		stats = "http://127.0.0.1:5009/stats"
 	}
 	env := &Env{
 		Config: cfg, Getenv: sys.Getenv, DB: d, Liercd: liercd.NewRouted(liercd.Instances{Main: cfg.LiercdHost, Next: cfg.LiercdNextHost}, d.LookupLiercd), StatsURL: stats,

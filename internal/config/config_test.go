@@ -17,7 +17,7 @@ func TestDefaults(t *testing.T) {
 	want := map[string][2]string{
 		"DBName":         {c.DBName, "lierc"},
 		"Secret":         {c.Secret, "changeme"},
-		"Key":            {c.Key, "changeme"},
+		"AdminListen":    {c.AdminListen, "127.0.0.1:5009"},
 		"NSQAddr":        {c.NSQAddr, "127.0.0.1:4150"},
 		"Listen":         {c.Listen, ":5003"},
 		"LiercdHost":     {c.LiercdHost, "127.0.0.1"},
@@ -41,13 +41,13 @@ func TestOverrides(t *testing.T) {
 	c, err := Load(env(map[string]string{
 		"LISTEN": ":9", "TRUSTED_PROXIES": "10.0.0.1, 10.0.0.2", "NSQD_HOST": "nsq",
 		"LIERCD_HOST": "lc", "LIERCD_NEXT_HOST": "lcn", "POSTGRES_HOST": "pg", "POSTGRES_USER": "u",
-		"POSTGRES_PASSWORD": "p", "API_KEY": "k", "API_SECRET": "s",
+		"POSTGRES_PASSWORD": "p", "ADMIN_LISTEN": "127.0.0.1:7", "API_SECRET": "s",
 	}))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if c.Listen != ":9" || c.NSQAddr != "nsq:4150" || c.LiercdHost != "lc" || c.LiercdNextHost != "lcn" ||
-		c.DBHost != "pg" || c.DBUser != "u" || c.DBPass != "p" || c.Key != "k" || c.Secret != "s" {
+		c.DBHost != "pg" || c.DBUser != "u" || c.DBPass != "p" || c.AdminListen != "127.0.0.1:7" || c.Secret != "s" {
 		t.Errorf("overrides not applied: %+v", c)
 	}
 	if !reflect.DeepEqual(c.TrustedProxies, []string{"10.0.0.1", "10.0.0.2"}) {

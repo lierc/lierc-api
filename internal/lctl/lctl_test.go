@@ -197,7 +197,7 @@ func TestEnvFromSystem(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer close2()
-	if env2.Config.DBName != "lierc" || env2.StatsURL != "http://127.0.0.1:5003/stats" {
+	if env2.Config.DBName != "lierc" || env2.StatsURL != "http://127.0.0.1:5009/stats" {
 		t.Errorf("defaults: db %q stats %q", env2.Config.DBName, env2.StatsURL)
 	}
 	if env2.Resolve == nil || env2.Sleep == nil || env2.ReadPassword == nil {

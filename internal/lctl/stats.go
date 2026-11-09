@@ -12,7 +12,7 @@ import (
 	"time"
 )
 
-// streamStats fetches the stream server's /stats (API_STATS): stream counts
+// streamStats fetches /stats from the stream server's admin listener (API_STATS): stream counts
 // per user id, or with user, that user's streams.
 func streamStats(ctx context.Context, env *Env, user string, into any) error {
 	u := env.StatsURL
@@ -23,7 +23,6 @@ func streamStats(ctx context.Context, env *Env, user string, into any) error {
 	if err != nil {
 		return err
 	}
-	req.Header.Set("Lierc-Key", env.Config.Key)
 	res, err := (&http.Client{Timeout: 30 * time.Second}).Do(req)
 	if err != nil {
 		return err

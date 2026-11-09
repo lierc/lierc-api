@@ -19,8 +19,8 @@ import (
 	"github.com/lierc/lierc-api/internal/session"
 )
 
-// Server serves /stats and, on every other path, the event stream of the
-// user logged in by Perl's "chats" cookie.
+// Server serves, on every path, the event stream of the user logged in by
+// Perl's "chats" cookie. Admin serves /stats on a separate listener.
 type Server struct {
 	// PingInterval is the time between pings to every stream (Events.pm start_pings).
 	PingInterval time.Duration
@@ -56,11 +56,6 @@ func New(cfg config.Config, d *db.DB, lc *liercd.Client) *Server {
 }
 
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if r.URL.Path == "/stats" {
-		s.serveStats(w, r)
-		return
-	}
-
 	user, ok := s.user(w, r)
 	if !ok {
 		return
