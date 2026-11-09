@@ -45,7 +45,7 @@ $router->add( GET    => "/connection/:id/channel",                        "chann
 
 $router->add( GET    => "/notification/web_push_keys",          "webpush.keys" );
 $router->add( POST   => "/notification/web_push",               "webpush.upsert" );
-$router->add( DELETE => "/notification/web_push/{endpoint:.+}", "webpush.delete" );
+$router->add( DELETE => "/notification/web_push",               "webpush.delete" );
 
 sub route {
   my $self = shift;

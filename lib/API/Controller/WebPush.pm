@@ -13,10 +13,15 @@ sub keys {
   });
 }
 
+# DELETE /notification/web_push?endpoint=<url> forgets one subscription.
+# The endpoint is in the query, not the path: nginx merges the slashes in a
+# path, turning "https://" into "https:/".
 sub delete {
   my ($app, $req) = @_;
   my $user     = $req->session->{user};
-  my $endpoint = $req->captures->{endpoint};
+  my $endpoint = $req->query_parameters->{endpoint};
+
+  return $app->error("endpoint is required") unless defined $endpoint && length $endpoint;
 
   my $sth = $app->dbh->prepare(q{
     DELETE FROM web_push
