@@ -121,6 +121,7 @@ sub start {
   }
 
   $app->dbh->do("NOTIFY highlights");
+  $app->notify_connection($user, $id, "create");
 }
 
 sub delete {
@@ -131,6 +132,7 @@ sub delete {
 
   if ($res->code == 200) {
     $app->delete_connection($id);
+    $app->notify_connection($req->session->{user}, $id, "delete");
     return $app->ok;
   }
 
@@ -151,6 +153,7 @@ sub edit {
   if (ref $saved eq "HASH" && server_key($saved) eq server_key($config)) {
     $app->update_connection($id, API::StoredJSON::encode($config));
     $app->dbh->do("NOTIFY highlights");
+    $app->notify_connection($req->session->{user}, $id, "update");
     return $app->ok;
   }
 
@@ -164,6 +167,7 @@ sub edit {
   $res = $app->request(POST => "$id/create", encode_json $config);
   die $res->decoded_content unless $res->code == 200;
   $app->dbh->do("NOTIFY highlights");
+  $app->notify_connection($req->session->{user}, $id, "update");
 
   return $app->ok;
 }
@@ -187,6 +191,7 @@ sub save {
 
   $app->update_connection($req->captures->{id}, API::StoredJSON::encode($config));
   $app->dbh->do("NOTIFY highlights");
+  $app->notify_connection($req->session->{user}, $req->captures->{id}, "update");
 
   return $app->ok;
 }

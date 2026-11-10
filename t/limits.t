@@ -20,6 +20,7 @@ like $@, qr/Unknown limit nope/, "an unknown limit is an error, not no limit";
   sub code { $_[0]{code} }
   sub decoded_content { "liercd said no" }
   package FakeApp;
+  sub notify_connection {}  # connection change announcements (t/connection_events.t)
   sub new {
     my ($class, %p) = @_;
     bless { count => 0, limited => [], log => [], liercd_code => 200, %p }, $class;

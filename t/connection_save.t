@@ -40,6 +40,7 @@ is $name, "connection.edit", "PUT /connection/:id is still save and reconnect";
     push @{ $self->{log} }, "liercd " . ($args[1] =~ s{.*/}{}r);
     FakeRes->new($self->{liercd_code}{ $args[1] =~ s{.*/}{}r } // 200);
   }
+  sub notify_connection { my ($self, @args) = @_; push @{ $self->{connection_events} }, [@args] }
   sub dbh { my $self = shift; bless { app => $self }, "FakeDBH" }
   sub ok { "ok" }
   sub json { $_[1] }

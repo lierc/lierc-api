@@ -26,6 +26,7 @@ like API::StoredJSON::encode({ Highlight => [$cake] }), qr/\x{1F370}/, "and is a
   sub code { $_[0]{code} }
   sub decoded_content { "no" }
   package FakeApp;
+  sub notify_connection {}  # connection change announcements (t/connection_events.t)
   sub new { my ($class, $saved) = @_; bless { saved => $saved, stored => [], liercd => [] }, $class }
   sub lookup_config { $_[0]{saved} }
   sub update_connection { push @{ $_[0]{stored} }, $_[2] }

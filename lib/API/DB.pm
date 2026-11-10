@@ -200,6 +200,17 @@ sub delete_connection {
   $sth->finish;
 }
 
+# Announces a change to a connection on the connections channel, which
+# the stream server LISTENs on to tell the owner's open tabs
+# (connection:create, :update, :delete). $action is create, update or
+# delete.
+sub notify_connection {
+  my ($self, $user, $id, $action) = @_;
+  my $sth = $self->dbh->prepare(q{SELECT pg_notify('connections', ?)});
+  $sth->execute(JSON::XS::encode_json({ user => $user, connection => $id, action => $action }));
+  $sth->finish;
+}
+
 sub last_login {
   my ($self, $user) = @_;
 
