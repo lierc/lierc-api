@@ -18,6 +18,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/lierc/lierc-api/internal/auth"
 	"github.com/lierc/lierc-api/internal/config"
 	"github.com/lierc/lierc-api/internal/db"
 	"github.com/lierc/lierc-api/internal/liercd"
@@ -64,7 +65,9 @@ func setupWith(t *testing.T, d *db.DB, fake *testenv.LiercdServer, liercdURL str
 	s.WriteTimeout = 5 * time.Second
 	e := &env{t: t, db: d, fake: fake, s: s, replay: make(chan struct{}, 100)}
 	s.replayed = func() { e.replay <- struct{}{} }
-	e.srv = httptest.NewServer(s)
+	mux := http.NewServeMux()
+	s.Routes(mux, auth.Users{Secret: testSecret, DB: d})
+	e.srv = httptest.NewServer(mux)
 	t.Cleanup(e.srv.Close)
 	e.admin = httptest.NewServer(s.Admin())
 	t.Cleanup(e.admin.Close)
@@ -147,7 +150,7 @@ func (e *env) post(path, user string) *http.Response {
 // background. Every event must be well-formed or the client records an error.
 func (e *env) open(user string) *client {
 	e.t.Helper()
-	res := e.get("/", user, "User-Agent", "test-agent")
+	res := e.get("/events", user, "User-Agent", "test-agent")
 	if res.StatusCode != 200 {
 		b, _ := io.ReadAll(res.Body)
 		e.t.Fatalf("stream status %d: %s", res.StatusCode, b)
@@ -379,13 +382,11 @@ func TestStats(t *testing.T) {
 		t.Errorf("unknown user stats = %s", body)
 	}
 
-	// The public listener has no /stats: it goes to Perl like any other
-	// path that isn't a stream.
-	e.s.Perl = fakePerl()
+	// Routes has no /stats (the api package sends it to Perl).
 	res = e.get("/stats", "")
 	res.Body.Close()
-	if res.StatusCode != 299 || res.Header.Get("X-Perl") != "GET /stats" {
-		t.Errorf("public /stats: %d %q, want Perl", res.StatusCode, res.Header.Get("X-Perl"))
+	if res.StatusCode != 404 {
+		t.Errorf("public /stats: %d, want 404", res.StatusCode)
 	}
 	// The admin listener serves nothing else.
 	for _, path := range []string{"/", "/stats/x"} {
@@ -400,7 +401,7 @@ func TestStats(t *testing.T) {
 func TestUnauthorized(t *testing.T) {
 	e := setup(t)
 	for _, user := range []string{"", "ghost"} {
-		res := e.get("/", user)
+		res := e.get("/events", user)
 		body, _ := io.ReadAll(res.Body)
 		res.Body.Close()
 		if res.StatusCode != 401 || string(body) != `{"status":"error","error":"unauthorized"}` ||
@@ -419,7 +420,7 @@ func TestUnverifiedForbidden(t *testing.T) {
 		}
 	}
 	setVerified(false)
-	res := e.get("/", u)
+	res := e.get("/events", u)
 	if res.StatusCode != 403 {
 		res.Body.Close() // a stream: don't read it
 		t.Fatalf("unverified: %d, want 403", res.StatusCode)
@@ -433,7 +434,7 @@ func TestUnverifiedForbidden(t *testing.T) {
 	// verified, and grandfathered (NULL), are let in
 	for _, v := range []any{true, nil} {
 		setVerified(v)
-		res = e.get("/", u)
+		res = e.get("/events", u)
 		res.Body.Close()
 		if res.StatusCode != 200 {
 			t.Errorf("verified %v: %d", v, res.StatusCode)
@@ -444,7 +445,7 @@ func TestUnverifiedForbidden(t *testing.T) {
 func TestHandshake(t *testing.T) {
 	e := setup(t)
 	u := e.addUser("alice")
-	res := e.get("/", u)
+	res := e.get("/events", u)
 	defer res.Body.Close()
 	if res.StatusCode != 200 {
 		t.Fatalf("status %d", res.StatusCode)
@@ -892,7 +893,7 @@ func TestWakePing(t *testing.T) {
 		}
 	}
 
-	if res := e.post("/"+c1.id+"/ping", u); res.StatusCode != 204 {
+	if res := e.post("/events/"+c1.id+"/ping", u); res.StatusCode != 204 {
 		t.Fatalf("ping status %d, want 204", res.StatusCode)
 	}
 	if id := lastID(t, c1.next()); id != 7 {
@@ -909,21 +910,12 @@ func TestWakePing(t *testing.T) {
 	}
 }
 
-func TestWakePingDoubleSlash(t *testing.T) {
-	e := setup(t)
-	u := e.addUser("alice")
-	c := e.open(u)
-	if res := e.post("//"+c.id+"/ping", u); res.StatusCode != 204 {
-		t.Fatalf("ping status %d, want 204", res.StatusCode)
-	}
-}
-
 func TestWakePingUnknown(t *testing.T) {
 	e := setup(t)
 	a, b := e.addUser("alice"), e.addUser("bob")
 	c := e.open(a)
 
-	req, _ := http.NewRequest("POST", e.srv.URL+"/nope/ping", nil)
+	req, _ := http.NewRequest("POST", e.srv.URL+"/events/nope/ping", nil)
 	req.AddCookie(&http.Cookie{Name: "chats", Value: testenv.PerlCookie(a, testSecret)})
 	res, err := noKeepAlive().Do(req)
 	if err != nil {
@@ -934,12 +926,12 @@ func TestWakePingUnknown(t *testing.T) {
 	if res.StatusCode != 404 || string(body) != `{"status":"error","error":"unknown stream"}` {
 		t.Errorf("unknown stream: %d %s", res.StatusCode, body)
 	}
-	if res := e.post("/"+c.id+"/ping", b); res.StatusCode != 404 {
+	if res := e.post("/events/"+c.id+"/ping", b); res.StatusCode != 404 {
 		t.Errorf("bob pinging alice's stream: %d, want 404", res.StatusCode)
 	}
 	c.close()
 	poll(t, "stream to close", func() bool { return e.s.count(a) == 0 })
-	if res := e.post("/"+c.id+"/ping", a); res.StatusCode != 404 {
+	if res := e.post("/events/"+c.id+"/ping", a); res.StatusCode != 404 {
 		t.Errorf("closed stream: %d, want 404", res.StatusCode)
 	}
 }
@@ -948,62 +940,8 @@ func TestWakePingUnauthorized(t *testing.T) {
 	e := setup(t)
 	u := e.addUser("alice")
 	c := e.open(u)
-	if res := e.post("/"+c.id+"/ping", ""); res.StatusCode != 401 {
+	if res := e.post("/events/"+c.id+"/ping", ""); res.StatusCode != 401 {
 		t.Errorf("no cookie: %d, want 401", res.StatusCode)
-	}
-}
-
-// fakePerl stands in for the Perl API: it answers 299 with X-Perl
-// "<method> <path>".
-func fakePerl() http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("X-Perl", r.Method+" "+r.URL.Path)
-		w.WriteHeader(299)
-	})
-}
-
-func TestEventsPathIsAStream(t *testing.T) {
-	e := setup(t)
-	e.s.Perl = fakePerl()
-	u := e.addUser("alice")
-	for _, path := range []string{"/events", "/events/"} {
-		res := e.get(path, u)
-		res.Body.Close()
-		if res.StatusCode != 200 || res.Header.Get("Content-Type") != "text/event-stream;charset=utf-8" || res.Header.Get("X-Perl") != "" {
-			t.Errorf("GET %s: %d %s %q, want a stream", path, res.StatusCode, res.Header.Get("Content-Type"), res.Header.Get("X-Perl"))
-		}
-	}
-}
-
-func TestEventsPing(t *testing.T) {
-	e := setup(t)
-	e.s.Perl = fakePerl()
-	u := e.addUser("alice")
-	c := e.open(u)
-	for _, path := range []string{"/events/" + c.id + "/ping", "//events/" + c.id + "/ping"} {
-		if res := e.post(path, u); res.StatusCode != 204 {
-			t.Errorf("POST %s: %d, want 204", path, res.StatusCode)
-		}
-	}
-}
-
-// Everything that isn't a stream or a ping goes to Perl, logged in or not.
-func TestOtherPathsGoToPerl(t *testing.T) {
-	e := setup(t)
-	e.s.Perl = fakePerl()
-	for _, rq := range [][2]string{
-		{"GET", "/preference"}, {"POST", "/auth"}, {"GET", "/x/ping"},
-		{"GET", "/eventsx"}, {"PUT", "/connection/c1"},
-	} {
-		req, _ := http.NewRequest(rq[0], e.srv.URL+rq[1], nil)
-		res, err := noKeepAlive().Do(req)
-		if err != nil {
-			t.Fatal(err)
-		}
-		res.Body.Close()
-		if want := rq[0] + " " + rq[1]; res.StatusCode != 299 || res.Header.Get("X-Perl") != want {
-			t.Errorf("%s: %d %q, want Perl", want, res.StatusCode, res.Header.Get("X-Perl"))
-		}
 	}
 }
 
@@ -1246,7 +1184,7 @@ func TestWriteTimeout(t *testing.T) {
 	}
 	defer conn.Close()
 	conn.(*net.TCPConn).SetReadBuffer(4096)
-	fmt.Fprintf(conn, "GET / HTTP/1.1\r\nHost: x\r\nCookie: chats=%s\r\n\r\n", testenv.PerlCookie(u, testSecret))
+	fmt.Fprintf(conn, "GET /events HTTP/1.1\r\nHost: x\r\nCookie: chats=%s\r\n\r\n", testenv.PerlCookie(u, testSecret))
 	// Never read from conn again.
 
 	poll(t, "stream registration", func() bool { return e.s.count(u) == 1 })
@@ -1292,7 +1230,7 @@ func TestSlowClientDropped(t *testing.T) {
 	}
 	defer conn.Close() // unblocks the stalled writer so the handler can finish
 	conn.(*net.TCPConn).SetReadBuffer(4096)
-	fmt.Fprintf(conn, "GET / HTTP/1.1\r\nHost: x\r\nCookie: chats=%s\r\n\r\n", testenv.PerlCookie(u, testSecret))
+	fmt.Fprintf(conn, "GET /events HTTP/1.1\r\nHost: x\r\nCookie: chats=%s\r\n\r\n", testenv.PerlCookie(u, testSecret))
 	// Never read from conn again.
 
 	poll(t, "stream registration", func() bool { return e.s.count(u) == 1 })
@@ -1351,7 +1289,7 @@ func TestLargeReplaySurvivesLiveEvents(t *testing.T) {
 		})
 	}}
 	hc := &http.Client{Transport: &http.Transport{DisableKeepAlives: true, DialContext: dialer.DialContext}}
-	req, _ := http.NewRequest("GET", e.srv.URL+"/", nil)
+	req, _ := http.NewRequest("GET", e.srv.URL+"/events", nil)
 	req.AddCookie(&http.Cookie{Name: "chats", Value: testenv.PerlCookie(u, testSecret)})
 	res, err := hc.Do(req)
 	if err != nil {

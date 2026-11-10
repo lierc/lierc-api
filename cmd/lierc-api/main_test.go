@@ -61,7 +61,7 @@ func TestServesStreamUnauthorized(t *testing.T) {
 	case <-time.After(30 * time.Second):
 		t.Fatal("server did not start")
 	}
-	resp, err := http.Get("http://" + a.String() + "/")
+	resp, err := http.Get("http://" + a.String() + "/events")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -111,7 +111,7 @@ func TestStreamServesWithoutNSQ(t *testing.T) {
 		t.Fatalf("exited %d without nsqd: %s", code, logs.String())
 	default:
 	}
-	resp, err := http.Get("http://" + a.String() + "/")
+	resp, err := http.Get("http://" + a.String() + "/events")
 	if err != nil {
 		t.Fatal(err)
 	}

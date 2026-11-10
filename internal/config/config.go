@@ -28,6 +28,20 @@ type Config struct {
 	PerlAPI string
 }
 
+// PerlURL is c's Perl API URL, which Load has checked; a Config built
+// without Load gets the default.
+func (c Config) PerlURL() *url.URL {
+	raw := c.PerlAPI
+	if raw == "" {
+		raw = DefaultPerlAPI
+	}
+	u, err := url.Parse(raw)
+	if err != nil {
+		u, _ = url.Parse(DefaultPerlAPI)
+	}
+	return u
+}
+
 // DefaultPerlAPI is the PERL_API default.
 const DefaultPerlAPI = "http://127.0.0.1:5004"
 

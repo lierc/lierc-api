@@ -8,25 +8,21 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
-	"net/url"
-	"regexp"
 	"strconv"
 	"sync"
 	"time"
 
 	"github.com/lierc/lierc-api/internal/respond"
 
+	"github.com/lierc/lierc-api/internal/auth"
 	"github.com/lierc/lierc-api/internal/config"
 	"github.com/lierc/lierc-api/internal/db"
 	"github.com/lierc/lierc-api/internal/liercd"
-	"github.com/lierc/lierc-api/internal/proxy"
-	"github.com/lierc/lierc-api/internal/session"
 )
 
 // Server serves the event stream of the user logged in by Perl's "chats"
-// cookie at /events (and /, while nginx may still strip the prefix), and
-// wake pings at /events/<id>/ping (and /<id>/ping). Every other request
-// goes to Perl. Admin serves /stats on a separate listener.
+// cookie at /events, and wake pings at /events/<id>/ping, on the routes
+// Routes registers. Admin serves /stats on a separate listener.
 type Server struct {
 	// PingInterval is the time between pings to every stream (Events.pm start_pings).
 	PingInterval time.Duration
@@ -35,9 +31,6 @@ type Server struct {
 	// NSQReconnect is the wait between attempts to reach nsqd, at start and
 	// after a lost connection.
 	NSQReconnect time.Duration
-	// Perl answers every request that isn't a stream or a wake ping: the
-	// Perl API, through proxy.PassThrough.
-	Perl http.Handler
 
 	cfg config.Config
 	db  *db.DB
@@ -60,88 +53,30 @@ func New(cfg config.Config, d *db.DB, lc *liercd.Client) *Server {
 		cfg:          cfg,
 		db:           d,
 		lc:           lc,
-		Perl:         proxy.PassThrough(perlAPI(cfg)),
 		streams:      map[string]map[string]*stream{},
 		latest:       map[string]int64{},
 	}
 }
 
-// perlAPI is cfg's Perl API URL, which config.Load has checked; a Config
-// built without Load gets the default.
-func perlAPI(cfg config.Config) *url.URL {
-	raw := cfg.PerlAPI
-	if raw == "" {
-		raw = config.DefaultPerlAPI
-	}
-	u, err := url.Parse(raw)
-	if err != nil {
-		u, _ = url.Parse(config.DefaultPerlAPI)
-	}
-	return u
+// Routes registers the stream and the wake ping on mux, behind users'
+// login check.
+func (s *Server) Routes(mux *http.ServeMux, users auth.Users) {
+	stream := users.Require(s.serveEvents)
+	mux.Handle("GET /events", stream)
+	mux.Handle("GET /events/{$}", stream)
+	mux.Handle("POST /events/{id}/ping", users.Require(func(w http.ResponseWriter, r *http.Request, user string) {
+		s.servePing(w, user, r.PathValue("id"))
+	}))
 }
 
-func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	ping := pingPath.FindStringSubmatch(r.URL.Path)
-	if ping != nil && r.Method != http.MethodPost {
-		ping = nil
-	}
-	if ping == nil && !streamPaths[r.URL.Path] {
-		s.Perl.ServeHTTP(w, r)
-		return
-	}
-
-	user, ok := s.user(w, r)
-	if !ok {
-		return
-	}
-	if ping != nil {
-		s.servePing(w, user, ping[1])
-		return
-	}
-
+// serveEvents serves user's stream of all their connections.
+func (s *Server) serveEvents(w http.ResponseWriter, r *http.Request, user string) {
 	conns, err := s.db.Connections(r.Context(), user)
 	if err != nil {
 		respond.Internal(w, "stream: connections", err)
 		return
 	}
 	s.serveStream(w, r, user, conns)
-}
-
-// pingPath is a wake ping's path, /events/<id>/ping, or /<id>/ping from an
-// nginx that strips /events. nginx may forward it with extra leading
-// slashes.
-var pingPath = regexp.MustCompile(`^/+(?:events/+)?([^/]+)/ping$`)
-
-// streamPaths serve the stream: / is for an nginx that strips /events.
-var streamPaths = map[string]bool{"/": true, "/events": true, "/events/": true}
-
-// user is the existing user logged in by r's "chats" cookie. Otherwise it
-// writes the error response and reports false.
-func (s *Server) user(w http.ResponseWriter, r *http.Request) (string, bool) {
-	user := session.User(r, s.cfg.Secret)
-	ok, unverified := false, false
-	if user != "" {
-		var err error
-		if ok, unverified, err = s.db.UserState(r.Context(), user); err != nil {
-			respond.Internal(w, "stream: lookup user", err)
-			return "", false
-		}
-	}
-	switch {
-	case !ok:
-		respond.Error(w, http.StatusUnauthorized, "unauthorized")
-		return "", false
-	case unverified:
-		// API::Responses unverified: signed up, but hasn't confirmed its
-		// email address yet
-		respond.JSON(w, http.StatusForbidden, struct {
-			Status     string `json:"status"`
-			Error      string `json:"error"`
-			Unverified bool   `json:"unverified"`
-		}{"error", "Confirm your email address first", true})
-		return "", false
-	}
-	return user, true
 }
 
 // servePing pings user's stream id at once, so a client waking from sleep

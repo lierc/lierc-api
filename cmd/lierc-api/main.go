@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/lierc/lierc-api/internal/api"
 	"io"
 	"log"
 	"net"
@@ -71,8 +72,9 @@ func run(ctx context.Context, args []string, getenv func(string) string, stderr 
 			nsqErr <- err
 		}
 	}()
-	// Every path is the event stream; /stats is on the admin listener.
-	srv := &http.Server{Handler: proxy.Wrap(cfg.TrustedProxies, s)}
+	// The stream and the ported routes, and everything else passed to the
+	// Perl API; /stats is on the admin listener.
+	srv := &http.Server{Handler: proxy.Wrap(cfg.TrustedProxies, api.New(cfg, d, s, proxy.PassThrough(cfg.PerlURL())))}
 	srv.RegisterOnShutdown(s.CloseStreams)
 	admin := &http.Server{Handler: s.Admin()}
 
