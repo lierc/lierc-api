@@ -23,6 +23,7 @@ func TestDefaults(t *testing.T) {
 		"LiercdHost":     {c.LiercdHost, "127.0.0.1"},
 		"LiercdNextHost": {c.LiercdNextHost, ""},
 		"DBHost":         {c.DBHost, "127.0.0.1"},
+		"PerlAPI":        {c.PerlAPI, "http://127.0.0.1:5004"},
 	}
 	for k, v := range want {
 		if v[0] != v[1] {
@@ -42,12 +43,14 @@ func TestOverrides(t *testing.T) {
 		"LISTEN": ":9", "TRUSTED_PROXIES": "10.0.0.1, 10.0.0.2", "NSQD_HOST": "nsq",
 		"LIERCD_HOST": "lc", "LIERCD_NEXT_HOST": "lcn", "POSTGRES_HOST": "pg", "POSTGRES_USER": "u",
 		"POSTGRES_PASSWORD": "p", "ADMIN_LISTEN": "127.0.0.1:7", "API_SECRET": "s",
+		"PERL_API": "http://perl:5004",
 	}))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if c.Listen != ":9" || c.NSQAddr != "nsq:4150" || c.LiercdHost != "lc" || c.LiercdNextHost != "lcn" ||
-		c.DBHost != "pg" || c.DBUser != "u" || c.DBPass != "p" || c.AdminListen != "127.0.0.1:7" || c.Secret != "s" {
+		c.DBHost != "pg" || c.DBUser != "u" || c.DBPass != "p" || c.AdminListen != "127.0.0.1:7" || c.Secret != "s" ||
+		c.PerlAPI != "http://perl:5004" {
 		t.Errorf("overrides not applied: %+v", c)
 	}
 	if !reflect.DeepEqual(c.TrustedProxies, []string{"10.0.0.1", "10.0.0.2"}) {
@@ -79,6 +82,14 @@ func TestDBMaxConns(t *testing.T) {
 	for _, bad := range []string{"0", "-2", "x", "99999999999"} {
 		if _, err := Load(env(map[string]string{"DB_MAX_CONNS": bad})); err == nil {
 			t.Errorf("DB_MAX_CONNS=%q accepted", bad)
+		}
+	}
+}
+
+func TestPerlAPIInvalid(t *testing.T) {
+	for _, v := range []string{"127.0.0.1:5004", "ftp://x", "http://"} {
+		if _, err := Load(env(map[string]string{"PERL_API": v})); err == nil {
+			t.Errorf("PERL_API=%q: no error", v)
 		}
 	}
 }
