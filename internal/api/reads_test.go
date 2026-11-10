@@ -134,8 +134,9 @@ func TestParseMissed(t *testing.T) {
 func TestMovedPathsOtherMethodsGoToPerl(t *testing.T) {
 	e := setup(t)
 	for _, rq := range [][2]string{
-		{"POST", "/privates"}, {"POST", "/preference/theme"}, {"POST", "/connection/c1/channel/%23a/seen"},
-		{"DELETE", "/notification/web_push"}, {"POST", "/missed"},
+		{"POST", "/privates"}, {"POST", "/missed"}, {"POST", "/connection/c1/channel"},
+		{"DELETE", "/preference/theme"}, {"PUT", "/connection/c1/nick/bob"}, {"GET", "/connection/c1/channel/%23a/seen"},
+		{"PUT", "/notification/web_push"},
 	} {
 		res := e.do(rq[0], rq[1], "")
 		res.Body.Close()

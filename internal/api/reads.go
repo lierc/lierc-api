@@ -1,7 +1,6 @@
 package api
 
 import (
-	"fmt"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -18,7 +17,7 @@ func (a *api) reads(mux *http.ServeMux) {
 	mux.Handle("GET /seen", a.users.Require(a.seen))
 	mux.Handle("GET /missed", a.users.Require(a.missed))
 	mux.Handle("GET /notification/web_push_keys", a.users.Require(a.webPushKeys))
-	mux.Handle("GET /connection/{id}/channel", a.users.Require(a.channels))
+	mux.Handle("GET /connection/{id}/channel", a.users.Require(a.owned(a.channels)))
 }
 
 // list answers v, or 500 for err.
@@ -81,18 +80,8 @@ func (a *api) webPushKeys(w http.ResponseWriter, r *http.Request, user string) {
 	}{key})
 }
 
-// channels lists the channels the user's connection {id} has logs in.
-func (a *api) channels(w http.ResponseWriter, r *http.Request, user string) {
-	id := r.PathValue("id")
-	owner, ok, err := a.db.LookupOwner(r.Context(), id)
-	if err != nil {
-		respond.Internal(w, "channels: lookup owner", err)
-		return
-	}
-	if !ok || owner != user {
-		respond.Error(w, http.StatusUnauthorized, fmt.Sprintf("Invalid connection id '%s'", id))
-		return
-	}
+// channels lists the channels the user's connection id has logs in.
+func (a *api) channels(w http.ResponseWriter, r *http.Request, user, id string) {
 	names, err := a.db.ChannelNames(r.Context(), id)
 	list(w, "channels", names, err)
 }
