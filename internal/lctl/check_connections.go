@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/lierc/lierc-api/internal/db"
 	"net/http"
 	"strings"
 	"time"
@@ -233,6 +234,10 @@ func deleteRows(ctx context.Context, env *Env, id string, tables []string, where
 		return nil, err
 	}
 	defer tx.Rollback(context.Background())
+	// tell the stream server, once this commits, so the UI drops the panels
+	if err := db.NotifyConnectionDeletes(ctx, tx, "id = $1", id); err != nil {
+		return nil, err
+	}
 	counts := make([]int64, len(tables))
 	for i, t := range tables {
 		tag, err := tx.Exec(ctx, `DELETE FROM `+quoteTable(t)+` WHERE `+where(t), id)

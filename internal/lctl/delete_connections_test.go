@@ -2,7 +2,11 @@ package lctl
 
 import (
 	"context"
+	"time"
+
 	"errors"
+	"github.com/lierc/lierc-api/internal/db"
+	"github.com/lierc/lierc-api/internal/testenv"
 	"strings"
 	"testing"
 )
@@ -111,5 +115,24 @@ func TestDeleteConnectionsStdinAndUsage(t *testing.T) {
 	h.env.Stdin = strings.NewReader("")
 	if err := h.run("delete-connections", "--delete"); !errors.As(err, &ue) {
 		t.Errorf("empty stdin: %v", err)
+	}
+}
+
+// Each deleted connection is announced to the stream server, with its
+// owner, once the delete has committed; a skipped one isn't.
+func TestDeleteConnectionsNotifies(t *testing.T) {
+	h := newHarness(t)
+	u := h.user("ann")
+	h.conn("c1", u, cfg)
+	h.conn("c2", u, cfg)
+	changes := testenv.ListenConnections(t, h.db)
+	h.liercd.Respond("POST", "/c1/destroy", 200, "ok")
+	h.liercd.Respond("POST", "/c2/destroy", 500, "no")
+	if err := h.run("delete-connections", "--delete", "--settle", "0", "c1", "c2"); err == nil || !strings.Contains(err.Error(), "1 connection(s) skipped") {
+		t.Fatalf("err %v, want c2 skipped", err)
+	}
+	got := changes(2 * time.Second)
+	if len(got) != 1 || got[0] != (db.ConnectionChange{User: u, Connection: "c1", Action: "delete"}) {
+		t.Errorf("notified %+v", got)
 	}
 }

@@ -2,7 +2,10 @@ package lctl
 
 import (
 	"context"
+	"time"
+
 	"errors"
+	"github.com/lierc/lierc-api/internal/testenv"
 	"strings"
 	"testing"
 )
@@ -251,5 +254,31 @@ func TestDeleteUsersSweepsLateRowsByUser(t *testing.T) {
 	h.has(u + ": removed 1 late log row(s)\n")
 	if n := h.count(`SELECT count(*) FROM log WHERE "user" = $1`, u); n != 0 {
 		t.Errorf("%d log rows left", n)
+	}
+}
+
+// Deleting a user announces each of their connections as deleted.
+func TestDeleteUsersNotifiesEachConnection(t *testing.T) {
+	h := newHarness(t)
+	u := h.user("ann")
+	other := h.user("bob")
+	h.conn("c1", u, `{}`)
+	h.conn("c2", u, `{}`)
+	h.conn("c3", other, `{}`)
+	changes := testenv.ListenConnections(t, h.db)
+	h.liercd.Respond("POST", "/*/destroy", 200, "ok")
+	if err := h.run("delete-users", "--delete", "--settle", "0", u); err != nil {
+		t.Fatal(err)
+	}
+	got := changes(2 * time.Second)
+	conns := map[string]bool{}
+	for _, c := range got {
+		if c.User != u || c.Action != "delete" {
+			t.Errorf("change %+v", c)
+		}
+		conns[c.Connection] = true
+	}
+	if len(got) != 2 || !conns["c1"] || !conns["c2"] {
+		t.Errorf("notified %+v, want c1 and c2", got)
 	}
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/lierc/lierc-api/internal/db"
 	"strings"
 	"time"
 )
@@ -200,6 +201,10 @@ func deleteUser(ctx context.Context, env *Env, u foundUser) error {
 		return err
 	}
 	defer tx.Rollback(context.Background())
+	// tell the stream server, once this commits, so the UI drops the panels
+	if err := db.NotifyConnectionDeletes(ctx, tx, `"user" = $1`, u.id); err != nil {
+		return err
+	}
 	for _, t := range userTables {
 		if _, err := tx.Exec(ctx, `DELETE FROM `+t.name+` WHERE `+t.where, tableArgs(t.kind, u.id, u.conns)...); err != nil {
 			return err
