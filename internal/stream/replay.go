@@ -8,6 +8,8 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/lierc/lierc-api/internal/respond"
+
 	"github.com/lierc/lierc-api/internal/db"
 )
 
@@ -45,7 +47,7 @@ type channel struct {
 var liercdPrefix = jsonString("liercd")
 
 func jsonString(s string) json.RawMessage {
-	b, _ := marshal(s)
+	b, _ := respond.Marshal(s)
 	return b
 }
 
@@ -68,7 +70,7 @@ func ircEvent(id, prefix json.RawMessage, command string, params ...json.RawMess
 	if params == nil {
 		params = []json.RawMessage{}
 	}
-	b, err := marshal(ircPayload{id, ircMessage{command, ircPrefix{prefix}, params, json.Number(hiresTime())}})
+	b, err := respond.Marshal(ircPayload{id, ircMessage{command, ircPrefix{prefix}, params, json.Number(hiresTime())}})
 	if err != nil {
 		panic(err) // raw values came from json.Unmarshal, so they are valid
 	}
@@ -216,10 +218,10 @@ func (s *Server) saveChannels(ctx context.Context, user string) {
 		for i, ch := range stat.Channels {
 			names[i] = ch.Name
 		}
-		if cfg["Channels"], err = marshal(names); err != nil {
+		if cfg["Channels"], err = respond.Marshal(names); err != nil {
 			continue
 		}
-		b, err := marshal(cfg)
+		b, err := respond.Marshal(cfg)
 		if err != nil {
 			continue
 		}
@@ -247,7 +249,7 @@ func snapshotEvent(statuses []*status) []byte {
 		}
 		list = append(list, snapshotEntry{stat.Id, name, stat.Nick, perlTrue(stat.Status.Connected)})
 	}
-	b, err := marshal(list)
+	b, err := respond.Marshal(list)
 	if err != nil {
 		panic(err) // raw values came from json.Unmarshal, so they are valid
 	}

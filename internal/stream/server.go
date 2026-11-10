@@ -14,6 +14,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/lierc/lierc-api/internal/respond"
+
 	"github.com/lierc/lierc-api/internal/config"
 	"github.com/lierc/lierc-api/internal/db"
 	"github.com/lierc/lierc-api/internal/liercd"
@@ -99,8 +101,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	conns, err := s.db.Connections(r.Context(), user)
 	if err != nil {
-		log.Printf("stream: connections: %v", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		respond.Internal(w, "stream: connections", err)
 		return
 	}
 	s.serveStream(w, r, user, conns)
@@ -122,19 +123,22 @@ func (s *Server) user(w http.ResponseWriter, r *http.Request) (string, bool) {
 	if user != "" {
 		var err error
 		if ok, unverified, err = s.db.UserState(r.Context(), user); err != nil {
-			log.Printf("stream: lookup user: %v", err)
-			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			respond.Internal(w, "stream: lookup user", err)
 			return "", false
 		}
 	}
 	switch {
 	case !ok:
-		writeError(w, http.StatusUnauthorized, "unauthorized")
+		respond.Error(w, http.StatusUnauthorized, "unauthorized")
 		return "", false
 	case unverified:
 		// API::Responses unverified: signed up, but hasn't confirmed its
 		// email address yet
-		writeJSON(w, http.StatusForbidden, unverifiedBody{"error", "Confirm your email address first", true})
+		respond.JSON(w, http.StatusForbidden, struct {
+			Status     string `json:"status"`
+			Error      string `json:"error"`
+			Unverified bool   `json:"unverified"`
+		}{"error", "Confirm your email address first", true})
 		return "", false
 	}
 	return user, true
@@ -150,7 +154,7 @@ func (s *Server) servePing(w http.ResponseWriter, user, id string) {
 	}
 	s.mu.Unlock()
 	if st == nil {
-		writeError(w, http.StatusNotFound, "unknown stream")
+		respond.Error(w, http.StatusNotFound, "unknown stream")
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -311,7 +315,7 @@ func sseEvent(typ string, data []byte, id string) []byte {
 // pingEvent carries the time and the user's newest message id, so a client
 // can tell it has missed messages.
 func pingEvent(lastID int64) []byte {
-	b, err := marshal(struct {
+	b, err := respond.Marshal(struct {
 		Time   json.Number `json:"time"`
 		LastID int64       `json:"last_id"`
 	}{json.Number(hiresTime()), lastID})
@@ -323,7 +327,7 @@ func pingEvent(lastID int64) []byte {
 
 // streamEvent tells a client its stream's id, which it names in wake pings.
 func streamEvent(id string) []byte {
-	b, err := marshal(struct {
+	b, err := respond.Marshal(struct {
 		ID string `json:"id"`
 	}{id})
 	if err != nil {
@@ -335,47 +339,6 @@ func streamEvent(id string) []byte {
 // hiresTime is Time::HiRes::time as Perl prints it (%.15g).
 func hiresTime() string {
 	return strconv.FormatFloat(float64(time.Now().UnixMicro())/1e6, 'g', 15, 64)
-}
-
-// marshal encodes like JSON::XS encode_json: no HTML escaping, no newline.
-func marshal(v any) ([]byte, error) {
-	var buf bytes.Buffer
-	enc := json.NewEncoder(&buf)
-	enc.SetEscapeHTML(false)
-	if err := enc.Encode(v); err != nil {
-		return nil, err
-	}
-	return bytes.TrimSuffix(buf.Bytes(), []byte("\n")), nil
-}
-
-// writeJSON is API::Responses json.
-func writeJSON(w http.ResponseWriter, code int, v any) {
-	b, err := marshal(v)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	h := w.Header()
-	h.Set("Content-Type", "application/javascript;charset=utf-8")
-	h.Set("Content-Length", strconv.Itoa(len(b)))
-	w.WriteHeader(code)
-	w.Write(b)
-}
-
-type errorBody struct {
-	Status string `json:"status"`
-	Error  string `json:"error"`
-}
-
-type unverifiedBody struct {
-	Status     string `json:"status"`
-	Error      string `json:"error"`
-	Unverified bool   `json:"unverified"`
-}
-
-// writeError is API::Responses error.
-func writeError(w http.ResponseWriter, code int, msg string) {
-	writeJSON(w, code, errorBody{"error", msg})
 }
 
 // perlTrue is Perl truthiness of a decoded JSON value.

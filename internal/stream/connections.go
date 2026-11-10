@@ -6,6 +6,8 @@ import (
 	"log"
 	"time"
 
+	"github.com/lierc/lierc-api/internal/respond"
+
 	"github.com/lierc/lierc-api/internal/db"
 )
 
@@ -33,7 +35,7 @@ func (s *Server) hasStreams(user string) bool {
 }
 
 func connEventBytes(typ string, c connEvent) []byte {
-	b, err := marshal(c)
+	b, err := respond.Marshal(c)
 	if err != nil {
 		panic(err) // plain strings
 	}

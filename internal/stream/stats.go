@@ -1,6 +1,10 @@
 package stream
 
-import "net/http"
+import (
+	"net/http"
+
+	"github.com/lierc/lierc-api/internal/respond"
+)
 
 type streamInfo struct {
 	Remote  string  `json:"remote"`
@@ -20,7 +24,7 @@ func (s *Server) Admin() http.Handler {
 // serveStats answers /stats (bin/stream.psgi, Events.pm stats): stream counts
 // per user, or one user's stream details with ?user=.
 func (s *Server) serveStats(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, s.stats(r.URL.Query().Get("user")))
+	respond.JSON(w, http.StatusOK, s.stats(r.URL.Query().Get("user")))
 }
 
 // stats snapshots the registry; the response is written after the lock is released.
