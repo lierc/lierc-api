@@ -39,7 +39,8 @@ type Server struct {
 	latest  map[string]int64              // user -> newest message id, while the user has streams
 	closed  bool                          // set by CloseStreams
 
-	replayed func() // test hook: runs when a stream's replay goroutine ends
+	replayed  func() // test hook: runs when a stream's replay goroutine ends
+	listening func() // test hook: runs each time ListenConnections' LISTEN is active
 }
 
 func New(cfg config.Config, d *db.DB, lc *liercd.Client) *Server {
@@ -213,6 +214,14 @@ func (s *Server) Deliver(body []byte) {
 	var m struct{ ConnectionId, MessageId json.RawMessage }
 	if err := json.Unmarshal(body, &m); err != nil {
 		log.Printf("stream: bad message: %v", err)
+		return
+	}
+	// liercd's fake connection events, replaced by the connection:* events
+	// (an old liercd may still send them); CONNECT and DISCONNECT from an
+	// old liercd pass through as irc events. Best effort: a message whose
+	// Message isn't an object is delivered as before.
+	var cmd struct{ Message struct{ Command string } }
+	if json.Unmarshal(body, &cmd) == nil && (cmd.Message.Command == "CREATE" || cmd.Message.Command == "DELETE") {
 		return
 	}
 	s.mu.Lock()

@@ -123,17 +123,10 @@ func (s *Server) replay(ctx context.Context, st *stream, conns []db.Connection) 
 		evs = append(evs, ircEvent(id, prefix, command, params...))
 	}
 
-	// push_connect
-	for _, stat := range statuses {
-		alias := stat.Config.Alias
-		if !perlTrue(alias) {
-			alias = stat.Config.Host
-		}
-		emit(stat.Id, liercdPrefix, "CREATE", stat.Nick, alias)
-		if perlTrue(stat.Status.Connected) {
-			emit(stat.Id, liercdPrefix, "CONNECT")
-		}
-	}
+	// The connections snapshot, first: every connection the user has, so
+	// the UI adds missing ones and drops ones deleted while it was away
+	// (this replaces Perl's push_connect CREATE and CONNECT).
+	evs = append(evs, snapshotEvent(statuses))
 	// push_welcome. A missing Isupport would die in Perl; it is treated as empty.
 	for _, stat := range registered {
 		welcome := "Welcome to the Internet Relay Network " + perlString(stat.Nick)
@@ -235,4 +228,28 @@ func (s *Server) saveChannels(ctx context.Context, user string) {
 			log.Printf("stream: save channels for %s: %v", c.ID, err)
 		}
 	}
+}
+
+type snapshotEntry struct {
+	Id, Name, Nick json.RawMessage
+	Connected      bool
+}
+
+// snapshotEvent is the replay's connections event: each connection's id,
+// network name (its alias, else its host), current nick and whether it's
+// connected, as liercd's status says.
+func snapshotEvent(statuses []*status) []byte {
+	list := make([]snapshotEntry, 0, len(statuses))
+	for _, stat := range statuses {
+		name := stat.Config.Alias
+		if !perlTrue(name) {
+			name = stat.Config.Host
+		}
+		list = append(list, snapshotEntry{stat.Id, name, stat.Nick, perlTrue(stat.Status.Connected)})
+	}
+	b, err := marshal(list)
+	if err != nil {
+		panic(err) // raw values came from json.Unmarshal, so they are valid
+	}
+	return sseEvent("connections", b, "")
 }

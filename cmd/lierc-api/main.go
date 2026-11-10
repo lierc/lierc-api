@@ -64,6 +64,8 @@ func run(ctx context.Context, args []string, getenv func(string) string, stderr 
 
 	s := stream.New(cfg, d, liercd.NewRouted(liercd.Instances{Main: cfg.LiercdHost, Next: cfg.LiercdNextHost}, d.LookupLiercd))
 	go s.Run(ctx)
+	// connection changes the API and lctl announce through Postgres
+	go s.ListenConnections(ctx)
 	go func() {
 		if err := s.Consume(ctx, cfg.NSQAddr); err != nil && ctx.Err() == nil {
 			nsqErr <- err

@@ -519,7 +519,6 @@ func decodeIRC(t *testing.T, ev event) (irc, string) {
 }
 
 var stepOf = map[string]int{
-	"CREATE": 0, "CONNECT": 0,
 	"001": 1, "005": 1, "CAP": 1,
 	"JOIN": 2,
 	"332":  3, "333": 3,
@@ -550,6 +549,12 @@ func TestReplayOrder(t *testing.T) {
 
 	c := e.open(u)
 	evs := e.replayEvents(c)
+	checkSnapshot(t, evs[0], map[string]string{
+		"c1": `{"Id":"c1","Name":"Net1","Nick":"me1","Connected":true}`,
+		"c2": `{"Id":"c2","Name":"irc.two","Nick":"me2","Connected":false}`,
+		"c3": `{"Id":"c3","Name":"irc.three","Nick":"me3","Connected":true}`,
+	})
+	evs = evs[1:]
 
 	perConn := map[string][]string{}
 	last := 0
@@ -567,8 +572,6 @@ func TestReplayOrder(t *testing.T) {
 	names := func(from, to int) string { return q(strings.Join(n[from:to], " ")) }
 	want := map[string][]string{
 		`"c1"`: {
-			`"c1" "liercd" CREATE ["me1","Net1"]`,
-			`"c1" "liercd" CONNECT []`,
 			`"c1" "liercd" 001 ["me1","Welcome to the Internet Relay Network me1"]`,
 			`"c1" "liercd" 005 ["me1","A=1 B=2"]`,
 			`"c1" "liercd" CAP ["*","ACK","sasl multi-prefix"]`,
@@ -585,16 +588,11 @@ func TestReplayOrder(t *testing.T) {
 			`"c1" "liercd" 324 ["#a","+nt"]`,
 		},
 		`"c2"`: {
-			`"c2" "liercd" CREATE ["me2","irc.two"]`,
 			`"c2" "liercd" 001 ["me2","Welcome to the Internet Relay Network me2"]`,
 			`"c2" "me2" JOIN ["#c"]`,
 			`"c2" "liercd" 332 ["me2","#c","t2"]`,
 			`"c2" "liercd" 333 ["me2","#c","carol","1700000001"]`,
 			`"c2" "liercd" 324 ["#c","+s"]`,
-		},
-		`"c3"`: {
-			`"c3" "liercd" CREATE ["me3","irc.three"]`,
-			`"c3" "liercd" CONNECT []`,
 		},
 	}
 	for id, w := range want {
@@ -609,6 +607,33 @@ func TestReplayOrder(t *testing.T) {
 	c.checkErr()
 }
 
+// checkSnapshot checks ev is the replay's connections event and lists
+// exactly want, by id (rows come back in no set order).
+func checkSnapshot(t *testing.T, ev event, want map[string]string) {
+	t.Helper()
+	if ev.typ != "connections" || ev.hasID {
+		t.Fatalf("first replay event %+v, want connections", ev)
+	}
+	var list []json.RawMessage
+	if err := json.Unmarshal([]byte(ev.data), &list); err != nil {
+		t.Fatalf("connections %q: %v", ev.data, err)
+	}
+	got := map[string]string{}
+	for _, raw := range list {
+		var c struct{ Id string }
+		json.Unmarshal(raw, &c)
+		got[c.Id] = string(raw)
+	}
+	if len(got) != len(want) {
+		t.Errorf("connections %s, want %v", ev.data, want)
+	}
+	for id, w := range want {
+		if got[id] != w {
+			t.Errorf("connection %s: %s, want %s", id, got[id], w)
+		}
+	}
+}
+
 func TestReplayRecreates(t *testing.T) {
 	e := setup(t)
 	u := e.addUser("alice")
@@ -621,9 +646,9 @@ func TestReplayRecreates(t *testing.T) {
 	if len(evs) != 1 {
 		t.Fatalf("events = %v", evs)
 	}
-	if _, line := decodeIRC(t, evs[0]); line != `"c4" "liercd" CREATE ["n4","irc.x"]` {
-		t.Errorf("event = %s", line)
-	}
+	checkSnapshot(t, evs[0], map[string]string{
+		"c4": `{"Id":"c4","Name":"irc.x","Nick":"n4","Connected":false}`,
+	})
 	var created bool
 	for _, call := range e.fake.Calls() {
 		if call.Method == "POST" && call.Path == "/c4/create" {
@@ -858,6 +883,12 @@ func TestWakePing(t *testing.T) {
 	lastID(t, c2.next())
 	e.waitReplay()
 	e.waitReplay()
+	// a user with no connections still gets an empty snapshot
+	for _, c := range []*client{c1, c2} {
+		if ev := c.next(); ev.typ != "connections" || ev.data != "[]" {
+			t.Fatalf("replay %+v, want an empty connections snapshot", ev)
+		}
+	}
 
 	if res := e.post("/"+c1.id+"/ping", u); res.StatusCode != 204 {
 		t.Fatalf("ping status %d, want 204", res.StatusCode)
