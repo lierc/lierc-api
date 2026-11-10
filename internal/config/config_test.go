@@ -93,3 +93,10 @@ func TestPerlAPIInvalid(t *testing.T) {
 		}
 	}
 }
+
+func TestVAPIDPublic(t *testing.T) {
+	c, err := Load(env(map[string]string{"VAPID_PUBLIC": "abc"}))
+	if err != nil || c.VAPIDPublic != "abc" {
+		t.Errorf("VAPIDPublic = %q, %v", c.VAPIDPublic, err)
+	}
+}

@@ -23,6 +23,7 @@ func New(cfg config.Config, d *db.DB, streams *stream.Server, perl http.Handler)
 	a := &api{cfg: cfg, db: d, users: auth.Users{Secret: cfg.Secret, DB: d}}
 	mux := http.NewServeMux()
 	streams.Routes(mux, a.users)
+	a.reads(mux)
 	mux.Handle("/", perl)
 	return mux
 }

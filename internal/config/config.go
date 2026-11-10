@@ -26,6 +26,9 @@ type Config struct {
 	// PerlAPI is the Perl API's base URL (PERL_API): every request the Go
 	// server doesn't handle itself is passed there.
 	PerlAPI string
+	// VAPIDPublic is the Web Push public key the UI subscribes with
+	// (VAPID_PUBLIC); empty when unset.
+	VAPIDPublic string
 }
 
 // PerlURL is c's Perl API URL, which Load has checked; a Config built
@@ -59,6 +62,7 @@ func Load(getenv func(string) string) (Config, error) {
 	}
 
 	c := Config{
+		VAPIDPublic:    getenv("VAPID_PUBLIC"),
 		LiercdHost:     or("LIERCD_HOST", "127.0.0.1"),
 		LiercdNextHost: or("LIERCD_NEXT_HOST", ""),
 		DBHost:         or("POSTGRES_HOST", "127.0.0.1"),
