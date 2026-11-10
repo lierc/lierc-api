@@ -55,7 +55,21 @@ func setupCfg(t *testing.T, cfg config.Config) *env {
 // do sends method path, logged in as user unless user is "".
 func (e *env) do(method, path, user string) *http.Response {
 	e.t.Helper()
-	req, _ := http.NewRequest(method, e.srv.URL+path, nil)
+	return e.doReq(method, path, user, "")
+}
+
+// doReq sends method path with body and header name/value pairs, logged
+// in as user unless user is "".
+func (e *env) doReq(method, path, user, body string, hdr ...string) *http.Response {
+	e.t.Helper()
+	var rb io.Reader
+	if body != "" {
+		rb = strings.NewReader(body)
+	}
+	req, _ := http.NewRequest(method, e.srv.URL+path, rb)
+	for i := 0; i+1 < len(hdr); i += 2 {
+		req.Header.Set(hdr[i], hdr[i+1])
+	}
 	if user != "" {
 		req.AddCookie(&http.Cookie{Name: "chats", Value: testenv.PerlCookie(user, testSecret)})
 	}
@@ -151,5 +165,37 @@ func TestOtherPathsGoToPerl(t *testing.T) {
 		{"POST", "/auth"}, {"GET", "/eventsx"}, {"PUT", "/connection/c1"}, {"GET", "/log/5"}, {"GET", "/stats"},
 	} {
 		checkPerl(t, e, rq[0], rq[1], "")
+	}
+}
+
+func TestCrossSiteToPerlRefused(t *testing.T) {
+	e := setupCfg(t, config.Config{Secret: testSecret, Origins: []string{"https://ok"}})
+	res := e.doReq("POST", "/auth", "", "", "Sec-Fetch-Site", "cross-site")
+	body, _ := io.ReadAll(res.Body)
+	res.Body.Close()
+	if res.StatusCode != 403 || res.Header.Get("X-Perl") != "" || string(body) != `{"status":"error","error":"Cross-site request refused"}` {
+		t.Errorf("cross-site POST /auth: %d %q %s", res.StatusCode, res.Header.Get("X-Perl"), body)
+	}
+	res = e.doReq("POST", "/auth", "", "", "Sec-Fetch-Site", "same-origin")
+	res.Body.Close()
+	if res.StatusCode != 299 {
+		t.Errorf("same-origin POST /auth: %d, want Perl", res.StatusCode)
+	}
+}
+
+func TestCrossSitePingRefused(t *testing.T) {
+	e := setupCfg(t, config.Config{Secret: testSecret, Origins: []string{"https://ok"}})
+	u := testenv.AddUser(t, e.db, "alice")
+	res, id := e.openStream("/events", u)
+	defer res.Body.Close()
+	ping := e.doReq("POST", "/events/"+id+"/ping", u, "", "Sec-Fetch-Site", "cross-site")
+	ping.Body.Close()
+	if ping.StatusCode != 403 {
+		t.Errorf("cross-site ping: %d, want 403", ping.StatusCode)
+	}
+	ping = e.doReq("POST", "/events/"+id+"/ping", u, "", "Sec-Fetch-Site", "same-origin")
+	ping.Body.Close()
+	if ping.StatusCode != 204 {
+		t.Errorf("same-origin ping: %d, want 204", ping.StatusCode)
 	}
 }

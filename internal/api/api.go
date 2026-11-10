@@ -25,5 +25,5 @@ func New(cfg config.Config, d *db.DB, streams *stream.Server, perl http.Handler)
 	streams.Routes(mux, a.users)
 	a.reads(mux)
 	mux.Handle("/", perl)
-	return mux
+	return sameOrigin(cfg.Origins, mux)
 }

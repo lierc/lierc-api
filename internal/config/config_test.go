@@ -100,3 +100,26 @@ func TestVAPIDPublic(t *testing.T) {
 		t.Errorf("VAPIDPublic = %q, %v", c.VAPIDPublic, err)
 	}
 }
+
+func TestOrigins(t *testing.T) {
+	for _, c := range []struct {
+		env  map[string]string
+		want []string
+	}{
+		{map[string]string{"API_ORIGINS": "https://a https://b"}, []string{"https://a", "https://b"}},
+		{map[string]string{"API_URL": "https://u"}, []string{"https://u"}},
+		{nil, []string{}},
+		{map[string]string{"API_ORIGINS": "https://a", "API_URL": "https://u"}, []string{"https://a"}},
+	} {
+		c2, err := Load(env(c.env))
+		if err != nil || len(c2.Origins) != len(c.want) {
+			t.Errorf("%v: Origins = %q, %v", c.env, c2.Origins, err)
+			continue
+		}
+		for i := range c.want {
+			if c2.Origins[i] != c.want[i] {
+				t.Errorf("%v: Origins = %q", c.env, c2.Origins)
+			}
+		}
+	}
+}

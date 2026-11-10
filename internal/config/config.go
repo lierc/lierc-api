@@ -29,6 +29,10 @@ type Config struct {
 	// VAPIDPublic is the Web Push public key the UI subscribes with
 	// (VAPID_PUBLIC); empty when unset.
 	VAPIDPublic string
+	// Origins are the origins the UI is served from, which may make
+	// state-changing requests: API_ORIGINS split on whitespace, else
+	// API_URL (API::Config origins). Empty counts as unset.
+	Origins []string
 }
 
 // PerlURL is c's Perl API URL, which Load has checked; a Config built
@@ -63,6 +67,7 @@ func Load(getenv func(string) string) (Config, error) {
 
 	c := Config{
 		VAPIDPublic:    getenv("VAPID_PUBLIC"),
+		Origins:        origins(getenv),
 		LiercdHost:     or("LIERCD_HOST", "127.0.0.1"),
 		LiercdNextHost: or("LIERCD_NEXT_HOST", ""),
 		DBHost:         or("POSTGRES_HOST", "127.0.0.1"),
@@ -99,4 +104,14 @@ func Load(getenv func(string) string) (Config, error) {
 		c.DBMaxConns = int(n)
 	}
 	return c, nil
+}
+
+func origins(getenv func(string) string) []string {
+	if o := strings.Fields(getenv("API_ORIGINS")); len(o) > 0 {
+		return o
+	}
+	if u := getenv("API_URL"); u != "" {
+		return []string{u}
+	}
+	return []string{}
 }
