@@ -149,7 +149,7 @@ func (d *DB) LatestMessageID(ctx context.Context, user string) (int64, error) {
 }
 
 func (d *DB) UpdateConfig(ctx context.Context, id string, config []byte) error {
-	_, err := d.Pool.Exec(ctx, `UPDATE connection SET config=$1 WHERE id=$2`, config, id)
+	_, err := d.Pool.Exec(ctx, `UPDATE connection SET config=$1, updated=NOW() WHERE id=$2`, config, id)
 	return err
 }
 

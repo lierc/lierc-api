@@ -27,6 +27,11 @@ create table connection (
   "user"  varchar(24) not null,
   config  json not null,
   liercd  text,
+  -- when the user added the connection, and when its settings last
+  -- changed through the API or the stream server (not the logger's saves
+  -- of the nick); NULL for connections from before the columns
+  created timestamp,
+  updated timestamp,
   primary key (id)
 );
 

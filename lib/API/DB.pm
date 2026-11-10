@@ -151,7 +151,7 @@ sub save_connection {
   my ($self, $id, $user, $config) = @_;
 
   my $sth = $self->dbh->prepare(
-    q{INSERT INTO connection (id, "user", config) VALUES(?,?,?)},
+    q{INSERT INTO connection (id, "user", config, created, updated) VALUES(?,?,?,NOW(),NOW())},
   );
   $sth->execute($id, $user, $config);
   $sth->finish;
@@ -172,7 +172,7 @@ sub save_connection_limited {
     if ($exists) {
       my ($count) = $dbh->selectrow_array(q{SELECT count(*) FROM connection WHERE "user"=?}, undef, $user);
       if ($count < $max) {
-        $dbh->do(q{INSERT INTO connection (id, "user", config) VALUES(?,?,?)}, undef, $id, $user, $config);
+        $dbh->do(q{INSERT INTO connection (id, "user", config, created, updated) VALUES(?,?,?,NOW(),NOW())}, undef, $id, $user, $config);
         $ok = 1;
       }
     }
@@ -188,7 +188,7 @@ sub save_connection_limited {
 
 sub update_connection {
   my ($self, $id, $config) = @_;
-  my $sth = $self->dbh->prepare(q{UPDATE connection SET config=? WHERE id=?});
+  my $sth = $self->dbh->prepare(q{UPDATE connection SET config=?, updated=NOW() WHERE id=?});
   $sth->execute($config, $id);
   $sth->finish;
 }

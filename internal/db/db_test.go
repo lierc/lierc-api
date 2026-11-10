@@ -92,6 +92,30 @@ func TestConnections(t *testing.T) {
 	}
 }
 
+// The stream server's save of the channel list marks the connection
+// updated; created is left as it was.
+func TestUpdateConfigTouchesUpdated(t *testing.T) {
+	d := testenv.Postgres(t)
+	ctx := context.Background()
+	testenv.AddConnection(t, d, "c1", "u1", `{}`)
+
+	if err := d.UpdateConfig(ctx, "c1", []byte(`{"Channels":["#a"]}`)); err != nil {
+		t.Fatal(err)
+	}
+	// Compared in SQL: the columns are timestamp without time zone.
+	var createdNull, updatedNow bool
+	if err := d.Pool.QueryRow(ctx, `SELECT created IS NULL, updated > NOW() - interval '1 minute'
+		FROM connection WHERE id='c1'`).Scan(&createdNull, &updatedNow); err != nil {
+		t.Fatal(err)
+	}
+	if !createdNull {
+		t.Error("created was set, want NULL")
+	}
+	if !updatedNow {
+		t.Error("updated is not now")
+	}
+}
+
 func TestErrorsAreWrapped(t *testing.T) {
 	l, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
