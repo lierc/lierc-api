@@ -7,7 +7,7 @@ use API::Controller::Connection;
 
 # Every change to a connection row is announced on the connections
 # channel (notify_connection), so the stream server can tell the owner's
-# open tabs: create once liercd has the connection, update on both edit
+# open tabs: create as soon as the row exists (before liercd connects), update on both edit
 # paths and on save, delete once the row is gone. Nothing is announced for
 # a change that didn't happen.
 
@@ -55,14 +55,17 @@ my $cfg = { Host => "1.1.1.1", Port => 6667, Nick => "lee" };
   my $app = FakeApp->new($saved);
   API::Controller::Connection::start($app, "c1", "u1", $cfg, 5);
   is_deeply $app->{events}, [["u1", "c1", "create"]], "a created connection is announced";
-  is_deeply $app->{log}, ["insert", "liercd create", "notify create"], "after liercd has it";
+  is_deeply $app->{log}, ["insert", "notify create", "liercd create"],
+    "before liercd connects, so tabs have it before its first status";
 }
 
 {
   my $app = FakeApp->new($saved, create => 500);
   eval { API::Controller::Connection::start($app, "c1", "u1", $cfg, 5) };
   ok $@, "a failed create dies";
-  is_deeply $app->{events}, [], "and announces nothing (its row is deleted again)";
+  is_deeply $app->{events}, [["u1", "c1", "create"], ["u1", "c1", "delete"]],
+    "and announces the connection deleted again, as its row is";
+  is_deeply $app->{log}, ["insert", "notify create", "liercd create", "delete", "notify delete"], "in that order";
 }
 
 {

@@ -108,20 +108,24 @@ sub valid_config_from {
 # first events to whoever the row says owns it. If the create fails,
 # the row is deleted again. A user who already has $max connections gets
 # no new one, and liercd isn't asked.
+# The create is announced before liercd connects, so the owner's tabs
+# have the connection before its first status (connection:connect) can
+# arrive; a create liercd refuses is announced as deleted again.
 sub start {
   my ($app, $id, $user, $config, $max) = @_;
   $app->save_connection_limited($id, $user, API::StoredJSON::encode($config), $max)
     or die "You can have at most $max connections\n";
+  $app->notify_connection($user, $id, "create");
 
   my $res = eval { $app->request(POST => "$id/create", encode_json $config) };
   my $err = $@ || ($res->code == 200 ? undef : $res->decoded_content);
   if (defined $err) {
     $app->delete_connection($id);
+    $app->notify_connection($user, $id, "delete");
     die $err;
   }
 
   $app->dbh->do("NOTIFY highlights");
-  $app->notify_connection($user, $id, "create");
 }
 
 sub delete {
