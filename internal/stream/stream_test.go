@@ -379,11 +379,13 @@ func TestStats(t *testing.T) {
 		t.Errorf("unknown user stats = %s", body)
 	}
 
-	// The public listener has no /stats: it is a stream path like any other.
+	// The public listener has no /stats: it goes to Perl like any other
+	// path that isn't a stream.
+	e.s.Perl = fakePerl()
 	res = e.get("/stats", "")
 	res.Body.Close()
-	if res.StatusCode != 401 {
-		t.Errorf("public /stats: %d, want 401", res.StatusCode)
+	if res.StatusCode != 299 || res.Header.Get("X-Perl") != "GET /stats" {
+		t.Errorf("public /stats: %d %q, want Perl", res.StatusCode, res.Header.Get("X-Perl"))
 	}
 	// The admin listener serves nothing else.
 	for _, path := range []string{"/", "/stats/x"} {
@@ -951,13 +953,57 @@ func TestWakePingUnauthorized(t *testing.T) {
 	}
 }
 
-func TestStreamStillServedOnOtherPaths(t *testing.T) {
+// fakePerl stands in for the Perl API: it answers 299 with X-Perl
+// "<method> <path>".
+func fakePerl() http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-Perl", r.Method+" "+r.URL.Path)
+		w.WriteHeader(299)
+	})
+}
+
+func TestEventsPathIsAStream(t *testing.T) {
 	e := setup(t)
+	e.s.Perl = fakePerl()
 	u := e.addUser("alice")
-	res := e.get("/x/ping", u)
-	defer res.Body.Close()
-	if res.StatusCode != 200 || res.Header.Get("Content-Type") != "text/event-stream;charset=utf-8" {
-		t.Errorf("GET /x/ping: %d %s, want a stream", res.StatusCode, res.Header.Get("Content-Type"))
+	for _, path := range []string{"/events", "/events/"} {
+		res := e.get(path, u)
+		res.Body.Close()
+		if res.StatusCode != 200 || res.Header.Get("Content-Type") != "text/event-stream;charset=utf-8" || res.Header.Get("X-Perl") != "" {
+			t.Errorf("GET %s: %d %s %q, want a stream", path, res.StatusCode, res.Header.Get("Content-Type"), res.Header.Get("X-Perl"))
+		}
+	}
+}
+
+func TestEventsPing(t *testing.T) {
+	e := setup(t)
+	e.s.Perl = fakePerl()
+	u := e.addUser("alice")
+	c := e.open(u)
+	for _, path := range []string{"/events/" + c.id + "/ping", "//events/" + c.id + "/ping"} {
+		if res := e.post(path, u); res.StatusCode != 204 {
+			t.Errorf("POST %s: %d, want 204", path, res.StatusCode)
+		}
+	}
+}
+
+// Everything that isn't a stream or a ping goes to Perl, logged in or not.
+func TestOtherPathsGoToPerl(t *testing.T) {
+	e := setup(t)
+	e.s.Perl = fakePerl()
+	for _, rq := range [][2]string{
+		{"GET", "/preference"}, {"POST", "/auth"}, {"GET", "/x/ping"},
+		{"GET", "/eventsx"}, {"PUT", "/connection/c1"},
+	} {
+		req, _ := http.NewRequest(rq[0], e.srv.URL+rq[1], nil)
+		res, err := noKeepAlive().Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		res.Body.Close()
+		if want := rq[0] + " " + rq[1]; res.StatusCode != 299 || res.Header.Get("X-Perl") != want {
+			t.Errorf("%s: %d %q, want Perl", want, res.StatusCode, res.Header.Get("X-Perl"))
+		}
 	}
 }
 

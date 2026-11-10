@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"net/url"
 	"regexp"
 	"strconv"
 	"sync"
@@ -16,11 +17,14 @@ import (
 	"github.com/lierc/lierc-api/internal/config"
 	"github.com/lierc/lierc-api/internal/db"
 	"github.com/lierc/lierc-api/internal/liercd"
+	"github.com/lierc/lierc-api/internal/proxy"
 	"github.com/lierc/lierc-api/internal/session"
 )
 
-// Server serves, on every path, the event stream of the user logged in by
-// Perl's "chats" cookie. Admin serves /stats on a separate listener.
+// Server serves the event stream of the user logged in by Perl's "chats"
+// cookie at /events (and /, while nginx may still strip the prefix), and
+// wake pings at /events/<id>/ping (and /<id>/ping). Every other request
+// goes to Perl. Admin serves /stats on a separate listener.
 type Server struct {
 	// PingInterval is the time between pings to every stream (Events.pm start_pings).
 	PingInterval time.Duration
@@ -29,6 +33,9 @@ type Server struct {
 	// NSQReconnect is the wait between attempts to reach nsqd, at start and
 	// after a lost connection.
 	NSQReconnect time.Duration
+	// Perl answers every request that isn't a stream or a wake ping: the
+	// Perl API, through proxy.PassThrough.
+	Perl http.Handler
 
 	cfg config.Config
 	db  *db.DB
@@ -51,18 +58,42 @@ func New(cfg config.Config, d *db.DB, lc *liercd.Client) *Server {
 		cfg:          cfg,
 		db:           d,
 		lc:           lc,
+		Perl:         proxy.PassThrough(perlAPI(cfg)),
 		streams:      map[string]map[string]*stream{},
 		latest:       map[string]int64{},
 	}
 }
 
+// perlAPI is cfg's Perl API URL, which config.Load has checked; a Config
+// built without Load gets the default.
+func perlAPI(cfg config.Config) *url.URL {
+	raw := cfg.PerlAPI
+	if raw == "" {
+		raw = config.DefaultPerlAPI
+	}
+	u, err := url.Parse(raw)
+	if err != nil {
+		u, _ = url.Parse(config.DefaultPerlAPI)
+	}
+	return u
+}
+
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	ping := pingPath.FindStringSubmatch(r.URL.Path)
+	if ping != nil && r.Method != http.MethodPost {
+		ping = nil
+	}
+	if ping == nil && !streamPaths[r.URL.Path] {
+		s.Perl.ServeHTTP(w, r)
+		return
+	}
+
 	user, ok := s.user(w, r)
 	if !ok {
 		return
 	}
-	if m := pingPath.FindStringSubmatch(r.URL.Path); m != nil && r.Method == http.MethodPost {
-		s.servePing(w, user, m[1])
+	if ping != nil {
+		s.servePing(w, user, ping[1])
 		return
 	}
 
@@ -75,9 +106,13 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	s.serveStream(w, r, user, conns)
 }
 
-// pingPath is a wake ping's path. nginx may forward it with extra leading
+// pingPath is a wake ping's path, /events/<id>/ping, or /<id>/ping from an
+// nginx that strips /events. nginx may forward it with extra leading
 // slashes.
-var pingPath = regexp.MustCompile(`^/+([^/]+)/ping$`)
+var pingPath = regexp.MustCompile(`^/+(?:events/+)?([^/]+)/ping$`)
+
+// streamPaths serve the stream: / is for an nginx that strips /events.
+var streamPaths = map[string]bool{"/": true, "/events": true, "/events/": true}
 
 // user is the existing user logged in by r's "chats" cookie. Otherwise it
 // writes the error response and reports false.
