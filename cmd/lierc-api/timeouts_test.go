@@ -72,9 +72,10 @@ func TestRealStreamOutlivesTimeouts(t *testing.T) {
 	d := testenv.Postgres(t)
 	fake := testenv.FakeLiercd(t)
 	cfg := config.Config{Secret: "testsecret"}
-	s := stream.New(cfg, d, &liercd.Client{BaseURL: fake.URL, HTTP: &http.Client{}})
+	lc := &liercd.Client{BaseURL: fake.URL, HTTP: &http.Client{}}
+	s := stream.New(cfg, d, lc)
 	s.PingInterval = time.Hour
-	url := serve(t, api.New(cfg, d, s, http.NotFoundHandler()))
+	url := serve(t, api.New(cfg, d, s, lc, http.NotFoundHandler()))
 	u := testenv.AddUser(t, d, "alice")
 	cookie := &http.Cookie{Name: "chats", Value: testenv.PerlCookie(u, cfg.Secret)}
 

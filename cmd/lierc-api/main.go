@@ -63,7 +63,8 @@ func run(ctx context.Context, args []string, getenv func(string) string, stderr 
 	defer cancel()
 	nsqErr := make(chan error, 1)
 
-	s := stream.New(cfg, d, liercd.NewRouted(liercd.Instances{Main: cfg.LiercdHost, Next: cfg.LiercdNextHost}, d.LookupLiercd))
+	lc := liercd.NewRouted(liercd.Instances{Main: cfg.LiercdHost, Next: cfg.LiercdNextHost}, d.LookupLiercd)
+	s := stream.New(cfg, d, lc)
 	go s.Run(ctx)
 	// connection changes the API and lctl announce through Postgres
 	go s.ListenConnections(ctx)
@@ -74,7 +75,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, stderr 
 	}()
 	// The stream and the ported routes, and everything else passed to the
 	// Perl API; /stats is on the admin listener.
-	srv := newServer(proxy.Wrap(cfg.TrustedProxies, api.New(cfg, d, s, proxy.PassThrough(cfg.PerlURL()))), serverTimeouts)
+	srv := newServer(proxy.Wrap(cfg.TrustedProxies, api.New(cfg, d, s, lc, proxy.PassThrough(cfg.PerlURL()))), serverTimeouts)
 	srv.RegisterOnShutdown(s.CloseStreams)
 	admin := newServer(s.Admin(), serverTimeouts)
 

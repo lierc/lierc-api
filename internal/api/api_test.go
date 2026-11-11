@@ -2,6 +2,7 @@ package api
 
 import (
 	"bufio"
+	"context"
 	"io"
 	"log"
 	"net/http"
@@ -34,9 +35,11 @@ func fakePerl() http.Handler {
 }
 
 type env struct {
-	t   *testing.T
-	db  *db.DB
-	srv *httptest.Server
+	t    *testing.T
+	db   *db.DB
+	srv  *httptest.Server
+	fake *testenv.LiercdServer
+	s    *stream.Server
 }
 
 func setup(t *testing.T) *env { return setupCfg(t, config.Config{Secret: testSecret}) }
@@ -47,9 +50,12 @@ func setupCfg(t *testing.T, cfg config.Config) *env {
 	fake := testenv.FakeLiercd(t)
 	lc := &liercd.Client{BaseURL: fake.URL, HTTP: &http.Client{Transport: &http.Transport{DisableKeepAlives: true}}}
 	s := stream.New(cfg, d, lc)
-	srv := httptest.NewServer(New(cfg, d, s, fakePerl()))
+	old := checkHost
+	checkHost = func(context.Context, string, int) error { return nil }
+	t.Cleanup(func() { checkHost = old })
+	srv := httptest.NewServer(New(cfg, d, s, lc, fakePerl()))
 	t.Cleanup(srv.Close)
-	return &env{t: t, db: d, srv: srv}
+	return &env{t: t, db: d, srv: srv, fake: fake, s: s}
 }
 
 // do sends method path, logged in as user unless user is "".
@@ -162,7 +168,7 @@ func TestLegacyPathsGoToPerl(t *testing.T) {
 func TestOtherPathsGoToPerl(t *testing.T) {
 	e := setup(t)
 	for _, rq := range [][2]string{
-		{"POST", "/auth"}, {"GET", "/eventsx"}, {"PUT", "/connection/c1"}, {"GET", "/connection"}, {"GET", "/stats"},
+		{"POST", "/auth"}, {"GET", "/eventsx"}, {"GET", "/auth"}, {"GET", "/stats"},
 	} {
 		checkPerl(t, e, rq[0], rq[1], "")
 	}
