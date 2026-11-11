@@ -176,3 +176,184 @@ for my $case (
   };
 }
 write_json("legacy_hashes.json", \@legacy);
+
+# ---- auth.json ----------------------------------------------------------
+# API::SignedToken, Data::Validate::Email::is_email (called as Auth.pm does,
+# with no options) and Util->irc_nick. Also writes internal/accounts/tlds.go
+# from Net::Domain::TLD's list.
+require API::SignedToken;
+require Data::Validate::Email;
+require Net::Domain::TLD;
+
+# tokens
+my $tsecret = "test-secret";
+my $expires = 1800000000;
+my @made;
+my @valid;
+for my $t (
+  [verify => "aB3dE5fG7hJ9kL1mN3pQ5r", 'lee@example.com'],
+  [reset  => "aB3dE5fG7hJ9kL1mN3pQ5r",
+    '$2b$15$abcdefghijklmnopqrstuuJ1mY2Vh7pN8kS0QwErTyUiOpAsDfGhK'],
+  [verify => "12345", 'a.b+c@example.co.uk'],
+  [reset  => "12345", 'deadbeef' x 8],
+) {
+  my ($purpose, $user, $fp) = @$t;
+  my $token = API::SignedToken->make(
+    secret => $tsecret, purpose => $purpose, user => $user,
+    fingerprint => $fp, expires => $expires,
+  );
+  push @made, {
+    secret => $tsecret, purpose => $purpose, user => $user,
+    fingerprint => $fp, expires => $expires, token => $token,
+  };
+  my $other = $purpose eq 'verify' ? 'reset' : 'verify';
+  for my $c (
+    ["right",             $tsecret,        $purpose, $fp,       $expires - 3600],
+    ["right_at_expiry",   $tsecret,        $purpose, $fp,       $expires],
+    ["expired",           $tsecret,        $purpose, $fp,       $expires + 1],
+    ["wrong_purpose",     $tsecret,        $other,   $fp,       $expires - 3600],
+    ["wrong_fingerprint", $tsecret,        $purpose, "$fp.x",   $expires - 3600],
+    ["wrong_secret",      "other-secret",  $purpose, $fp,       $expires - 3600],
+  ) {
+    my ($name, $s, $p, $f, $now) = @$c;
+    push @valid, {
+      name => "$purpose/$user/$name", secret => $s, purpose => $p,
+      token => $token, fingerprint => $f, now => $now,
+      valid => API::SignedToken->valid(
+        secret => $s, purpose => $p, token => $token,
+        fingerprint => $f, now => $now,
+      ) ? JSON::XS::true : JSON::XS::false,
+    };
+  }
+}
+
+# Odd tokens: what user() names, and whether valid() takes them, for
+# purpose verify, fingerprint lee@example.com, now = $expires - 3600.
+require MIME::Base64;
+my $b64u = sub { MIME::Base64::encode_base64url($_[0]) };
+my $good = $made[0]{token};
+my @parsing;
+for my $token (
+  "", "!!!!", "abc def", $good, "${good}A", "${good}AA", "$good=",
+  $b64u->("lee"),
+  $b64u->("lee:1800000000"),
+  $b64u->("lee:1800000000:mac:extra"),
+  $b64u->(":1800000000:mac"),
+  $b64u->("lee:18x:mac"),
+  $b64u->("lee::mac"),
+  $b64u->("lee:1800000000:"),
+  $b64u->("lee:-1:mac"),
+  $b64u->("lee:1800000000:mac\n"),
+  $b64u->("lee:1800000000\n:mac"),
+  # properly signed, with odd expires: Perl's /^\d+$/ takes a trailing
+  # newline, and its numeric compare takes more digits than an int64
+  map {
+    API::SignedToken->make(
+      secret => $tsecret, purpose => "verify", user => "lee",
+      fingerprint => 'lee@example.com', expires => $_,
+    )
+  } ("1800000000\n", "1800000000\n\n", "0001800000000", "9" x 30,
+     $expires - 3600, $expires - 3601),
+) {
+  my $u = API::SignedToken->user($token);
+  push @parsing, {
+    token => $token,
+    user  => $u,
+    valid => API::SignedToken->valid(
+      secret => $tsecret, purpose => "verify", token => $token,
+      fingerprint => 'lee@example.com', now => $expires - 3600,
+    ) ? JSON::XS::true : JSON::XS::false,
+  };
+}
+
+# emails. Data::Validate::Email ships no test file in local/, so these cases
+# follow its documentation and regexes (local part /^[a-z0-9_\-\.\+]+$/i,
+# Data::Validate::Domain labels and the Net::Domain::TLD list).
+sub domain_of_length {
+  # a domain of exactly $n characters ending in .com
+  my $n = shift;
+  my @labels;
+  my $left = $n - 4;    # room before ".com"
+  while ($left > 0) {
+    my $len = $left > 64 ? 63 : $left == 64 ? 62 : $left;
+    push @labels, "a" x $len;
+    $left -= $len + 1;    # label plus its dot
+  }
+  my $d = join(".", @labels) . ".com";
+  die "domain_of_length($n) gave " . length($d) unless length $d == $n;
+  return $d;
+}
+my @email_cases = (
+  # documented: something@something.tld
+  'bob@test.com', 'bob@test.com.au', 'foo.bob@test.com.au',
+  'foo-bob@test-com.au', 'foo-bob@test.uk', 'bob_smith@example.org',
+  'a+tag@example.com', 'A.B+C@Example.COM', '0@example.com',
+  '1234@5678.net', 'x@a.io', 'x@xn--bcher-kva.com',
+  # documented: no real names, comments or partial addresses
+  'Richard Sonnen <sonnen@frii.com>', '<sonnen@frii.com>',
+  'sonnen@frii.com (Richard Sonnen)', 'sonnen@frii', 'bob', '', '@',
+  'bob@', '@example.com', 'bob@@example.com', 'a@b@example.com',
+  'bob@localhost', 'bob@com',
+  # local part
+  'bob smith@example.com', 'bob,smith@example.com', 'bob!@example.com',
+  "bob'o\@example.com", 'bob/x@example.com', 'bob=x@example.com',
+  ".bob\@example.com", "bob.\@example.com", 'bo..b@example.com',
+  "b\x{e9}b\@example.com", "bob\n\@example.com",
+  # quoted local parts
+  '"bob"@example.com', '"bob smith"@example.com', '"a@b"@example.com',
+  # domain labels
+  'bob@-example.com', 'bob@example-.com', 'bob@ex-ample.com',
+  'bob@ex--ample.com', 'bob@ex_ample.com', 'bob@exa mple.com',
+  'bob@.example.com', 'bob@example..com', 'bob@example.com.',
+  'bob@example.com..', 'bob@example.', 'bob@.', "bob\@example.com\n",
+  "bob\@ex\x{e4}mple.com", 'bob@1.2.3.4', 'bob@[1.2.3.4]',
+  'bob@[IPv6:::1]', 'bob@127.0.0.1.com',
+  'bob@' . ("a" x 63) . '.com', 'bob@' . ("a" x 64) . '.com',
+  'bob@' . ("a" x 65) . '.com',
+  'bob@' . domain_of_length(253), 'bob@' . domain_of_length(254),
+  'bob@' . domain_of_length(253) . '.', 'bob@' . domain_of_length(254) . '.',
+  # TLDs
+  'a@example.test', 'a@foo.localhost', 'a@x.inc', 'a@x.museum', 'a@x.zz',
+  'a@x.MUSEUM', 'a@x.example', 'a@x.invalid', 'a@x.xn--p1ai',
+  'a@x.123', 'a@x.c',
+  # trailing @: Perl's split drops the empty last field (Go refuses)
+  'a@b.com@', 'a@b.com@@',
+);
+my @emails = map {
+  +{ email => $_,
+     valid => defined(Data::Validate::Email::is_email($_))
+       ? JSON::XS::true : JSON::XS::false }
+} @email_cases;
+
+# nicks
+my @nicks = map { +{ username => $_, nick => Util->irc_nick($_) } }
+  ("lee", "9lives", "a.b", "\x{e9}", "abcdefghij" x 4, "_x", "Lee.Do_1");
+
+write_json("auth.json", {
+  tokens => { make => \@made, valid => \@valid, parsing => \@parsing },
+  emails => \@emails,
+  nicks  => \@nicks,
+});
+
+# tlds.go: every name tld_exists accepts. Only names that can pass
+# Data::Validate::Domain's ASCII label check are written; the rest
+# (the non-ASCII IDN names) can never be reached.
+# tlds() lists a name once per category it's in, so dedupe.
+my %tld_seen;
+my @tlds = sort grep { !$tld_seen{$_}++ }
+  grep { /^[a-z0-9-]+$/ && Net::Domain::TLD::tld_exists($_) }
+  map { lc } Net::Domain::TLD::tlds();
+my $go = File::Spec->catfile($dir, File::Spec->updir, File::Spec->updir,
+  "internal", "accounts", "tlds.go");
+open my $gofh, '>', $go or die "$go: $!";
+print $gofh "// Code generated by testdata/fixtures/gen.pl from Net::Domain::TLD "
+  . "$Net::Domain::TLD::VERSION; DO NOT EDIT.\n\n";
+print $gofh "package accounts\n\n";
+print $gofh "// tlds is Net::Domain::TLD's list, lowercased: the names tld_exists accepts.\n";
+print $gofh "var tlds = map[string]bool{\n";
+print $gofh "\t\"$_\": true,\n" for @tlds;
+print $gofh "}\n";
+close $gofh;
+# gofmt aligns the values; without it the file is valid Go, just unformatted.
+system("gofmt", "-w", $go) == 0 or warn "gofmt $go failed; run it by hand\n";
+print "wrote $go\n";
