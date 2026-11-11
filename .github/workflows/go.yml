@@ -6,7 +6,7 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ghcr.io/lierc/lierc-api-go
+  IMAGE_NAME: ghcr.io/lierc/lierc-api
 
 jobs:
   test:
