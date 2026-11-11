@@ -69,6 +69,13 @@ func (u Users) Require(h Handler) http.Handler { return u.require(h, false) }
 // email address yet (GET /auth, POST /verify/resend).
 func (u Users) RequireAny(h Handler) http.Handler { return u.require(h, true) }
 
+// perlCutoff is when Perl cookies stop working. After the deploy nothing
+// issues them, so every legitimate browser's copy is swapped for a login or
+// has expired within 7 days; from this time on a Perl cookie is refused, so a
+// copied one can't come back after a password reset or end-login. A later
+// change deletes the Perl path entirely.
+var perlCutoff = time.Date(2026, 11, 20, 0, 0, 0, 0, time.UTC)
+
 func (u Users) clock() time.Time {
 	if u.now != nil {
 		return u.now()
@@ -123,6 +130,9 @@ func (u Users) check(w http.ResponseWriter, r *http.Request, v string) (login.Lo
 			}
 		}
 		return l, true, nil
+	}
+	if !u.clock().Before(perlCutoff) {
+		return login.Login{}, false, nil
 	}
 	user, ok := session.ReadPerl(v, u.Secret)
 	if !ok {

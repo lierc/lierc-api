@@ -20,7 +20,7 @@ import (
 	"github.com/lierc/lierc-api/internal/liercd"
 )
 
-// Server serves the event stream of the user logged in by Perl's "chats"
+// Server serves the event stream of the user logged in by the "chats" login
 // cookie at /events, and wake pings at /events/<id>/ping, on the routes
 // Routes registers. Admin serves /stats on a separate listener.
 type Server struct {

@@ -257,6 +257,44 @@ func TestRenewFailureLetsRequestThrough(t *testing.T) {
 	if w.Code != 200 || w.Body.String() != "user="+u {
 		t.Errorf("%d %s", w.Code, w.Body)
 	}
+	if c := w.Header()["Set-Cookie"]; len(c) != 0 {
+		t.Errorf("Set-Cookie %v", c)
+	}
+}
+
+func TestPerlCookieRefusedAfterCutoff(t *testing.T) {
+	d := testenv.Postgres(t)
+	u := testenv.AddUser(t, d, "alice")
+	pc := testenv.PerlCookie(u, secret)
+	at := func(now time.Time) *httptest.ResponseRecorder {
+		return run(Users{Secret: secret, DB: d, now: func() time.Time { return now }}, false, &pc, nil)
+	}
+	rows := func() int {
+		list, err := login.List(context.Background(), d, u)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return len(list)
+	}
+	w := at(perlCutoff)
+	cs := setCookies(w)
+	if w.Code != 401 || w.Body.String() != unauthorized || len(cs) != 1 || cs[0].MaxAge >= 0 || rows() != 0 {
+		t.Fatalf("at cutoff: %d %s %v rows=%d", w.Code, w.Body, w.Header()["Set-Cookie"], rows())
+	}
+	w = at(perlCutoff.Add(-time.Second))
+	if w.Code != 200 || w.Body.String() != "user="+u || rows() != 1 {
+		t.Errorf("before cutoff: %d %s rows=%d", w.Code, w.Body, rows())
+	}
+}
+
+func TestTokenUnaffectedByCutoff(t *testing.T) {
+	d := testenv.Postgres(t)
+	u := testenv.AddUser(t, d, "alice")
+	token := testenv.Login(t, d, u)
+	users := Users{Secret: secret, DB: d, now: func() time.Time { return perlCutoff.Add(30 * 24 * time.Hour) }}
+	if w := run(users, false, &token, nil); w.Code != 200 || w.Body.String() != "user="+u {
+		t.Errorf("%d %s", w.Code, w.Body)
+	}
 }
 
 func TestClient(t *testing.T) {
