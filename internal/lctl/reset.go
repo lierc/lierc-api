@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"strings"
 
-	"golang.org/x/crypto/bcrypt"
+	"github.com/lierc/lierc-api/internal/passwords"
 )
 
 const resetUsage = `reset EMAIL
@@ -45,12 +45,12 @@ func reset(ctx context.Context, env *Env, args []string) error {
 		return errors.New("password is empty")
 	}
 
-	hash, err := bcrypt.GenerateFromPassword([]byte(pw), 12)
+	hash, err := passwords.Hash(pw)
 	if err != nil {
 		return err
 	}
 	tag, err := env.DB.Pool.Exec(ctx,
-		`UPDATE "user" SET password_hash = $1, password = NULL WHERE lower(email) = lower($2)`, string(hash), email)
+		`UPDATE "user" SET password_hash = $1, password = NULL WHERE lower(email) = lower($2)`, hash, email)
 	if err != nil {
 		return err
 	}

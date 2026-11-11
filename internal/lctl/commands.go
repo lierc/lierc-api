@@ -12,6 +12,7 @@ var Commands = []Command{
 	{Name: "delete-users", Summary: "Delete users and all their data; dry run unless --delete", Run: deleteUsers},
 	{Name: "delete-connections", Summary: "Delete connections and their data, keeping the users; dry run unless --delete", Run: deleteConnections},
 	{Name: "reset", Summary: "Set a user's password (prompted, or one line on stdin)", Run: reset},
+	{Name: "convert-legacy-passwords", Summary: "Rewrite legacy Perl password hashes as $2b$15$ bcrypt in password_hash; --dry-run counts only", Run: convertLegacyPasswords},
 	{Name: "reconnect", Summary: "Restart connections in liercd from their saved configs", Run: reconnect},
 	{Name: "move-connection", Summary: "Move a connection to another liercd instance (main or next)", Run: moveConnection},
 	{Name: "move-connections", Summary: "Move every connection on one liercd instance to the other, in paced batches; dry run unless --move", Run: moveConnections},

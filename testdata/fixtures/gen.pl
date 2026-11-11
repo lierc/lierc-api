@@ -154,3 +154,25 @@ my @hex = (
 my @cnv = map { +{ hex => $_, b62 => scalar cnv($_, 16, 62) } } @hex;
 my @uuids = map { Util->uuid } 1 .. 5;
 write_json("ids.json", { cnv => \@cnv, uuid_samples => \@uuids });
+
+# ---- legacy_hashes.json -------------------------------------------------
+# The legacy scheme, Util->hash_password: bcrypt cost 15 with the secret
+# (left-padded to 16 bytes) as the salt, as a hex digest. Passwords are
+# UTF-8 bytes.
+require Encode;
+my @legacy;
+for my $case (
+  ["0123456789abcdef", "correct horse"],
+  ["0123456789abcdef", "p\x{e4}ssw\x{f6}rd"],
+  ["0123456789abcdef", "x" x 80],
+  ["changeme",         "correct horse"],
+) {
+  my ($s, $p) = @$case;
+  my $bytes = Encode::encode("UTF-8", $p);
+  push @legacy, {
+    secret   => $s,
+    password => $p,
+    legacy   => Util->hash_password($bytes, $s),
+  };
+}
+write_json("legacy_hashes.json", \@legacy);
