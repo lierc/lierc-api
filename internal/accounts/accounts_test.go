@@ -4,7 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
+	"log"
 	"net/http"
+	"net/http/httptest"
+	"os"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -655,4 +659,121 @@ func TestMailDoesNotBlock(t *testing.T) {
 	if n := b.started.Load(); n != 3 {
 		t.Errorf("%d sends started, want 3", n)
 	}
+}
+
+// cancellingLiercd answers liercd's create after cancelling the caller's
+// ctx, as a browser leaving mid-request does.
+func cancellingLiercd(t *testing.T, cancel func()) (*liercd.Client, func() []string) {
+	t.Helper()
+	var mu sync.Mutex
+	var calls []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		calls = append(calls, r.Method+" "+r.URL.Path)
+		mu.Unlock()
+		if strings.HasSuffix(r.URL.Path, "/create") {
+			cancel()
+			time.Sleep(100 * time.Millisecond)
+		}
+		io.WriteString(w, "{}")
+	}))
+	t.Cleanup(srv.Close)
+	return &liercd.Client{BaseURL: srv.URL, HTTP: &http.Client{}}, func() []string {
+		mu.Lock()
+		defer mu.Unlock()
+		return append([]string(nil), calls...)
+	}
+}
+
+// Once verified=true is committed, a disconnect mustn't cost the user the
+// signup network: a re-verify isn't a first verification.
+func TestFirstNetworkSurvivesCancel(t *testing.T) {
+	h := setup(t)
+	id := h.addUser("leaver", "leaver@example.com", "p", ptr(false))
+	c, cancel := context.WithCancel(context.Background())
+	var calls func() []string
+	h.s.Conns.Liercd, calls = cancellingLiercd(t, cancel)
+	if err := h.s.Verify(c, MakeToken(secret, "verify", id, "leaver@example.com", time.Now().Unix()+60)); err != nil {
+		t.Errorf("Verify = %v", err)
+	}
+	if n := len(h.connections(id)); n != 1 || len(calls()) != 1 {
+		t.Errorf("verify: %d connections, liercd calls %v", n, calls())
+	}
+
+	id = h.addUser("leaver2", "leaver2@example.com", "old", ptr(false))
+	var hash string
+	h.d.Pool.QueryRow(ctx, `SELECT password_hash FROM "user" WHERE id=$1`, id).Scan(&hash)
+	c, cancel = context.WithCancel(context.Background())
+	h.s.Conns.Liercd, calls = cancellingLiercd(t, cancel)
+	if u, err := h.s.ResetConfirm(c, MakeToken(secret, "reset", id, hash, time.Now().Unix()+60), "new"); err != nil || u.ID != id {
+		t.Errorf("ResetConfirm = %+v, %v", u, err)
+	}
+	if n := len(h.connections(id)); n != 1 || len(calls()) != 1 {
+		t.Errorf("reset confirm: %d connections, liercd calls %v", n, calls())
+	}
+}
+
+type syncBuffer struct {
+	mu sync.Mutex
+	b  strings.Builder
+}
+
+func (s *syncBuffer) Write(p []byte) (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.b.Write(p)
+}
+
+func (s *syncBuffer) String() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.b.String()
+}
+
+func captureLog(t *testing.T) *syncBuffer {
+	buf := &syncBuffer{}
+	log.SetOutput(buf)
+	t.Cleanup(func() { log.SetOutput(os.Stderr) })
+	return buf
+}
+
+func waitFor(t *testing.T, buf *syncBuffer, subs ...string) {
+	t.Helper()
+	for end := time.Now().Add(5 * time.Second); time.Now().Before(end); time.Sleep(10 * time.Millisecond) {
+		all := true
+		for _, s := range subs {
+			all = all && strings.Contains(buf.String(), s)
+		}
+		if all {
+			return
+		}
+	}
+	t.Errorf("log = %q, want %q", buf.String(), subs)
+}
+
+type panicking struct{}
+
+func (panicking) Send(to, subject, body string) error { panic("mailer blew up") }
+
+// Mail runs in a bare goroutine after the response: a panic there would
+// take the whole API down.
+func TestMailNeverPanics(t *testing.T) {
+	h := setup(t)
+	h.s.After = nil // the default: go f()
+	buf := captureLog(t)
+
+	h.s.Mail = nil
+	if _, err := h.s.Register(ctx, "nomail", "nomail@example.com", "p"); err != nil {
+		t.Fatal(err)
+	}
+	if err := h.s.Reset(ctx, "nomail@example.com"); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, buf, "Unable to send verification email for nomail", "Unable to send reset email for nomail")
+
+	h.s.Mail = panicking{}
+	if err := h.s.Reset(ctx, "nomail@example.com"); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, buf, "mailer blew up")
 }

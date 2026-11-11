@@ -119,12 +119,41 @@ func (s *Service) now() time.Time {
 	return time.Now()
 }
 
+// after queues f, the sending of an email, to run after the response. It
+// runs in a goroutine of its own, so a panic in it would take the whole
+// process down: it's recovered and logged.
 func (s *Service) after(f func()) {
+	safe := func() {
+		defer func() {
+			if r := recover(); r != nil {
+				log.Printf("accounts: sending mail panicked: %v", r)
+			}
+		}()
+		f()
+	}
 	if s.After != nil {
-		s.After(f)
+		s.After(safe)
 		return
 	}
-	go f()
+	go safe()
+}
+
+// send sends one email, if there's a mailer to send it with.
+func (s *Service) send(to, subject, body string) error {
+	if s.Mail == nil {
+		return errors.New("no mailer configured")
+	}
+	return s.Mail.Send(to, subject, body)
+}
+
+// stepTimeout bounds the work done after verified=true is committed.
+const stepTimeout = time.Minute
+
+// detached is ctx without its cancellation, bounded by stepTimeout: once
+// verified=true is committed, the signup network must still be added if
+// the browser goes away, since a later verify isn't a first one.
+func detached(ctx context.Context) (context.Context, context.CancelFunc) {
+	return context.WithTimeout(context.WithoutCancel(ctx), stepTimeout)
 }
 
 // asciiLower is Perl's lc on bytes: only A-Z change.
@@ -285,7 +314,7 @@ func (s *Service) sendVerifyEmail(id, name, email string) {
 	if s.NoSMTP {
 		return
 	}
-	if err := s.Mail.Send(email, verifySubject, body); err != nil {
+	if err := s.send(email, verifySubject, body); err != nil {
 		log.Printf("Unable to send verification email for %s: %v", name, err)
 	}
 }
@@ -313,6 +342,8 @@ func (s *Service) Verify(ctx context.Context, token string) error {
 		return err
 	}
 	if first {
+		ctx, cancel := detached(ctx)
+		defer cancel()
 		return s.addFirstNetwork(ctx, uid, name)
 	}
 	return nil
@@ -427,7 +458,7 @@ func (s *Service) Reset(ctx context.Context, email string) error {
 		if s.NoSMTP {
 			return
 		}
-		if err := s.Mail.Send(addr, resetSubject, body); err != nil {
+		if err := s.send(addr, resetSubject, body); err != nil {
 			log.Printf("Unable to send reset email for %s: %v", name, err)
 		}
 	})
@@ -485,6 +516,9 @@ func (s *Service) ResetConfirm(ctx context.Context, token, pass string) (User, e
 	if !changed {
 		return User{}, userError(400, msgResetExpired)
 	}
+	// the password has changed: finish even if the browser goes away
+	ctx, cancel := detached(ctx)
+	defer cancel()
 	if first {
 		if err := s.addFirstNetwork(ctx, uid, name); err != nil {
 			return User{}, err
