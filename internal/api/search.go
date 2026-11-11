@@ -18,6 +18,11 @@ func (a *api) search(mux *http.ServeMux) {
 	mux.Handle("GET /connection/{id}/channel/{channel}/date/{from}/{to}", a.users.Require(a.owned(a.dateSearch)))
 }
 
+// searchWriteTimeout is how long one write to a date search's client may
+// block before the search gives up (and frees its database connection):
+// there is no server-wide WriteTimeout, since streams must stay open.
+var searchWriteTimeout = time.Minute
+
 // channelDate runs the date search's query; tests replace it.
 var channelDate = (*db.DB).ChannelDate
 
@@ -80,6 +85,7 @@ func (a *api) dateSearch(w http.ResponseWriter, r *http.Request, user, id string
 		if err != nil {
 			return err
 		}
+		rc.SetWriteDeadline(time.Now().Add(searchWriteTimeout))
 		if err := sseEvent(w, "log", b); err != nil {
 			return err
 		}

@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"strings"
 	"testing"
 	"time"
@@ -197,4 +198,36 @@ func TestDateSearchOwner(t *testing.T) {
 	e, _ := searchSetup(t)
 	b := testenv.AddUser(t, e.db, "bob")
 	e.want(datePath, b, 401, `{"status":"error","error":"Invalid connection id 'c1'"}`)
+}
+
+// A client that stops reading (a frozen tab) mustn't hold the search, and
+// its database connection, open: each write gets a deadline.
+func TestDateSearchStalledClient(t *testing.T) {
+	e, a := searchSetup(t)
+	old := searchWriteTimeout
+	searchWriteTimeout = 200 * time.Millisecond
+	t.Cleanup(func() { searchWriteTimeout = old })
+	big := json.RawMessage(`{"Params":["#a","` + strings.Repeat("x", 64<<10) + `"]}`)
+	done := make(chan error, 1)
+	swapDate(t, func(d *db.DB, ctx context.Context, _, _, _, _ string, _, _ *string, each func(db.Message) error) error {
+		for i := int64(1); ; i++ {
+			if err := each(db.Message{MessageId: i, Message: big, ConnectionId: "c1"}); err != nil {
+				done <- err
+				return err
+			}
+		}
+	})
+	conn, err := net.Dial("tcp", strings.TrimPrefix(e.srv.URL, "http://"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	conn.(*net.TCPConn).SetReadBuffer(4096)
+	fmt.Fprintf(conn, "GET %s HTTP/1.1\r\nHost: x\r\nCookie: chats=%s\r\n\r\n", datePath, testenv.PerlCookie(a, testSecret))
+	// never read
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the search is still writing to a client that stopped reading")
+	}
 }
