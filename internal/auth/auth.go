@@ -34,7 +34,14 @@ type unverifiedBody struct {
 // Otherwise it answers 401, or 403 for a signup that hasn't confirmed its
 // email address yet (verified NULL, from before signups had to verify, is
 // let in).
-func (u Users) Require(h Handler) http.Handler {
+func (u Users) Require(h Handler) http.Handler { return u.require(h, false) }
+
+// RequireAny is Require, but lets in a signup that hasn't confirmed its
+// email address yet (GET /auth, POST /verify/resend). It refreshes the
+// cookie too.
+func (u Users) RequireAny(h Handler) http.Handler { return u.require(h, true) }
+
+func (u Users) require(h Handler, any bool) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		user := session.User(r, u.Secret)
 		ok, unverified := false, false
@@ -48,7 +55,7 @@ func (u Users) Require(h Handler) http.Handler {
 		switch {
 		case !ok:
 			respond.Error(w, http.StatusUnauthorized, "unauthorized")
-		case unverified:
+		case unverified && !any:
 			// not a 401, so the UI doesn't take it for logged out
 			respond.JSON(w, http.StatusForbidden, unverifiedBody{"error", "Confirm your email address first", true})
 		default:

@@ -168,7 +168,7 @@ func TestLegacyPathsGoToPerl(t *testing.T) {
 func TestOtherPathsGoToPerl(t *testing.T) {
 	e := setup(t)
 	for _, rq := range [][2]string{
-		{"POST", "/auth"}, {"GET", "/eventsx"}, {"GET", "/auth"}, {"GET", "/stats"},
+		{"POST", "/nope"}, {"GET", "/eventsx"}, {"GET", "/nope"}, {"GET", "/stats"},
 	} {
 		checkPerl(t, e, rq[0], rq[1], "")
 	}
@@ -176,16 +176,16 @@ func TestOtherPathsGoToPerl(t *testing.T) {
 
 func TestCrossSiteToPerlRefused(t *testing.T) {
 	e := setupCfg(t, config.Config{Secret: testSecret, Origins: []string{"https://ok"}})
-	res := e.doReq("POST", "/auth", "", "", "Sec-Fetch-Site", "cross-site")
+	res := e.doReq("POST", "/nope", "", "", "Sec-Fetch-Site", "cross-site")
 	body, _ := io.ReadAll(res.Body)
 	res.Body.Close()
 	if res.StatusCode != 403 || res.Header.Get("X-Perl") != "" || string(body) != `{"status":"error","error":"Cross-site request refused"}` {
-		t.Errorf("cross-site POST /auth: %d %q %s", res.StatusCode, res.Header.Get("X-Perl"), body)
+		t.Errorf("cross-site POST /nope: %d %q %s", res.StatusCode, res.Header.Get("X-Perl"), body)
 	}
-	res = e.doReq("POST", "/auth", "", "", "Sec-Fetch-Site", "same-origin")
+	res = e.doReq("POST", "/nope", "", "", "Sec-Fetch-Site", "same-origin")
 	res.Body.Close()
 	if res.StatusCode != 299 {
-		t.Errorf("same-origin POST /auth: %d, want Perl", res.StatusCode)
+		t.Errorf("same-origin POST /nope: %d, want Perl", res.StatusCode)
 	}
 }
 
@@ -219,7 +219,7 @@ func TestStreamSetsCookie(t *testing.T) {
 func TestPassThroughSetsNoCookie(t *testing.T) {
 	e := setup(t)
 	u := testenv.AddUser(t, e.db, "alice")
-	res := e.do("POST", "/auth", u)
+	res := e.do("POST", "/nope", u)
 	res.Body.Close()
 	if res.StatusCode != 299 || res.Header.Get("Set-Cookie") != "" {
 		t.Errorf("pass-through: %d %v", res.StatusCode, res.Header["Set-Cookie"])

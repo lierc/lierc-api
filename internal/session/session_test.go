@@ -185,3 +185,16 @@ func TestSetPerl(t *testing.T) {
 		}
 	}
 }
+
+func TestExpirePerl(t *testing.T) {
+	for _, secure := range []bool{false, true} {
+		w := httptest.NewRecorder()
+		ExpirePerl(w, secure)
+		h := w.Header().Get("Set-Cookie")
+		c := (&http.Response{Header: w.Header()}).Cookies()[0]
+		if c.Name != "chats" || c.Value != "" || c.Path != "/" || c.MaxAge != -1 || !c.Expires.Before(time.Now()) ||
+			!c.HttpOnly || c.SameSite != http.SameSiteStrictMode || c.Secure != secure || !strings.Contains(h, "Max-Age=0") {
+			t.Errorf("secure %v: %s", secure, h)
+		}
+	}
+}

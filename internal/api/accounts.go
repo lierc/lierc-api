@@ -1,0 +1,162 @@
+package api
+
+import (
+	"log"
+	"net/http"
+	"time"
+
+	"github.com/lierc/lierc-api/internal/accounts"
+	"github.com/lierc/lierc-api/internal/config"
+	"github.com/lierc/lierc-api/internal/mail"
+	"github.com/lierc/lierc-api/internal/respond"
+	"github.com/lierc/lierc-api/internal/session"
+)
+
+// newMailer builds the mailer for the accounts service; tests replace it.
+// A bad SMTP_OPTS is logged and leaves no mailer, so the API still starts
+// (accounts logs the emails it can't send).
+var newMailer = func(cfg config.Config) accounts.Mailer {
+	opts, err := mail.ParseOpts(cfg.SMTPOpts)
+	if err != nil {
+		log.Printf("SMTP_OPTS: %v; emails will not be sent", err)
+		return nil
+	}
+	return &mail.Sender{Opts: opts, From: cfg.FromAddress}
+}
+
+func (a *api) accounts(mux *http.ServeMux) {
+	a.acct = &accounts.Service{
+		DB:             a.db,
+		Conns:          a.conns,
+		Mail:           newMailer(a.cfg),
+		Secret:         a.cfg.Secret,
+		SiteURL:        a.cfg.SiteURL,
+		NoSMTP:         a.cfg.NoSMTP,
+		DefaultNetwork: a.cfg.DefaultNetwork,
+		After:          func(f func()) { go f() },
+	}
+	mux.Handle("GET /auth", a.users.RequireAny(a.showUser))
+	mux.HandleFunc("POST /auth", a.login)
+	mux.HandleFunc("POST /register", a.register)
+	mux.HandleFunc("/logout", a.logout)
+	mux.HandleFunc("POST /verify", a.verify)
+	mux.Handle("POST /verify/resend", a.users.RequireAny(a.resend))
+	mux.HandleFunc("POST /reset", a.reset)
+	mux.HandleFunc("POST /reset/confirm", a.resetConfirm)
+}
+
+// userBody is GET /auth's answer.
+type userBody struct {
+	Email    string `json:"email"`
+	User     string `json:"user"`
+	ID       string `json:"id"`
+	Verified *bool  `json:"verified"`
+}
+
+func userJSON(u accounts.User) userBody {
+	return userBody{Email: u.Email, User: u.Username, ID: u.ID, Verified: u.Verified}
+}
+
+// accountFailed answers a user-facing accounts error with its status and
+// message, and anything else as a 500.
+func accountFailed(w http.ResponseWriter, what string, err error) {
+	if e, ok := accounts.IsError(err); ok {
+		respond.Error(w, e.Code, e.Msg)
+		return
+	}
+	respond.Internal(w, what, err)
+}
+
+func (a *api) showUser(w http.ResponseWriter, r *http.Request, id string) {
+	u, err := a.acct.Show(r.Context(), id)
+	if err != nil {
+		accountFailed(w, "show user", err)
+		return
+	}
+	respond.JSON(w, http.StatusOK, userJSON(u))
+}
+
+// loggedIn logs u in, answering as GET /auth does.
+func (a *api) loggedIn(w http.ResponseWriter, u accounts.User) {
+	if err := session.SetPerl(w, u.ID, a.cfg.Secret, a.cfg.Secure, time.Now()); err != nil {
+		respond.Internal(w, "set login cookie", err)
+		return
+	}
+	respond.JSON(w, http.StatusOK, userJSON(u))
+}
+
+func (a *api) login(w http.ResponseWriter, r *http.Request) {
+	param, ok := formParams(w, r)
+	if !ok {
+		return
+	}
+	u, err := a.acct.Login(r.Context(), param("email"), param("pass"))
+	if err != nil {
+		accountFailed(w, "login", err)
+		return
+	}
+	a.loggedIn(w, u)
+}
+
+func (a *api) register(w http.ResponseWriter, r *http.Request) {
+	param, ok := formParams(w, r)
+	if !ok {
+		return
+	}
+	u, err := a.acct.Register(r.Context(), param("username"), param("email"), param("pass"))
+	if err != nil {
+		accountFailed(w, "register", err)
+		return
+	}
+	a.loggedIn(w, u)
+}
+
+func (a *api) logout(w http.ResponseWriter, r *http.Request) {
+	session.ExpirePerl(w, a.cfg.Secure)
+	ok(w)
+}
+
+func (a *api) verify(w http.ResponseWriter, r *http.Request) {
+	param, good := formParams(w, r)
+	if !good {
+		return
+	}
+	if err := a.acct.Verify(r.Context(), param("token")); err != nil {
+		accountFailed(w, "verify", err)
+		return
+	}
+	ok(w)
+}
+
+func (a *api) resend(w http.ResponseWriter, r *http.Request, id string) {
+	if err := a.acct.Resend(r.Context(), id); err != nil {
+		accountFailed(w, "resend verify", err)
+		return
+	}
+	ok(w)
+}
+
+func (a *api) reset(w http.ResponseWriter, r *http.Request) {
+	param, good := formParams(w, r)
+	if !good {
+		return
+	}
+	if err := a.acct.Reset(r.Context(), param("email")); err != nil {
+		accountFailed(w, "reset", err)
+		return
+	}
+	ok(w)
+}
+
+func (a *api) resetConfirm(w http.ResponseWriter, r *http.Request) {
+	param, good := formParams(w, r)
+	if !good {
+		return
+	}
+	u, err := a.acct.ResetConfirm(r.Context(), param("token"), param("pass"))
+	if err != nil {
+		accountFailed(w, "reset confirm", err)
+		return
+	}
+	a.loggedIn(w, u)
+}

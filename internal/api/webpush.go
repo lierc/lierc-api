@@ -76,21 +76,9 @@ func checkSubscription(endpoint, key, auth string) string {
 // subscribe saves the subscription in the form body (or, as with Perl's
 // parameters, the query when the body lacks a field).
 func (a *api) subscribe(w http.ResponseWriter, r *http.Request, user string) {
-	r.Body = http.MaxBytesReader(w, r.Body, maxBody)
-	if err := r.ParseForm(); err != nil {
-		var tooBig *http.MaxBytesError
-		if errors.As(err, &tooBig) {
-			respond.Error(w, http.StatusBadRequest, "request body is too large")
-		} else {
-			respond.Error(w, http.StatusBadRequest, "could not read the request body")
-		}
+	param, ok := formParams(w, r)
+	if !ok {
 		return
-	}
-	param := func(name string) string {
-		if r.PostForm.Has(name) {
-			return strings.ToValidUTF8(r.PostForm.Get(name), "�")
-		}
-		return strings.ToValidUTF8(r.URL.Query().Get(name), "�")
 	}
 	endpoint, key, auth := param("endpoint"), param("key"), param("auth")
 	if msg := checkSubscription(endpoint, key, auth); msg != "" {
@@ -110,4 +98,26 @@ func (a *api) unsubscribePush(w http.ResponseWriter, r *http.Request, user strin
 		return
 	}
 	a.done(w, "delete web push", a.db.DeleteWebPush(r.Context(), user, endpoint))
+}
+
+// formParams reads the form body, and answers a function giving a field
+// from it, or, as with Perl's parameters, from the query when the body
+// lacks it. Over maxBody it answers 400 and reports false.
+func formParams(w http.ResponseWriter, r *http.Request) (func(string) string, bool) {
+	r.Body = http.MaxBytesReader(w, r.Body, maxBody)
+	if err := r.ParseForm(); err != nil {
+		var tooBig *http.MaxBytesError
+		if errors.As(err, &tooBig) {
+			respond.Error(w, http.StatusBadRequest, "request body is too large")
+		} else {
+			respond.Error(w, http.StatusBadRequest, "could not read the request body")
+		}
+		return nil, false
+	}
+	return func(name string) string {
+		if r.PostForm.Has(name) {
+			return strings.ToValidUTF8(r.PostForm.Get(name), "�")
+		}
+		return strings.ToValidUTF8(r.URL.Query().Get(name), "�")
+	}, true
 }

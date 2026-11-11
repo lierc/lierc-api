@@ -106,3 +106,32 @@ func TestRequireRefreshesCookie(t *testing.T) {
 		t.Errorf("403 set a cookie: %v", w.Header()["Set-Cookie"])
 	}
 }
+
+func TestRequireAnyLetsUnverifiedIn(t *testing.T) {
+	d := testenv.Postgres(t)
+	u := testenv.AddUser(t, d, "newbie")
+	run := func(user string) *httptest.ResponseRecorder {
+		h := Users{Secret: secret, DB: d}.RequireAny(func(w http.ResponseWriter, r *http.Request, user string) { io.WriteString(w, "user="+user) })
+		req := httptest.NewRequest("GET", "/", nil)
+		if user != "" {
+			req.AddCookie(&http.Cookie{Name: "chats", Value: testenv.PerlCookie(user, secret)})
+		}
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, req)
+		return w
+	}
+	for _, v := range []any{false, true, nil} {
+		if _, err := d.Pool.Exec(context.Background(), `UPDATE "user" SET verified=$2 WHERE id=$1`, u, v); err != nil {
+			t.Fatal(err)
+		}
+		w := run(u)
+		if w.Code != 200 || w.Body.String() != "user="+u || w.Header().Get("Set-Cookie") == "" {
+			t.Errorf("verified %v: %d %s %v", v, w.Code, w.Body, w.Header()["Set-Cookie"])
+		}
+	}
+	for _, user := range []string{"", "ghost"} {
+		if w := run(user); w.Code != 401 || w.Body.String() != `{"status":"error","error":"unauthorized"}` {
+			t.Errorf("user %q: %d %s", user, w.Code, w.Body)
+		}
+	}
+}

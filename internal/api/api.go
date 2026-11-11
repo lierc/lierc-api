@@ -5,6 +5,8 @@ package api
 import (
 	"context"
 
+	"github.com/lierc/lierc-api/internal/accounts"
+
 	"github.com/lierc/lierc-api/internal/connections"
 	"github.com/lierc/lierc-api/internal/liercd"
 	"net/http"
@@ -20,6 +22,7 @@ type api struct {
 	db    *db.DB
 	users auth.Users
 	conns *connections.Service
+	acct  *accounts.Service
 }
 
 // New routes the stream server's routes and the ported ones, and
@@ -42,6 +45,7 @@ func New(cfg config.Config, d *db.DB, streams *stream.Server, lc *liercd.Client,
 	a.history(mux)
 	a.search(mux)
 	a.connections(mux)
+	a.accounts(mux)
 	mux.Handle("/", perl)
 	return sameOrigin(cfg.Origins, mux)
 }

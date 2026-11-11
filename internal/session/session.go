@@ -98,3 +98,12 @@ func SetPerl(w http.ResponseWriter, user, secret string, secure bool, now time.T
 	w.Header().Add("Set-Cookie", c)
 	return nil
 }
+
+// ExpirePerl tells the browser to drop the "chats" cookie (logout).
+func ExpirePerl(w http.ResponseWriter, secure bool) {
+	c := perlCookieName + "=; Path=/; Expires=" + time.Unix(0, 0).UTC().Format(http.TimeFormat) + "; Max-Age=0; HttpOnly; SameSite=Strict"
+	if secure {
+		c += "; Secure"
+	}
+	w.Header().Add("Set-Cookie", c)
+}
