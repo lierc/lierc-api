@@ -177,7 +177,9 @@ func TestDefaultNetwork(t *testing.T) {
 	if n = load(map[string]string{"DEFAULT_NETWORK_HOST": "h", "DEFAULT_NETWORK_SSL": "0"}); n.Ssl {
 		t.Error("SSL=0 is true")
 	}
-	if _, err := Load(env(map[string]string{"DEFAULT_NETWORK_HOST": "h", "DEFAULT_NETWORK_PORT": "x"})); err == nil {
-		t.Error("bad port accepted")
+	for port, want := range map[string]int{"x": 6667, "-5": 6667, "0": 6667, "70000": 6667, " 6697 ": 6697, "6697": 6697} {
+		if n = load(map[string]string{"DEFAULT_NETWORK_HOST": "h", "DEFAULT_NETWORK_PORT": port}); n.Port != want {
+			t.Errorf("port %q = %d, want %d", port, n.Port, want)
+		}
 	}
 }

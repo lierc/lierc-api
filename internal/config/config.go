@@ -138,11 +138,8 @@ func Load(getenv func(string) string) (Config, error) {
 			Ssl:      getenv("DEFAULT_NETWORK_SSL") != "" && getenv("DEFAULT_NETWORK_SSL") != "0",
 			Channels: strings.Fields(getenv("DEFAULT_NETWORK_CHANNELS")),
 		}
-		if s := getenv("DEFAULT_NETWORK_PORT"); s != "" && s != "0" {
-			p, err := strconv.ParseInt(s, 10, 32)
-			if err != nil || p < 0 || p > 65535 {
-				return Config{}, fmt.Errorf("DEFAULT_NETWORK_PORT: %q is not a port", s)
-			}
+		// Like Perl's int(... || 6667), a bad port never stops startup.
+		if p, err := strconv.ParseInt(strings.TrimSpace(getenv("DEFAULT_NETWORK_PORT")), 10, 32); err == nil && p >= 1 && p <= 65535 {
 			n.Port = int(p)
 		}
 		c.DefaultNetwork = n
