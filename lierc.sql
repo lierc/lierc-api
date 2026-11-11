@@ -103,3 +103,16 @@ create table web_push (
   "user" varchar(24) not null,
   primary key ("user", endpoint)
 );
+
+-- one row per logged-in browser; the "chats" cookie holds a random token
+-- and only its SHA-256 is stored
+create table login (
+  id         bigint generated always as identity primary key,
+  token_hash bytea not null unique,
+  "user"     varchar(24) not null references "user"(id) on delete cascade,
+  created    timestamptz not null default now(),
+  last_used  timestamptz not null default now(),
+  user_agent text not null default '',
+  ip         inet
+);
+create index login_user on login ("user");
