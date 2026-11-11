@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/lierc/lierc-api/internal/connconfig"
 	"github.com/lierc/lierc-api/internal/db"
@@ -58,6 +59,17 @@ func NotifyHighlights(d *db.DB) func(ctx context.Context) error {
 	}
 }
 
+// stepTimeout bounds a create, edit, save or delete.
+const stepTimeout = time.Minute
+
+// detached is ctx without its cancellation, bounded by stepTimeout: once
+// started, the steps finish even if the browser goes away, as Perl's did.
+// A cancelled request mustn't stop an undo, or leave a destroyed
+// connection un-recreated.
+func detached(ctx context.Context) (context.Context, context.CancelFunc) {
+	return context.WithTimeout(context.WithoutCancel(ctx), stepTimeout)
+}
+
 // newID makes connection ids (Util->uuid); tests fix it.
 var newID = ids.New
 
@@ -103,6 +115,8 @@ func (s *Service) announce(ctx context.Context, user, id, action string) {
 // the owner's tabs have it before its first status can arrive; a create
 // liercd refuses is deleted and announced as deleted again.
 func (s *Service) Create(ctx context.Context, user string, raw []byte) (string, error) {
+	ctx, cancel := detached(ctx)
+	defer cancel()
 	if _, err := object(raw); err != nil {
 		return "", err
 	}
@@ -194,6 +208,8 @@ func (s *Service) edited(ctx context.Context, id string, raw []byte, saved map[s
 // destroys and recreates it, and the row stays put meanwhile, so the
 // stream always finds its owner.
 func (s *Service) Edit(ctx context.Context, user, id string, raw []byte) error {
+	ctx, cancel := detached(ctx)
+	defer cancel()
 	saved, err := s.saved(ctx, id)
 	if err != nil {
 		return err
@@ -251,6 +267,8 @@ func (s *Service) updated(ctx context.Context, user, id string, body []byte) err
 // it is: it's what liercd is running, and an old value or a DNS failure
 // can't block this.
 func (s *Service) Save(ctx context.Context, user, id string, raw []byte) error {
+	ctx, cancel := detached(ctx)
+	defer cancel()
 	params, err := object(raw)
 	if err != nil {
 		return err
@@ -285,6 +303,8 @@ func (s *Service) Save(ctx context.Context, user, id string, raw []byte) error {
 // delete). A connection liercd no longer has (404) is deleted too: Perl
 // refused, so a network liercd had lost could never be removed.
 func (s *Service) Delete(ctx context.Context, user, id string) error {
+	ctx, cancel := detached(ctx)
+	defer cancel()
 	res, err := s.liercd(ctx, id+"/destroy", nil)
 	if err != nil {
 		return err

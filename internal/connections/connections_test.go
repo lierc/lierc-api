@@ -5,10 +5,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/lierc/lierc-api/internal/db"
 	"github.com/lierc/lierc-api/internal/liercd"
@@ -302,5 +305,62 @@ func TestServerKey(t *testing.T) {
 	}
 	if k(`{"Host":"h","Nick":"a"}`) == k(`{"Host":"h","Nick":"b"}`) {
 		t.Error("nick ignored")
+	}
+}
+
+// cancelling is a liercd that cancels the caller's request (the browser
+// went away) while answering path, then answers code.
+func cancelling(t *testing.T, path string, code int, body string, cancel func()) *liercd.Client {
+	t.Helper()
+	var mu sync.Mutex
+	var calls []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		calls = append(calls, r.Method+" "+r.URL.Path)
+		mu.Unlock()
+		if r.URL.Path == path {
+			cancel()
+			time.Sleep(100 * time.Millisecond)
+			w.WriteHeader(code)
+			io.WriteString(w, body)
+			return
+		}
+		w.WriteHeader(200)
+	}))
+	t.Cleanup(srv.Close)
+	cancelCalls = func() []string { mu.Lock(); defer mu.Unlock(); return append([]string(nil), calls...) }
+	return &liercd.Client{BaseURL: srv.URL, HTTP: &http.Client{}}
+}
+
+var cancelCalls func() []string
+
+// A browser that leaves mid-create mustn't stop the undo: the refused
+// create's row is still deleted and announced.
+func TestCreateFinishesAfterCancel(t *testing.T) {
+	h, a := setup(t)
+	old := newID
+	newID = func() string { return "fixedid" }
+	t.Cleanup(func() { newID = old })
+	ctx, cancel := context.WithCancel(context.Background())
+	h.s.Liercd = cancelling(t, "/fixedid/create", 400, "nok\n", cancel)
+	_, err := h.s.Create(ctx, a, []byte(valid))
+	userMsg(t, err, "nok")
+	if _, ok := h.row("fixedid"); ok || fmt.Sprint(h.said) != "[create fixedid delete fixedid]" {
+		t.Errorf("row left %v, said %v", ok, h.said)
+	}
+}
+
+// A browser that leaves mid-edit mustn't leave the network destroyed: the
+// recreate still happens.
+func TestEditFinishesAfterCancel(t *testing.T) {
+	h, a := setup(t)
+	testenv.AddConnection(t, h.d, "c1", a, `{"Host":"irc.example","Port":6667,"Nick":"me","Channels":[]}`)
+	ctx, cancel := context.WithCancel(context.Background())
+	h.s.Liercd = cancelling(t, "/c1/destroy", 200, "ok", cancel)
+	if err := h.s.Edit(ctx, a, "c1", []byte(`{"Host":"irc.other","Port":6667,"Nick":"me"}`)); err != nil {
+		t.Fatal(err)
+	}
+	if fmt.Sprint(cancelCalls()) != "[POST /c1/destroy POST /c1/create]" || fmt.Sprint(h.said) != "[update c1]" {
+		t.Errorf("calls %v said %v", cancelCalls(), h.said)
 	}
 }
