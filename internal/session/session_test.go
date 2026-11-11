@@ -7,9 +7,11 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"strings"
 	"testing"
+	"time"
 )
 
 const secret = "test-secret"
@@ -101,6 +103,85 @@ func TestUser(t *testing.T) {
 		}
 		if got := User(r, secret); got != c.want {
 			t.Errorf("%s: got %q, want %q", c.name, got, c.want)
+		}
+	}
+}
+
+func TestWritePerlMatchesFixtures(t *testing.T) {
+	b, err := os.ReadFile("../../testdata/fixtures/cookies.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var fixtures []struct {
+		Name    string            `json:"name"`
+		Value   string            `json:"cookie_value"`
+		Session map[string]string `json:"session"`
+	}
+	if err := json.Unmarshal(b, &fixtures); err != nil {
+		t.Fatal(err)
+	}
+	n := 0
+	for _, f := range fixtures {
+		switch f.Name {
+		case "login_ascii", "login_numeric_id", "login_email_like":
+		default:
+			continue
+		}
+		raw, _ := url.QueryUnescape(f.Value)
+		id := strings.SplitN(raw, ":", 2)[0]
+		got, err := WritePerl(f.Session["user"], "test-secret", id)
+		if err != nil || got != f.Value {
+			t.Errorf("%s: %q, %v\nwant %q", f.Name, got, err, f.Value)
+		}
+		n++
+	}
+	if n != 3 {
+		t.Fatalf("%d fixtures checked", n)
+	}
+}
+
+func TestWritePerlRoundTrip(t *testing.T) {
+	for _, u := range []string{"abc", strings.Repeat("u", 300)} {
+		v, err := WritePerl(u, "s3cret", PerlID(time.Now()))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got, ok := ReadPerl(v, "s3cret"); !ok || got != u {
+			t.Errorf("%d bytes: %q %v", len(u), got, ok)
+		}
+	}
+	if _, err := WritePerl("pässwörd", "s", "1.0"); err == nil {
+		t.Error("non-ASCII user written")
+	}
+}
+
+func TestPerlID(t *testing.T) {
+	if got := PerlID(time.Unix(1792769372, 785980000)); got != "1792769372.78598" {
+		t.Errorf("PerlID = %q", got)
+	}
+}
+
+func TestSetPerl(t *testing.T) {
+	for _, secure := range []bool{false, true} {
+		w := httptest.NewRecorder()
+		now := time.Now()
+		if err := SetPerl(w, "abc", "s3cret", secure, now); err != nil {
+			t.Fatal(err)
+		}
+		cs := (&http.Response{Header: w.Header()}).Cookies()
+		if len(cs) != 1 {
+			t.Fatalf("cookies = %v", w.Header()["Set-Cookie"])
+		}
+		c := cs[0]
+		h := w.Header().Get("Set-Cookie")
+		if c.Name != "chats" || c.Path != "/" || !c.HttpOnly || c.SameSite != http.SameSiteStrictMode || c.Secure != secure {
+			t.Errorf("secure %v: %s", secure, h)
+		}
+		if d := c.Expires.Sub(now.Add(7 * 24 * time.Hour)); d > time.Minute || d < -time.Minute {
+			t.Errorf("expires %v", c.Expires)
+		}
+		if u, ok := ReadPerl(c.Value, "s3cret"); !ok || u != "abc" {
+			t.Errorf("value reads %q %v", u, ok)
 		}
 	}
 }

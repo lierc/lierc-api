@@ -2,6 +2,7 @@ package storable
 
 import (
 	"encoding/base64"
+	"strings"
 	"testing"
 )
 
@@ -53,4 +54,23 @@ func TestDecodeHashRejects(t *testing.T) {
 func FuzzDecodeHash(f *testing.F) {
 	f.Add([]byte{5, 11, 3, 0, 0, 0, 1, 10, 1, 'a', 0, 0, 0, 1, 'k'})
 	f.Fuzz(func(t *testing.T, b []byte) { _, _ = DecodeHash(b) })
+}
+
+func TestEncodeHashRoundTrip(t *testing.T) {
+	for _, v := range []string{"lee", strings.Repeat("x", 300)} {
+		b, err := EncodeHash(map[string]string{"user": v})
+		if err != nil {
+			t.Fatal(err)
+		}
+		h, err := DecodeHash(b)
+		if err != nil || h["user"] != v {
+			t.Errorf("%d bytes: %v %v", len(v), h, err)
+		}
+	}
+	if _, err := EncodeHash(map[string]string{"user": "pässwörd"}); err == nil {
+		t.Error("non-ASCII accepted")
+	}
+	if _, err := EncodeHash(map[string]string{"a": "1", "b": "2"}); err == nil {
+		t.Error("two keys accepted")
+	}
 }
