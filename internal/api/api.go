@@ -26,6 +26,7 @@ func New(cfg config.Config, d *db.DB, streams *stream.Server, perl http.Handler)
 	a.reads(mux)
 	a.writes(mux)
 	a.webPush(mux)
+	a.history(mux)
 	mux.Handle("/", perl)
 	return sameOrigin(cfg.Origins, mux)
 }

@@ -162,7 +162,7 @@ func TestLegacyPathsGoToPerl(t *testing.T) {
 func TestOtherPathsGoToPerl(t *testing.T) {
 	e := setup(t)
 	for _, rq := range [][2]string{
-		{"POST", "/auth"}, {"GET", "/eventsx"}, {"PUT", "/connection/c1"}, {"GET", "/log/5"}, {"GET", "/stats"},
+		{"POST", "/auth"}, {"GET", "/eventsx"}, {"PUT", "/connection/c1"}, {"GET", "/connection"}, {"GET", "/stats"},
 	} {
 		checkPerl(t, e, rq[0], rq[1], "")
 	}
