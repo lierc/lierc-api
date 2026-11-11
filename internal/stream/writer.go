@@ -10,8 +10,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/lierc/lierc-api/internal/auth"
 	"github.com/lierc/lierc-api/internal/db"
 	"github.com/lierc/lierc-api/internal/ids"
+	"github.com/lierc/lierc-api/internal/login"
 )
 
 // bufferSize is how many pings and live events a stream may queue. They never
@@ -155,8 +157,33 @@ func (s *Server) serveStream(w http.ResponseWriter, r *http.Request, user string
 		}
 	}()
 
+	// The login behind the stream is re-checked every LoginCheck, so a stream
+	// ends soon after its login is deleted, expires or its user is deleted.
+	var check <-chan time.Time
+	loginID, ok := auth.LoginID(r.Context())
+	if ok && s.LoginCheck > 0 {
+		t := time.NewTicker(s.LoginCheck)
+		defer t.Stop()
+		check = t.C
+	}
+
 	for {
 		select {
+		case <-check:
+			alive := s.alive
+			if alive == nil {
+				alive = func(ctx context.Context, id int64) (bool, error) { return login.Alive(ctx, s.db, id) }
+			}
+			ok, err := alive(ctx, loginID)
+			if err != nil {
+				if ctx.Err() == nil {
+					log.Printf("stream %s: login check: %v", st.id, err)
+				}
+				continue
+			}
+			if !ok {
+				return
+			}
 		case b := <-st.out:
 			if !s.write(rc, w, b) {
 				return

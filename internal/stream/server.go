@@ -31,6 +31,9 @@ type Server struct {
 	// NSQReconnect is the wait between attempts to reach nsqd, at start and
 	// after a lost connection.
 	NSQReconnect time.Duration
+	// LoginCheck is how often a stream re-checks that its login still exists
+	// and has not expired.
+	LoginCheck time.Duration
 
 	cfg config.Config
 	db  *db.DB
@@ -41,8 +44,9 @@ type Server struct {
 	latest  map[string]int64              // user -> newest message id, while the user has streams
 	closed  bool                          // set by CloseStreams
 
-	replayed  func() // test hook: runs when a stream's replay goroutine ends
-	listening func() // test hook: runs each time ListenConnections' LISTEN is active
+	replayed  func()                                            // test hook: runs when a stream's replay goroutine ends
+	listening func()                                            // test hook: runs each time ListenConnections' LISTEN is active
+	alive     func(ctx context.Context, id int64) (bool, error) // test hook: replaces login.Alive
 }
 
 func New(cfg config.Config, d *db.DB, lc *liercd.Client) *Server {
@@ -50,6 +54,7 @@ func New(cfg config.Config, d *db.DB, lc *liercd.Client) *Server {
 		PingInterval: 5 * time.Second,
 		WriteTimeout: 3 * time.Minute,
 		NSQReconnect: 5 * time.Second,
+		LoginCheck:   time.Minute,
 		cfg:          cfg,
 		db:           d,
 		lc:           lc,

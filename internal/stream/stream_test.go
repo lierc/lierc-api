@@ -150,7 +150,23 @@ func (e *env) post(path, user string) *http.Response {
 // background. Every event must be well-formed or the client records an error.
 func (e *env) open(user string) *client {
 	e.t.Helper()
-	res := e.get("/events", user, "User-Agent", "test-agent")
+	return e.openRes(e.get("/events", user, "User-Agent", "test-agent"))
+}
+
+// openToken is open, logged in with a login token.
+func (e *env) openToken(token string) *client {
+	e.t.Helper()
+	req, _ := http.NewRequest("GET", e.srv.URL+"/events", nil)
+	req.AddCookie(&http.Cookie{Name: "chats", Value: token})
+	res, err := noKeepAlive().Do(req)
+	if err != nil {
+		e.t.Fatal(err)
+	}
+	return e.openRes(res)
+}
+
+func (e *env) openRes(res *http.Response) *client {
+	e.t.Helper()
 	if res.StatusCode != 200 {
 		b, _ := io.ReadAll(res.Body)
 		e.t.Fatalf("stream status %d: %s", res.StatusCode, b)
