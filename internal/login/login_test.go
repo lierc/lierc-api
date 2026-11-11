@@ -89,17 +89,19 @@ func TestCreateLookup(t *testing.T) {
 func TestLookupExpired(t *testing.T) {
 	d := testenv.Postgres(t)
 	tok := testenv.Login(t, d, testenv.AddUser(t, d, "alice"))
-	exec(t, d, `UPDATE login SET last_used = now() - interval '7 days 1 second'`)
 	l, ok, err := login.Lookup(ctx, d, tok)
-	if err != nil || ok {
+	if err != nil || !ok || l.ID <= 0 {
+		t.Fatalf("fresh Lookup: %+v %v %v", l, ok, err)
+	}
+	exec(t, d, `UPDATE login SET last_used = now() - interval '7 days 1 second'`)
+	if _, ok, err := login.Lookup(ctx, d, tok); err != nil || ok {
 		t.Fatalf("expired Lookup: %v %v", ok, err)
 	}
 	if alive, err := login.Alive(ctx, d, l.ID); err != nil || alive {
 		t.Errorf("expired Alive = %v %v", alive, err)
 	}
 	exec(t, d, `UPDATE login SET last_used = now() - interval '6 days 23 hours'`)
-	l, ok, err = login.Lookup(ctx, d, tok)
-	if err != nil || !ok {
+	if _, ok, err = login.Lookup(ctx, d, tok); err != nil || !ok {
 		t.Fatalf("live Lookup: %v %v", ok, err)
 	}
 	if alive, err := login.Alive(ctx, d, l.ID); err != nil || !alive {
