@@ -25,7 +25,7 @@ type api struct {
 // New routes the stream server's routes and the ported ones, and
 // everything else, any method, to perl.
 func New(cfg config.Config, d *db.DB, streams *stream.Server, lc *liercd.Client, perl http.Handler) http.Handler {
-	a := &api{cfg: cfg, db: d, users: auth.Users{Secret: cfg.Secret, DB: d}}
+	a := &api{cfg: cfg, db: d, users: auth.Users{Secret: cfg.Secret, DB: d, Secure: cfg.Secure}}
 	a.conns = &connections.Service{
 		DB:               d,
 		Liercd:           lc,

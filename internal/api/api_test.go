@@ -205,3 +205,23 @@ func TestCrossSitePingRefused(t *testing.T) {
 		t.Errorf("same-origin ping: %d, want 204", ping.StatusCode)
 	}
 }
+
+func TestStreamSetsCookie(t *testing.T) {
+	e := setup(t)
+	u := testenv.AddUser(t, e.db, "alice")
+	res, _ := e.openStream("/events", u)
+	defer res.Body.Close()
+	if cs := res.Cookies(); len(cs) != 1 || cs[0].Name != "chats" {
+		t.Errorf("stream Set-Cookie = %v", res.Header["Set-Cookie"])
+	}
+}
+
+func TestPassThroughSetsNoCookie(t *testing.T) {
+	e := setup(t)
+	u := testenv.AddUser(t, e.db, "alice")
+	res := e.do("POST", "/auth", u)
+	res.Body.Close()
+	if res.StatusCode != 299 || res.Header.Get("Set-Cookie") != "" {
+		t.Errorf("pass-through: %d %v", res.StatusCode, res.Header["Set-Cookie"])
+	}
+}

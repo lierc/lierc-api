@@ -123,3 +123,12 @@ func TestOrigins(t *testing.T) {
 		}
 	}
 }
+
+func TestSecure(t *testing.T) {
+	for v, want := range map[string]bool{"1": true, "yes": true, "0": false, "": false} {
+		c, err := Load(env(map[string]string{"API_SECURE": v}))
+		if err != nil || c.Secure != want {
+			t.Errorf("API_SECURE=%q: %v, %v", v, c.Secure, err)
+		}
+	}
+}

@@ -2,6 +2,7 @@ package auth
 
 import (
 	"context"
+	"github.com/lierc/lierc-api/internal/session"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -69,5 +70,39 @@ func TestRequireUnverified(t *testing.T) {
 		if code, body := serve(t, d, u, secret); code != 200 || body != "user="+u {
 			t.Errorf("verified %v: %d %s", v, code, body)
 		}
+	}
+}
+
+func TestRequireRefreshesCookie(t *testing.T) {
+	d := testenv.Postgres(t)
+	u := testenv.AddUser(t, d, "alice")
+	run := func(users Users, user string) *httptest.ResponseRecorder {
+		h := users.Require(func(w http.ResponseWriter, r *http.Request, user string) { io.WriteString(w, "ok") })
+		req := httptest.NewRequest("GET", "/", nil)
+		if user != "" {
+			req.AddCookie(&http.Cookie{Name: "chats", Value: testenv.PerlCookie(user, secret)})
+		}
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, req)
+		return w
+	}
+	for _, secure := range []bool{false, true} {
+		w := run(Users{Secret: secret, DB: d, Secure: secure}, u)
+		cs := (&http.Response{Header: w.Header()}).Cookies()
+		if w.Code != 200 || len(cs) != 1 || cs[0].Name != "chats" || cs[0].Secure != secure {
+			t.Fatalf("secure %v: %d %v", secure, w.Code, w.Header()["Set-Cookie"])
+		}
+		if got, ok := session.ReadPerl(cs[0].Value, secret); !ok || got != u {
+			t.Errorf("refreshed cookie reads %q %v", got, ok)
+		}
+	}
+	if w := run(Users{Secret: secret, DB: d}, ""); w.Code != 401 || w.Header().Get("Set-Cookie") != "" {
+		t.Errorf("401 set a cookie: %v", w.Header()["Set-Cookie"])
+	}
+	if _, err := d.Pool.Exec(context.Background(), `UPDATE "user" SET verified=false WHERE id=$1`, u); err != nil {
+		t.Fatal(err)
+	}
+	if w := run(Users{Secret: secret, DB: d}, u); w.Code != 403 || w.Header().Get("Set-Cookie") != "" {
+		t.Errorf("403 set a cookie: %v", w.Header()["Set-Cookie"])
 	}
 }

@@ -3,7 +3,9 @@
 package auth
 
 import (
+	"log"
 	"net/http"
+	"time"
 
 	"github.com/lierc/lierc-api/internal/db"
 	"github.com/lierc/lierc-api/internal/respond"
@@ -14,6 +16,8 @@ import (
 type Users struct {
 	Secret string
 	DB     *db.DB
+	// Secure marks the refreshed login cookie Secure.
+	Secure bool
 }
 
 // Handler serves a request for a logged-in user.
@@ -25,7 +29,8 @@ type unverifiedBody struct {
 	Unverified bool   `json:"unverified"`
 }
 
-// Require runs h for the existing user logged in by r's "chats" cookie.
+// Require runs h for the existing user logged in by r's "chats" cookie,
+// first refreshing that cookie.
 // Otherwise it answers 401, or 403 for a signup that hasn't confirmed its
 // email address yet (verified NULL, from before signups had to verify, is
 // let in).
@@ -47,6 +52,11 @@ func (u Users) Require(h Handler) http.Handler {
 			// not a 401, so the UI doesn't take it for logged out
 			respond.JSON(w, http.StatusForbidden, unverifiedBody{"error", "Confirm your email address first", true})
 		default:
+			// renew the login for another 7 days, as Perl's session
+			// middleware does on every response
+			if err := session.SetPerl(w, user, u.Secret, u.Secure, time.Now()); err != nil {
+				log.Printf("refresh login cookie: %v", err)
+			}
 			h(w, r, user)
 		}
 	})

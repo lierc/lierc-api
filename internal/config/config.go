@@ -33,6 +33,9 @@ type Config struct {
 	// state-changing requests: API_ORIGINS split on whitespace, else
 	// API_URL (API::Config origins). Empty counts as unset.
 	Origins []string
+	// Secure marks the login cookie Secure (API_SECURE, true as Perl reads
+	// it: set, and not "0").
+	Secure bool
 }
 
 // PerlURL is c's Perl API URL, which Load has checked; a Config built
@@ -68,6 +71,7 @@ func Load(getenv func(string) string) (Config, error) {
 	c := Config{
 		VAPIDPublic:    getenv("VAPID_PUBLIC"),
 		Origins:        origins(getenv),
+		Secure:         getenv("API_SECURE") != "" && getenv("API_SECURE") != "0",
 		LiercdHost:     or("LIERCD_HOST", "127.0.0.1"),
 		LiercdNextHost: or("LIERCD_NEXT_HOST", ""),
 		DBHost:         or("POSTGRES_HOST", "127.0.0.1"),
