@@ -23,8 +23,10 @@ Layout
 - `internal/connections`, `internal/connconfig`, `internal/liercd`:
   connection settings and liercd.
 - `internal/db` (with `internal/db/sql`), `internal/archive`: Postgres.
-- `internal/session`, `internal/storable`, `internal/auth`: the `chats`
-  login cookie (still in the Perl API's format) and the login check.
+- `internal/login`, `internal/auth`: login records (one row per browser)
+  and the `chats` cookie, and the login check.
+- `internal/session`, `internal/storable`: only to read old Perl cookies
+  during the switch.
 - `lierc.sql`: the schema.
 
 Running it
