@@ -137,9 +137,9 @@ func TestLastRoute(t *testing.T) {
 	e.want("/connection/c1/channel/%23a/last", a, 200, `[]`)
 }
 
-func TestHistoryOtherMethodsGoToPerl(t *testing.T) {
+func TestHistoryOtherMethodsNotFound(t *testing.T) {
 	e := setup(t)
 	for _, p := range []string{"/log/5", "/connection/c1/channel/a/events"} {
-		checkPerl(t, e, "POST", p, "")
+		checkNotFound(t, e, "POST", p, "")
 	}
 }

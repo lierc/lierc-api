@@ -5,7 +5,6 @@ package config
 import (
 	"fmt"
 	"net"
-	"net/url"
 	"strconv"
 	"strings"
 )
@@ -23,9 +22,6 @@ type Config struct {
 	LiercdNextHost string
 	// DBMaxConns is the Postgres pool size (DB_MAX_CONNS).
 	DBMaxConns int
-	// PerlAPI is the Perl API's base URL (PERL_API): every request the Go
-	// server doesn't handle itself is passed there.
-	PerlAPI string
 	// VAPIDPublic is the Web Push public key the UI subscribes with
 	// (VAPID_PUBLIC); empty when unset.
 	VAPIDPublic string
@@ -58,23 +54,6 @@ type DefaultNetwork struct {
 	Channels []string
 }
 
-// PerlURL is c's Perl API URL, which Load has checked; a Config built
-// without Load gets the default.
-func (c Config) PerlURL() *url.URL {
-	raw := c.PerlAPI
-	if raw == "" {
-		raw = DefaultPerlAPI
-	}
-	u, err := url.Parse(raw)
-	if err != nil {
-		u, _ = url.Parse(DefaultPerlAPI)
-	}
-	return u
-}
-
-// DefaultPerlAPI is the PERL_API default.
-const DefaultPerlAPI = "http://127.0.0.1:5004"
-
 // DefaultDBMaxConns is the DB_MAX_CONNS default.
 const DefaultDBMaxConns = 20
 
@@ -104,14 +83,10 @@ func Load(getenv func(string) string) (Config, error) {
 		NSQAddr:     or("NSQD_HOST", "127.0.0.1"),
 		Listen:      or("LISTEN", ":5003"),
 		AdminListen: or("ADMIN_LISTEN", "127.0.0.1:5009"),
-		PerlAPI:     or("PERL_API", DefaultPerlAPI),
 		SMTPOpts:    getenv("SMTP_OPTS"),
 		FromAddress: or("FROM_ADDRESS", "do-not-reply@relaychat.party"),
 		SiteURL:     or("API_URL", "https://relaychat.party"),
 		NoSMTP:      getenv("LIERC_NO_SMTP") != "" && getenv("LIERC_NO_SMTP") != "0",
-	}
-	if u, err := url.Parse(c.PerlAPI); err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
-		return Config{}, fmt.Errorf("PERL_API: %q is not an http(s) URL", c.PerlAPI)
 	}
 	// NSQD_HOST may carry a port; without one nsqd's default 4150 is used.
 	if _, _, err := net.SplitHostPort(c.NSQAddr); err != nil {

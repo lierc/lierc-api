@@ -137,7 +137,6 @@ func TestAdminListenerServesStats(t *testing.T) {
 		"LISTEN":        "127.0.0.1:0",
 		"ADMIN_LISTEN":  "127.0.0.1:0",
 		"NSQD_HOST":     "127.0.0.2:1",
-		"PERL_API":      "http://127.0.0.1:1", // nothing listens: Perl's 502
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -170,9 +169,9 @@ func TestAdminListenerServesStats(t *testing.T) {
 	if code, body := get(a[1]); code != 200 || body != "{}" {
 		t.Errorf("admin /stats = %d %q, want 200 {}", code, body)
 	}
-	// The public listener passes /stats to Perl, which isn't running here.
-	if code, body := get(a[0]); code != 502 || body != `{"status":"error","error":"API unavailable"}` {
-		t.Errorf("stream /stats = %d %q, want Perl's 502", code, body)
+	// The public listener has no /stats: an unknown path.
+	if code, body := get(a[0]); code != 404 || body != `{"status":"error","error":"not found"}` {
+		t.Errorf("public /stats = %d %q, want the 404", code, body)
 	}
 
 	cancel()

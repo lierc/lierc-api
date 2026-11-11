@@ -73,9 +73,9 @@ func run(ctx context.Context, args []string, getenv func(string) string, stderr 
 			nsqErr <- err
 		}
 	}()
-	// The stream and the ported routes, and everything else passed to the
-	// Perl API; /stats is on the admin listener.
-	srv := newServer(proxy.Wrap(cfg.TrustedProxies, api.New(cfg, d, s, lc, proxy.PassThrough(cfg.PerlURL()))), serverTimeouts)
+	// The whole API, the event stream included; /stats is on the admin
+	// listener.
+	srv := newServer(proxy.Wrap(cfg.TrustedProxies, api.New(cfg, d, s, lc)), serverTimeouts)
 	srv.RegisterOnShutdown(s.CloseStreams)
 	admin := newServer(s.Admin(), serverTimeouts)
 

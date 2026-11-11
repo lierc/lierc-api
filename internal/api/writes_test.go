@@ -15,9 +15,6 @@ func (e *env) send(method, path, user, body string, hdr ...string) (int, string)
 	res := e.doReq(method, path, user, body, hdr...)
 	defer res.Body.Close()
 	b, _ := io.ReadAll(res.Body)
-	if res.Header.Get("X-Perl") != "" {
-		e.t.Errorf("%s %s reached Perl", method, path)
-	}
 	return res.StatusCode, string(b)
 }
 

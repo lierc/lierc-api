@@ -1,32 +1,25 @@
 # Perl golden fixtures
 
-JSON files generated from the real Perl code by `gen.pl`. Go tests read them to
-prove compatibility with Perl. Regenerating is optional; the files are committed.
+A frozen record of the Perl API's behaviour, generated from the real Perl
+code before it was deleted. The Go tests read these files to prove Go
+answers as Perl did. They are no longer regenerated: the generator
+(`gen.pl`) and the Perl code it ran are in git history.
 
-## Regenerating
+They were made with Perl 5.42.0, Plack::Middleware::Session 0.36,
+Digest::Bcrypt 1.212, JSON::XS 4.04, Data::UUID 1.227 and Math::BaseConvert
+1.8, plus Data::Validate::Email, Data::Validate::Domain and Net::Domain::TLD
+for `auth.json`. The cookie `expires`, the cookie id/time prefix and the uuid
+samples were random per run.
 
-From the repository root (needs Perl 5.42 with cpanm, no system libraries):
-
-    cpanm -n -L testdata/fixtures/local Plack Plack::Middleware::Session@0.36 \
-        Digest::Bcrypt Data::UUID Math::BaseConvert JSON::XS
-    perl -Itestdata/fixtures/local/lib/perl5 -Ilib testdata/fixtures/gen.pl
-
-`testdata/fixtures/local/` is git-ignored.
-
-Versions used for the committed files: Plack::Middleware::Session 0.36
-(exactly as in `cpanfile.snapshot`), Digest::Bcrypt 1.212, JSON::XS 4.04
-(all as in `cpanfile.snapshot`), Data::UUID 1.227, Math::BaseConvert 1.8, Plack 1.0055 (snapshot has 1.0054;
-not relevant to the output), Perl 5.42.0.
-
-The cookie Set-Cookie `expires` and the cookie id/time prefix vary per run, and
-the uuid samples are random, so regenerating changes those files.
+The files: `cookies.json` and `ids.json` (below), `legacy_hashes.json` (the
+legacy password hashes `lctl convert-legacy-passwords` rewrites), and
+`auth.json` (signed tokens, `is_email` and `irc_nick` answers).
 
 ## cookies.json
 
 Array of `{name, session, set_cookie_header, cookie_value}`, produced by the real
 `Plack::Middleware::Session::Cookie` with secret `"test-secret"`, `session_key`
-`chats`, `expires` 7 days, `httponly` 1, `secure` off (same options as
-`bin/api.psgi` apart from `secure`).
+`chats`, `expires` 7 days, `httponly` 1, `secure` off (the options the Perl API used, apart from `secure`).
 
 - `name`: case label.
 - `session`: the session hash decoded from the cookie (`{"user": ...}`, or `{}`).

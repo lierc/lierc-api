@@ -1,35 +1,52 @@
-Goals
-=====
+lierc-api
+=========
 
-This is an HTTP API responsible for user authentication, and gating access
-to the basic `liercd` functions. It is also responsible for storing a user's
-connection configurations. It will use these configurations to create connections
-on liercd. The API also provides endpoints to access logs.
+relaychat's HTTP API, in Go: accounts and login, a user's IRC connection
+settings (and driving `liercd` to run them), the event stream (server-sent
+events) that delivers each user's IRC traffic to the browser, history and
+search, preferences, web push and email. It replaced a Perl (Plack) API,
+route for route; that code is in this repository's git history, and the
+JSON fixtures in `testdata/fixtures` record its behaviour, which the Go tests
+check against.
 
-Setup
-=====
+The same binary, `lierc-api`, also carries `lctl`, the admin command
+(`lierc-api lctl help`).
 
-Create database
+Layout
+------
+
+- `cmd/lierc-api`: the server (`lierc-api stream`) and `lctl`.
+- `internal/api`: the HTTP routes, behind a same-origin check.
+- `internal/stream`: the event stream, NSQ consumers and the admin `/stats`.
+- `internal/accounts`, `internal/passwords`, `internal/mail`: login,
+  signup, email confirmation and password reset.
+- `internal/connections`, `internal/connconfig`, `internal/liercd`:
+  connection settings and liercd.
+- `internal/db` (with `internal/db/sql`), `internal/archive`: Postgres.
+- `internal/session`, `internal/storable`, `internal/auth`: the `chats`
+  login cookie (still in the Perl API's format) and the login check.
+- `lierc.sql`: the schema.
+
+Running it
+----------
+
+The easiest way is the dev stack in `lierc-docker-compose`. To run it by
+hand you need PostgreSQL with `lierc.sql` loaded, nsqd and liercd:
 
 ```
-apt-get install postgresql
-sudo -u postgres createuser $USER
-sudo -u postgres createdb -O $USER lierc
-psql lierc < lierc.sql
+go build ./cmd/lierc-api
+POSTGRES_HOST=127.0.0.1 LIERCD_HOST=127.0.0.1 NSQD_HOST=127.0.0.1 \
+  LISTEN=127.0.0.1:5003 ADMIN_LISTEN=127.0.0.1:5009 ./lierc-api stream
 ```
 
-Install carton for perl dependencies
+`internal/config` lists every setting and its default.
+
+Tests
+-----
 
 ```
-apt-get install carton 
-carton install
+go test -p 1 ./...
 ```
 
-Start the server
-
-```
-cp config.example.json config.json
-carton exec plackup -Ilib app.psgi
-```
-
-Try the login page at `http://localhost:5000/login.html`
+The tests start their own embedded PostgreSQL and nsqd; `-p 1` keeps the
+packages from starting several at once.

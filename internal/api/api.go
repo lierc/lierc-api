@@ -1,9 +1,10 @@
-// Package api is the HTTP API in front of the Perl one: it serves the
-// routes ported to Go, and passes every other request to Perl.
+// Package api is relaychat's HTTP API. It ported the Perl API's routes
+// (lib/API in git history); an unknown path is a 404.
 package api
 
 import (
 	"context"
+	"github.com/lierc/lierc-api/internal/respond"
 
 	"github.com/lierc/lierc-api/internal/accounts"
 
@@ -26,8 +27,8 @@ type api struct {
 }
 
 // New routes the stream server's routes and the ported ones, and
-// everything else, any method, to perl.
-func New(cfg config.Config, d *db.DB, streams *stream.Server, lc *liercd.Client, perl http.Handler) http.Handler {
+// answers anything else, any method, with a 404.
+func New(cfg config.Config, d *db.DB, streams *stream.Server, lc *liercd.Client) http.Handler {
 	a := &api{cfg: cfg, db: d, users: auth.Users{Secret: cfg.Secret, DB: d, Secure: cfg.Secure}}
 	a.conns = &connections.Service{
 		DB:               d,
@@ -46,6 +47,8 @@ func New(cfg config.Config, d *db.DB, streams *stream.Server, lc *liercd.Client,
 	a.search(mux)
 	a.connections(mux)
 	a.accounts(mux)
-	mux.Handle("/", perl)
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		respond.Error(w, http.StatusNotFound, "not found")
+	})
 	return sameOrigin(cfg.Origins, mux)
 }

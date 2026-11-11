@@ -25,15 +25,6 @@ func TestMain(m *testing.M) {
 
 const testSecret = "testsecret"
 
-// fakePerl stands in for the Perl API: it answers 299 with X-Perl
-// "<method> <path>".
-func fakePerl() http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("X-Perl", r.Method+" "+r.URL.Path)
-		w.WriteHeader(299)
-	})
-}
-
 type env struct {
 	t    *testing.T
 	db   *db.DB
@@ -53,7 +44,7 @@ func setupCfg(t *testing.T, cfg config.Config) *env {
 	old := checkHost
 	checkHost = func(context.Context, string, int) error { return nil }
 	t.Cleanup(func() { checkHost = old })
-	srv := httptest.NewServer(New(cfg, d, s, lc, fakePerl()))
+	srv := httptest.NewServer(New(cfg, d, s, lc))
 	t.Cleanup(srv.Close)
 	return &env{t: t, db: d, srv: srv, fake: fake, s: s}
 }
@@ -94,9 +85,9 @@ func (e *env) doReq(method, path, user, body string, hdr ...string) *http.Respon
 func (e *env) openStream(path, user string) (*http.Response, string) {
 	e.t.Helper()
 	res := e.do("GET", path, user)
-	if res.StatusCode != 200 || res.Header.Get("Content-Type") != "text/event-stream;charset=utf-8" || res.Header.Get("X-Perl") != "" {
+	if res.StatusCode != 200 || res.Header.Get("Content-Type") != "text/event-stream;charset=utf-8" {
 		res.Body.Close()
-		e.t.Fatalf("GET %s: %d %q %q, want a stream", path, res.StatusCode, res.Header.Get("Content-Type"), res.Header.Get("X-Perl"))
+		e.t.Fatalf("GET %s: %d %q, want a stream", path, res.StatusCode, res.Header.Get("Content-Type"))
 	}
 	br := bufio.NewReader(res.Body)
 	done := make(chan string, 1)
@@ -146,46 +137,53 @@ func TestEventsPing(t *testing.T) {
 	}
 }
 
-func checkPerl(t *testing.T, e *env, method, path, user string) {
+const notFoundBody = `{"status":"error","error":"not found"}`
+
+// checkNotFound expects Go's 404 JSON: every route Perl served is now
+// Go's, and anything else is unknown.
+func checkNotFound(t *testing.T, e *env, method, path, user string) {
 	t.Helper()
 	res := e.do(method, path, user)
+	body, _ := io.ReadAll(res.Body)
 	res.Body.Close()
-	want := method + " " + path
-	if res.StatusCode != 299 || res.Header.Get("X-Perl") != want {
-		t.Errorf("%s: %d %q, want Perl", want, res.StatusCode, res.Header.Get("X-Perl"))
+	if res.StatusCode != 404 || string(body) != notFoundBody || res.Header.Get("Content-Type") != "application/javascript;charset=utf-8" {
+		t.Errorf("%s %s: %d %q %s, want the 404 JSON", method, path, res.StatusCode, res.Header.Get("Content-Type"), body)
 	}
 }
 
-func TestLegacyPathsGoToPerl(t *testing.T) {
+// The paths the stream served before nginx sent /events are unknown now.
+func TestLegacyStreamPathsNotFound(t *testing.T) {
 	e := setup(t)
 	u := testenv.AddUser(t, e.db, "alice")
 	res, id := e.openStream("/events", u)
 	defer res.Body.Close()
-	checkPerl(t, e, "GET", "/", u)
-	checkPerl(t, e, "POST", "/"+id+"/ping", u)
+	checkNotFound(t, e, "GET", "/", u)
+	checkNotFound(t, e, "POST", "/"+id+"/ping", u)
 }
 
-func TestOtherPathsGoToPerl(t *testing.T) {
+func TestUnknownPathNotFound(t *testing.T) {
 	e := setup(t)
 	for _, rq := range [][2]string{
 		{"POST", "/nope"}, {"GET", "/eventsx"}, {"GET", "/nope"}, {"GET", "/stats"},
+		{"PUT", "/connection/c1/nick/bob"}, {"GET", "/"},
 	} {
-		checkPerl(t, e, rq[0], rq[1], "")
+		checkNotFound(t, e, rq[0], rq[1], "")
 	}
 }
 
-func TestCrossSiteToPerlRefused(t *testing.T) {
+func TestCrossSiteRefused(t *testing.T) {
 	e := setupCfg(t, config.Config{Secret: testSecret, Origins: []string{"https://ok"}})
 	res := e.doReq("POST", "/nope", "", "", "Sec-Fetch-Site", "cross-site")
 	body, _ := io.ReadAll(res.Body)
 	res.Body.Close()
-	if res.StatusCode != 403 || res.Header.Get("X-Perl") != "" || string(body) != `{"status":"error","error":"Cross-site request refused"}` {
-		t.Errorf("cross-site POST /nope: %d %q %s", res.StatusCode, res.Header.Get("X-Perl"), body)
+	if res.StatusCode != 403 || string(body) != `{"status":"error","error":"Cross-site request refused"}` {
+		t.Errorf("cross-site POST /nope: %d %s", res.StatusCode, body)
 	}
 	res = e.doReq("POST", "/nope", "", "", "Sec-Fetch-Site", "same-origin")
+	body, _ = io.ReadAll(res.Body)
 	res.Body.Close()
-	if res.StatusCode != 299 {
-		t.Errorf("same-origin POST /nope: %d, want Perl", res.StatusCode)
+	if res.StatusCode != 404 || string(body) != notFoundBody {
+		t.Errorf("same-origin POST /nope: %d %s, want the 404", res.StatusCode, body)
 	}
 }
 
@@ -216,12 +214,12 @@ func TestStreamSetsCookie(t *testing.T) {
 	}
 }
 
-func TestPassThroughSetsNoCookie(t *testing.T) {
+func TestNotFoundSetsNoCookie(t *testing.T) {
 	e := setup(t)
 	u := testenv.AddUser(t, e.db, "alice")
 	res := e.do("POST", "/nope", u)
 	res.Body.Close()
-	if res.StatusCode != 299 || res.Header.Get("Set-Cookie") != "" {
-		t.Errorf("pass-through: %d %v", res.StatusCode, res.Header["Set-Cookie"])
+	if res.StatusCode != 404 || res.Header.Get("Set-Cookie") != "" {
+		t.Errorf("unknown path: %d %v", res.StatusCode, res.Header["Set-Cookie"])
 	}
 }

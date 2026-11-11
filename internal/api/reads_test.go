@@ -25,8 +25,8 @@ func (e *env) getJSON(path, user string) (int, string) {
 	res := e.do("GET", path, user)
 	defer res.Body.Close()
 	b, _ := io.ReadAll(res.Body)
-	if res.Header.Get("X-Perl") != "" || res.Header.Get("Content-Type") != "application/javascript;charset=utf-8" {
-		e.t.Errorf("GET %s: X-Perl %q, content type %q", path, res.Header.Get("X-Perl"), res.Header.Get("Content-Type"))
+	if res.Header.Get("Content-Type") != "application/javascript;charset=utf-8" {
+		e.t.Errorf("GET %s: content type %q", path, res.Header.Get("Content-Type"))
 	}
 	return res.StatusCode, string(b)
 }
@@ -131,17 +131,13 @@ func TestParseMissed(t *testing.T) {
 	}
 }
 
-func TestMovedPathsOtherMethodsGoToPerl(t *testing.T) {
+func TestMovedPathsOtherMethodsNotFound(t *testing.T) {
 	e := setup(t)
 	for _, rq := range [][2]string{
 		{"POST", "/privates"}, {"POST", "/missed"}, {"POST", "/connection/c1/channel"},
 		{"DELETE", "/preference/theme"}, {"PUT", "/connection/c1/nick/bob"}, {"GET", "/connection/c1/channel/%23a/seen"},
 		{"PUT", "/notification/web_push"},
 	} {
-		res := e.do(rq[0], rq[1], "")
-		res.Body.Close()
-		if res.StatusCode != 299 || res.Header.Get("X-Perl") == "" {
-			t.Errorf("%s %s: %d %q, want Perl", rq[0], rq[1], res.StatusCode, res.Header.Get("X-Perl"))
-		}
+		checkNotFound(t, e, rq[0], rq[1], "")
 	}
 }
