@@ -290,3 +290,19 @@ func looseField(t *testing.T, input string) string {
 	}
 	return ""
 }
+
+func TestCleanNames(t *testing.T) {
+	got, err := CleanNames(map[string]any{"Highlight": []any{" a ", "", "b"}, "Alias": " Net "})
+	if err != nil || fmt.Sprint(got["Highlight"]) != "[a b]" || got["Alias"] != "Net" {
+		t.Errorf("names = %v, %v", got, err)
+	}
+	if got, err := CleanNames(map[string]any{"Alias": ""}); err != nil || got["Alias"] != nil {
+		t.Errorf("empty alias = %v, %v", got, err)
+	}
+	if _, err := CleanNames(map[string]any{"Alias": "bad!"}); err == nil || err.Error() != errAlias {
+		t.Errorf("bad alias: %v", err)
+	}
+	if _, err := CleanNames(map[string]any{"Highlight": []any{"a\x01"}}); err == nil || err.Error() != "Highlight words can't contain control characters" {
+		t.Errorf("control: %v", err)
+	}
+}

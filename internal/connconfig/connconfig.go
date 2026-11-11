@@ -246,26 +246,12 @@ func Clean(raw []byte) (map[string]any, error) {
 	}
 	config["Channels"] = channels
 
-	highlight, err := list(params["Highlight"], "Highlight")
+	names, err := CleanNames(params)
 	if err != nil {
 		return nil, err
 	}
-	for _, h := range highlight {
-		if controlRe.MatchString(h) {
-			return nil, errors.New("Highlight words can't contain control characters")
-		}
-	}
-	config["Highlight"] = highlight
-
-	alias, _, err := str(params["Alias"], "Network alias")
-	if err != nil {
-		return nil, err
-	}
-	if alias = trim(alias); alias != "" {
-		if !aliasRe.MatchString(alias) {
-			return nil, errors.New(errAlias)
-		}
-		config["Alias"] = alias
+	for k, v := range names {
+		config[k] = v
 	}
 
 	for _, k := range []string{"Ssl", "SASL"} {
@@ -397,4 +383,33 @@ func Display(v any) (string, bool) {
 		return string(x), true
 	}
 	return "", false
+}
+
+// CleanNames checks and normalises the settings that don't need a
+// reconnect (API::ConnectionConfig clean_names): Highlight, always set,
+// and Alias, set unless blank. Clean uses it for those keys.
+func CleanNames(params map[string]any) (map[string]any, error) {
+	names := map[string]any{}
+	highlight, err := list(params["Highlight"], "Highlight")
+	if err != nil {
+		return nil, err
+	}
+	for _, h := range highlight {
+		if controlRe.MatchString(h) {
+			return nil, errors.New("Highlight words can't contain control characters")
+		}
+	}
+	names["Highlight"] = highlight
+
+	alias, _, err := str(params["Alias"], "Network alias")
+	if err != nil {
+		return nil, err
+	}
+	if alias = trim(alias); alias != "" {
+		if !aliasRe.MatchString(alias) {
+			return nil, errors.New(errAlias)
+		}
+		names["Alias"] = alias
+	}
+	return names, nil
 }

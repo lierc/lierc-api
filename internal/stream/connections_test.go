@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/lierc/lierc-api/internal/db"
 	"io"
 	"log"
 	"strings"
@@ -238,4 +239,29 @@ func TestStatusTopicEvents(t *testing.T) {
 		}
 		break
 	}
+}
+
+// The API announces its own changes by calling ConnectionChanged, with no
+// LISTEN running.
+func TestConnectionChangedInMemory(t *testing.T) {
+	e := setup(t)
+	u := e.addUser("alice")
+	e.liveConn("c1", u)
+	c := e.openReplayed(u)
+	ctx := context.Background()
+
+	e.addConn("c2", u, `{"Host":"irc.two","Alias":"Net","Nick":"me2"}`)
+	e.s.ConnectionChanged(ctx, db.ConnectionChange{User: u, Connection: "c2", Action: "create"})
+	if ev := nextConnEvent(c); ev.typ != "connection:create" || ev.data != `{"Id":"c2","Name":"Net","Nick":"me2"}` {
+		t.Errorf("create: %+v", ev)
+	}
+	e.s.ConnectionChanged(ctx, db.ConnectionChange{User: u, Connection: "c2", Action: "update"})
+	if ev := nextConnEvent(c); ev.typ != "connection:update" || ev.data != `{"Id":"c2","Name":"Net"}` {
+		t.Errorf("update: %+v", ev)
+	}
+	e.s.ConnectionChanged(ctx, db.ConnectionChange{User: u, Connection: "c2", Action: "delete"})
+	if ev := nextConnEvent(c); ev.typ != "connection:delete" || ev.data != `{"Id":"c2"}` {
+		t.Errorf("delete: %+v", ev)
+	}
+	c.checkErr()
 }

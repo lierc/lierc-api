@@ -85,15 +85,22 @@ func (s *Server) listenOnce(ctx context.Context) error {
 	}
 }
 
-// connectionChanged sends a connections-channel notification to the
-// owner's streams: create and update with the row's name (and nick), delete
-// with just the id, since the row is already gone.
+// connectionChanged parses a connections-channel notification (lctl's, or
+// Perl's) and passes it to ConnectionChanged.
 func (s *Server) connectionChanged(ctx context.Context, payload string) {
 	var c db.ConnectionChange
 	if err := json.Unmarshal([]byte(payload), &c); err != nil || c.User == "" || c.Connection == "" {
 		log.Printf("stream: bad connection change %q", payload)
 		return
 	}
+	s.ConnectionChanged(ctx, c)
+}
+
+// ConnectionChanged sends a connection change to the owner's streams:
+// create and update with the row's name (and nick), delete with just the
+// id, since the row is already gone. The API calls it for its own changes;
+// connectionChanged calls it for lctl's, heard on LISTEN.
+func (s *Server) ConnectionChanged(ctx context.Context, c db.ConnectionChange) {
 	if !s.hasStreams(c.User) {
 		return // nobody to tell; skip the lookup
 	}
@@ -123,7 +130,7 @@ func (s *Server) connectionChanged(ctx context.Context, payload string) {
 		}
 		s.sendToUser(owner, connEventBytes(typ, ev))
 	default:
-		log.Printf("stream: unknown connection change %q", payload)
+		log.Printf("stream: unknown connection change %+v", c)
 	}
 }
 
