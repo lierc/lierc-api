@@ -777,3 +777,29 @@ func TestMailNeverPanics(t *testing.T) {
 	}
 	waitFor(t, buf, "mailer blew up")
 }
+
+func TestResetConfirmDeletesLogins(t *testing.T) {
+	h := setup(t)
+	id := h.addUser("forgot", "forgot@example.com", "old pw", ptr(true))
+	testenv.Login(t, h.d, id)
+	testenv.Login(t, h.d, id)
+	count := func() (n int) {
+		h.d.Pool.QueryRow(ctx, `SELECT count(*) FROM login WHERE "user"=$1`, id).Scan(&n)
+		return
+	}
+	var hash string
+	h.d.Pool.QueryRow(ctx, `SELECT password_hash FROM "user" WHERE id=$1`, id).Scan(&hash)
+
+	expiredTok := MakeToken(secret, "reset", id, hash, time.Now().Unix()-60)
+	wantError(t, nil2(h.s.ResetConfirm(ctx, expiredTok, "new pw")), 400, "This reset link has expired or was already used. Request a new one.")
+	if n := count(); n != 2 {
+		t.Fatalf("failed confirm left %d logins, want 2", n)
+	}
+	token := MakeToken(secret, "reset", id, hash, time.Now().Unix()+ResetLifetime)
+	if _, err := h.s.ResetConfirm(ctx, token, "new pw"); err != nil {
+		t.Fatal(err)
+	}
+	if n := count(); n != 0 {
+		t.Errorf("%d logins after confirm, want 0", n)
+	}
+}

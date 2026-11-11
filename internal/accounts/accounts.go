@@ -17,6 +17,7 @@ import (
 	"github.com/lierc/lierc-api/internal/connections"
 	"github.com/lierc/lierc-api/internal/db"
 	"github.com/lierc/lierc-api/internal/ids"
+	"github.com/lierc/lierc-api/internal/login"
 	"github.com/lierc/lierc-api/internal/passwords"
 )
 
@@ -539,6 +540,10 @@ func (s *Service) replaceAndVerify(ctx context.Context, id, hash string, oldHash
 	}
 	if n > 0 {
 		if first, err = markVerified(ctx, tx, id); err != nil {
+			return false, false, err
+		}
+		// a changed password ends every login, whoever held it
+		if _, err := login.DeleteAll(ctx, tx, id); err != nil {
 			return false, false, err
 		}
 	}

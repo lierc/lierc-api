@@ -7,6 +7,8 @@ import (
 	"testing"
 
 	"golang.org/x/crypto/bcrypt"
+
+	"github.com/lierc/lierc-api/internal/testenv"
 )
 
 func (h *harness) hash(user string) (hash, legacy *string) {
@@ -81,5 +83,26 @@ func TestResetUsage(t *testing.T) {
 		if err := h.run("reset", args...); !errors.As(err, &ue) {
 			t.Errorf("%v: got %v", args, err)
 		}
+	}
+}
+
+func TestResetEndsLogins(t *testing.T) {
+	h := newHarness(t)
+	u := h.user("ann")
+	other := h.user("bob")
+	testenv.Login(t, h.db, u)
+	testenv.Login(t, h.db, u)
+	testenv.Login(t, h.db, other)
+	h.env.StdinIsTerminal = false
+	h.env.Stdin = strings.NewReader("s3cret pw\n")
+	if err := h.run("reset", "ann@example.com"); err != nil {
+		t.Fatal(err)
+	}
+	h.has("password set for ann@example.com\n", "ended 2 logins\n")
+	if n := h.count(`SELECT count(*) FROM login WHERE "user" = $1`, u); n != 0 {
+		t.Errorf("%d logins left", n)
+	}
+	if n := h.count(`SELECT count(*) FROM login WHERE "user" = $1`, other); n != 1 {
+		t.Errorf("other user has %d logins, want 1", n)
 	}
 }

@@ -6,10 +6,11 @@ import (
 	"time"
 
 	"github.com/lierc/lierc-api/internal/accounts"
+	"github.com/lierc/lierc-api/internal/auth"
 	"github.com/lierc/lierc-api/internal/config"
+	"github.com/lierc/lierc-api/internal/login"
 	"github.com/lierc/lierc-api/internal/mail"
 	"github.com/lierc/lierc-api/internal/respond"
-	"github.com/lierc/lierc-api/internal/session"
 )
 
 // newMailer builds the mailer for the accounts service; tests replace it.
@@ -77,11 +78,22 @@ func (a *api) showUser(w http.ResponseWriter, r *http.Request, id string) {
 }
 
 // loggedIn logs u in, answering as GET /auth does.
-func (a *api) loggedIn(w http.ResponseWriter, u accounts.User) {
-	if err := session.SetPerl(w, u.ID, a.cfg.Secret, a.cfg.Secure, time.Now()); err != nil {
-		respond.Internal(w, "set login cookie", err)
+// The request's own login, if it has one, is ended first, so logging in
+// again replaces a login instead of piling them up.
+func (a *api) loggedIn(w http.ResponseWriter, r *http.Request, u accounts.User) {
+	if c, err := r.Cookie(login.CookieName); err == nil && login.IsToken(c.Value) {
+		if err := login.DeleteToken(r.Context(), a.db, c.Value); err != nil {
+			respond.Internal(w, "end old login", err)
+			return
+		}
+	}
+	agent, ip := auth.Client(r)
+	token, err := login.Create(r.Context(), a.db, u.ID, agent, ip)
+	if err != nil {
+		respond.Internal(w, "create login", err)
 		return
 	}
+	login.SetCookie(w, token, a.cfg.Secure, time.Now())
 	respond.JSON(w, http.StatusOK, userJSON(u))
 }
 
@@ -95,7 +107,7 @@ func (a *api) login(w http.ResponseWriter, r *http.Request) {
 		accountFailed(w, "login", err)
 		return
 	}
-	a.loggedIn(w, u)
+	a.loggedIn(w, r, u)
 }
 
 func (a *api) register(w http.ResponseWriter, r *http.Request) {
@@ -108,11 +120,16 @@ func (a *api) register(w http.ResponseWriter, r *http.Request) {
 		accountFailed(w, "register", err)
 		return
 	}
-	a.loggedIn(w, u)
+	a.loggedIn(w, r, u)
 }
 
 func (a *api) logout(w http.ResponseWriter, r *http.Request) {
-	session.ExpirePerl(w, a.cfg.Secure)
+	if c, err := r.Cookie(login.CookieName); err == nil && login.IsToken(c.Value) {
+		if err := login.DeleteToken(r.Context(), a.db, c.Value); err != nil {
+			log.Printf("logout: %v", err)
+		}
+	}
+	login.ExpireCookie(w, a.cfg.Secure)
 	ok(w)
 }
 
@@ -158,5 +175,5 @@ func (a *api) resetConfirm(w http.ResponseWriter, r *http.Request) {
 		accountFailed(w, "reset confirm", err)
 		return
 	}
-	a.loggedIn(w, u)
+	a.loggedIn(w, r, u)
 }

@@ -14,6 +14,7 @@ import (
 
 	"github.com/lierc/lierc-api/internal/accounts"
 	"github.com/lierc/lierc-api/internal/config"
+	"github.com/lierc/lierc-api/internal/login"
 	"github.com/lierc/lierc-api/internal/passwords"
 	"github.com/lierc/lierc-api/internal/testenv"
 )
@@ -242,5 +243,170 @@ func TestVerifyResendResetRoutes(t *testing.T) {
 	res, _ = e.form("POST", "/auth", "", url.Values{"email": {"newbie"}, "pass": {"brandnew"}})
 	if res.StatusCode != 200 {
 		t.Errorf("login with the new password: %d", res.StatusCode)
+	}
+}
+
+func (e *env) logins(user string) int {
+	e.t.Helper()
+	var n int
+	if err := e.db.Pool.QueryRow(context.Background(), `SELECT count(*) FROM login WHERE "user"=$1`, user).Scan(&n); err != nil {
+		e.t.Fatal(err)
+	}
+	return n
+}
+
+// withToken is a request carrying the login token as its chats cookie.
+func (e *env) withToken(method, path, token string) *http.Response {
+	e.t.Helper()
+	res := e.doReq(method, path, "", "", "Cookie", "chats="+token)
+	res.Body.Close()
+	return res
+}
+
+// logIn posts /auth (optionally with an existing token) and returns the new token.
+func (e *env) logIn(email, pass, oldToken string, hdr ...string) string {
+	e.t.Helper()
+	if oldToken != "" {
+		hdr = append(hdr, "Cookie", "chats="+oldToken)
+	}
+	res, body := e.form("POST", "/auth", "", url.Values{"email": {email}, "pass": {pass}}, hdr...)
+	c := chatsCookie(res)
+	if res.StatusCode != 200 || c == nil {
+		e.t.Fatalf("login: %d %s", res.StatusCode, body)
+	}
+	return c.Value
+}
+
+func expired(c *http.Cookie) bool {
+	return c != nil && c.MaxAge == -1 && c.Value == "" && c.Expires.Before(time.Now())
+}
+
+func TestLoginCreatesLogin(t *testing.T) {
+	e := setup(t)
+	id := testenv.AddUser(t, e.db, "alice")
+	e.setPassword(id, "hunter2")
+	tok := e.logIn("alice", "hunter2", "", "User-Agent", "TestAgent/1")
+	if !login.IsToken(tok) {
+		t.Fatalf("cookie %q is not a token", tok)
+	}
+	var n int
+	var ua string
+	if err := e.db.Pool.QueryRow(context.Background(), `SELECT count(*), min(user_agent) FROM login WHERE "user"=$1`, id).Scan(&n, &ua); err != nil {
+		t.Fatal(err)
+	}
+	if n != 1 || ua != "TestAgent/1" {
+		t.Errorf("rows %d, agent %q", n, ua)
+	}
+	if res := e.withToken("GET", "/preference", tok); res.StatusCode != 200 {
+		t.Errorf("GET /preference: %d", res.StatusCode)
+	}
+}
+
+func TestLoginAgainReplacesLogin(t *testing.T) {
+	e := setup(t)
+	id := testenv.AddUser(t, e.db, "alice")
+	e.setPassword(id, "hunter2")
+	first := e.logIn("alice", "hunter2", "")
+	second := e.logIn("alice", "hunter2", first)
+	if n := e.logins(id); n != 1 {
+		t.Errorf("%d logins, want 1", n)
+	}
+	if res := e.withToken("GET", "/preference", first); res.StatusCode != 401 {
+		t.Errorf("first token: %d, want 401", res.StatusCode)
+	}
+	if res := e.withToken("GET", "/preference", second); res.StatusCode != 200 {
+		t.Errorf("second token: %d, want 200", res.StatusCode)
+	}
+}
+
+func TestRegisterCreatesLogin(t *testing.T) {
+	e, _ := mailEnv(t)
+	res, body := e.form("POST", "/register", "", url.Values{"username": {"newbie"}, "email": {"new@example.com"}, "pass": {"s3cret"}})
+	c := chatsCookie(res)
+	if res.StatusCode != 200 || c == nil || !login.IsToken(c.Value) {
+		t.Fatalf("register: %d %v %s", res.StatusCode, res.Header["Set-Cookie"], body)
+	}
+	var u struct{ ID string }
+	json.Unmarshal([]byte(body), &u)
+	if n := e.logins(u.ID); n != 1 {
+		t.Errorf("%d logins, want 1", n)
+	}
+}
+
+func TestLogoutEndsOnlyThisLogin(t *testing.T) {
+	e := setup(t)
+	id := testenv.AddUser(t, e.db, "alice")
+	e.setPassword(id, "hunter2")
+	a := e.logIn("alice", "hunter2", "")
+	b := e.logIn("alice", "hunter2", "")
+	res := e.doReq("POST", "/logout", "", "", "Cookie", "chats="+a)
+	res.Body.Close()
+	if res.StatusCode != 200 || !expired(chatsCookie(res)) {
+		t.Errorf("logout: %d %v", res.StatusCode, res.Header["Set-Cookie"])
+	}
+	if res := e.withToken("GET", "/preference", a); res.StatusCode != 401 {
+		t.Errorf("A after logout: %d, want 401", res.StatusCode)
+	}
+	if res := e.withToken("GET", "/preference", b); res.StatusCode != 200 {
+		t.Errorf("B after logout: %d, want 200", res.StatusCode)
+	}
+}
+
+func TestLogoutRace(t *testing.T) {
+	e := setup(t)
+	id := testenv.AddUser(t, e.db, "alice")
+	e.setPassword(id, "hunter2")
+	a := e.logIn("alice", "hunter2", "")
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() { defer wg.Done(); e.withToken("GET", "/preference", a) }()
+	go func() { defer wg.Done(); e.withToken("POST", "/logout", a) }()
+	wg.Wait()
+	res := e.doReq("GET", "/preference", "", "", "Cookie", "chats="+a)
+	res.Body.Close()
+	if res.StatusCode != 401 || !expired(chatsCookie(res)) {
+		t.Errorf("after logout: %d %v", res.StatusCode, res.Header["Set-Cookie"])
+	}
+}
+
+func TestLogoutPerlCookie(t *testing.T) {
+	e := setup(t)
+	id := testenv.AddUser(t, e.db, "alice")
+	res := e.do("POST", "/logout", id)
+	res.Body.Close()
+	if res.StatusCode != 200 || !expired(chatsCookie(res)) {
+		t.Errorf("logout: %d %v", res.StatusCode, res.Header["Set-Cookie"])
+	}
+	if n := e.logins(id); n != 0 {
+		t.Errorf("%d logins, want 0", n)
+	}
+}
+
+func TestResetConfirmEndsAllLogins(t *testing.T) {
+	e := setup(t)
+	id := testenv.AddUser(t, e.db, "alice")
+	e.setPassword(id, "hunter2")
+	a := e.logIn("alice", "hunter2", "")
+	b := e.logIn("alice", "hunter2", "")
+	var hash string
+	if err := e.db.Pool.QueryRow(context.Background(), `SELECT password_hash FROM "user" WHERE id=$1`, id).Scan(&hash); err != nil {
+		t.Fatal(err)
+	}
+	token := accounts.MakeToken(testSecret, "reset", id, hash, time.Now().Unix()+accounts.ResetLifetime)
+	res, body := e.form("POST", "/reset/confirm", "", url.Values{"token": {token}, "pass": {"brandnew"}})
+	c := chatsCookie(res)
+	if res.StatusCode != 200 || c == nil || !login.IsToken(c.Value) {
+		t.Fatalf("confirm: %d %v %s", res.StatusCode, res.Header["Set-Cookie"], body)
+	}
+	for _, old := range []string{a, b} {
+		if res := e.withToken("GET", "/preference", old); res.StatusCode != 401 {
+			t.Errorf("old token: %d, want 401", res.StatusCode)
+		}
+	}
+	if res := e.withToken("GET", "/preference", c.Value); res.StatusCode != 200 {
+		t.Errorf("new token: %d, want 200", res.StatusCode)
+	}
+	if n := e.logins(id); n != 1 {
+		t.Errorf("%d logins, want 1", n)
 	}
 }
