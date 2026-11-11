@@ -37,6 +37,12 @@ func (d *DB) SaveConnectionLimited(ctx context.Context, id, user string, config 
 	return true, tx.Commit(ctx)
 }
 
+// SaveConnection saves a connection with no limit check.
+func (d *DB) SaveConnection(ctx context.Context, id, user string, config []byte) error {
+	_, err := d.Pool.Exec(ctx, `INSERT INTO connection (id, "user", config, created, updated) VALUES ($1,$2,$3,NOW(),NOW())`, id, user, string(config))
+	return err
+}
+
 // DeleteConnection deletes connection id's row.
 func (d *DB) DeleteConnection(ctx context.Context, id string) error {
 	_, err := d.Pool.Exec(ctx, `DELETE FROM connection WHERE id=$1`, id)

@@ -364,3 +364,36 @@ func TestEditFinishesAfterCancel(t *testing.T) {
 		t.Errorf("calls %v said %v", cancelCalls(), h.said)
 	}
 }
+
+func TestCreateDefault(t *testing.T) {
+	h, a := setup(t)
+	cfg := map[string]any{"Host": "bad.example", "Port": 6667, "Nick": "alice", "Channels": []string{"#a"}}
+	id, err := h.s.CreateDefault(context.Background(), a, cfg)
+	if err != nil || id == "" {
+		t.Fatalf("CreateDefault = %q, %v", id, err)
+	}
+	row, ok := h.row(id)
+	if !ok || row["Host"] != "bad.example" {
+		t.Errorf("row = %v %v", row, ok)
+	}
+	var created bool
+	h.d.Pool.QueryRow(context.Background(), `SELECT created IS NOT NULL AND updated IS NOT NULL FROM connection WHERE id=$1`, id).Scan(&created)
+	if !created || len(h.said) != 0 || fmt.Sprint(h.calls()) != "[POST /"+id+"/create]" || h.notes != 1 {
+		t.Errorf("created %v said %v calls %v notes %d", created, h.said, h.calls(), h.notes)
+	}
+
+	old := newID
+	newID = func() string { return "failid" }
+	defer func() { newID = old }()
+	h.fake.Respond("POST", "/failid/create", 500, "boom")
+	id, err = h.s.CreateDefault(context.Background(), a, cfg)
+	if err == nil || id != "failid" {
+		t.Errorf("CreateDefault on 500 = %q, %v", id, err)
+	}
+	if _, ok := h.row("failid"); !ok {
+		t.Error("row deleted after liercd failed")
+	}
+	if len(h.said) != 0 {
+		t.Errorf("said %v", h.said)
+	}
+}

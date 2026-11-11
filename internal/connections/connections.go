@@ -152,6 +152,32 @@ func (s *Service) Create(ctx context.Context, user string, raw []byte) (string, 
 	return id, s.NotifyHighlights(ctx)
 }
 
+// CreateDefault adds the signup network (Auth.pm add_default_network). It
+// differs from Create in exactly these ways: the config is saved as given
+// (no Clean, no limit, no host check), nothing is announced, and the row
+// stays when liercd fails, as in Perl; the stream re-creates it when the
+// user next connects. On a liercd failure the id comes back with the error.
+func (s *Service) CreateDefault(ctx context.Context, user string, config map[string]any) (string, error) {
+	ctx, cancel := detached(ctx)
+	defer cancel()
+	body, err := respond.Marshal(config)
+	if err != nil {
+		return "", err
+	}
+	id := newID()
+	if err := s.DB.SaveConnection(ctx, id, user, body); err != nil {
+		return "", err
+	}
+	if err := s.NotifyHighlights(ctx); err != nil {
+		return id, err
+	}
+	res, err := s.liercd(ctx, id+"/create", body)
+	if err == nil && res.Status != http.StatusOK {
+		err = userError(string(res.Body))
+	}
+	return id, err
+}
+
 // saved is connection id's stored config as an object, or empty.
 func (s *Service) saved(ctx context.Context, id string) (map[string]any, error) {
 	raw, ok, err := s.DB.LookupConfig(ctx, id)

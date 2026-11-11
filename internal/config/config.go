@@ -45,6 +45,17 @@ type Config struct {
 	// NoSMTP skips sending email (LIERC_NO_SMTP, true as Perl reads it:
 	// set, and not "0").
 	NoSMTP bool
+	// DefaultNetwork is the network new users get when they confirm their
+	// email (DEFAULT_NETWORK_*); nil when DEFAULT_NETWORK_HOST is empty.
+	DefaultNetwork *DefaultNetwork
+}
+
+// DefaultNetwork is the signup network (API::Config default_network).
+type DefaultNetwork struct {
+	Host     string
+	Port     int
+	Ssl      bool
+	Channels []string
 }
 
 // PerlURL is c's Perl API URL, which Load has checked; a Config built
@@ -119,6 +130,22 @@ func Load(getenv func(string) string) (Config, error) {
 		return Config{}, fmt.Errorf("DB_MAX_CONNS: %q is not a positive integer", s)
 	} else {
 		c.DBMaxConns = int(n)
+	}
+	if host := getenv("DEFAULT_NETWORK_HOST"); host != "" {
+		n := &DefaultNetwork{
+			Host:     host,
+			Port:     6667,
+			Ssl:      getenv("DEFAULT_NETWORK_SSL") != "" && getenv("DEFAULT_NETWORK_SSL") != "0",
+			Channels: strings.Fields(getenv("DEFAULT_NETWORK_CHANNELS")),
+		}
+		if s := getenv("DEFAULT_NETWORK_PORT"); s != "" && s != "0" {
+			p, err := strconv.ParseInt(s, 10, 32)
+			if err != nil || p < 0 || p > 65535 {
+				return Config{}, fmt.Errorf("DEFAULT_NETWORK_PORT: %q is not a port", s)
+			}
+			n.Port = int(p)
+		}
+		c.DefaultNetwork = n
 	}
 	return c, nil
 }

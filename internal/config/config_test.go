@@ -153,3 +153,31 @@ func TestMailSettings(t *testing.T) {
 		t.Error("LIERC_NO_SMTP=0 should be false")
 	}
 }
+
+func TestDefaultNetwork(t *testing.T) {
+	load := func(m map[string]string) *DefaultNetwork {
+		t.Helper()
+		c, err := Load(env(m))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return c.DefaultNetwork
+	}
+	if n := load(nil); n != nil {
+		t.Errorf("unset = %+v", n)
+	}
+	n := load(map[string]string{"DEFAULT_NETWORK_HOST": "h"})
+	if n == nil || n.Host != "h" || n.Port != 6667 || n.Ssl || len(n.Channels) != 0 {
+		t.Errorf("host only = %+v", n)
+	}
+	n = load(map[string]string{"DEFAULT_NETWORK_HOST": "h", "DEFAULT_NETWORK_PORT": "6697", "DEFAULT_NETWORK_SSL": "1", "DEFAULT_NETWORK_CHANNELS": " #a  #b\n"})
+	if n == nil || n.Port != 6697 || !n.Ssl || !reflect.DeepEqual(n.Channels, []string{"#a", "#b"}) {
+		t.Errorf("all set = %+v", n)
+	}
+	if n = load(map[string]string{"DEFAULT_NETWORK_HOST": "h", "DEFAULT_NETWORK_SSL": "0"}); n.Ssl {
+		t.Error("SSL=0 is true")
+	}
+	if _, err := Load(env(map[string]string{"DEFAULT_NETWORK_HOST": "h", "DEFAULT_NETWORK_PORT": "x"})); err == nil {
+		t.Error("bad port accepted")
+	}
+}
