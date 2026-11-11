@@ -132,3 +132,24 @@ func TestSecure(t *testing.T) {
 		}
 	}
 }
+
+func TestMailSettings(t *testing.T) {
+	c, err := Load(env(nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.SMTPOpts != "" || c.FromAddress != "do-not-reply@relaychat.party" || c.SiteURL != "https://relaychat.party" || c.NoSMTP {
+		t.Errorf("defaults: %q %q %q %v", c.SMTPOpts, c.FromAddress, c.SiteURL, c.NoSMTP)
+	}
+	c, err = Load(env(map[string]string{"SMTP_OPTS": "Host,h", "FROM_ADDRESS": "a@b.c", "API_URL": "https://x.test", "LIERC_NO_SMTP": "1"}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.SMTPOpts != "Host,h" || c.FromAddress != "a@b.c" || c.SiteURL != "https://x.test" || !c.NoSMTP {
+		t.Errorf("set: %q %q %q %v", c.SMTPOpts, c.FromAddress, c.SiteURL, c.NoSMTP)
+	}
+	c, _ = Load(env(map[string]string{"LIERC_NO_SMTP": "0"}))
+	if c.NoSMTP {
+		t.Error("LIERC_NO_SMTP=0 should be false")
+	}
+}

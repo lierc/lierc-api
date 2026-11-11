@@ -36,6 +36,15 @@ type Config struct {
 	// Secure marks the login cookie Secure (API_SECURE, true as Perl reads
 	// it: set, and not "0").
 	Secure bool
+	// SMTPOpts is SMTP_OPTS, parsed by mail.ParseOpts; "" when unset.
+	SMTPOpts string
+	// FromAddress is the sender of the API's emails (FROM_ADDRESS).
+	FromAddress string
+	// SiteURL begins the links in those emails (API_URL).
+	SiteURL string
+	// NoSMTP skips sending email (LIERC_NO_SMTP, true as Perl reads it:
+	// set, and not "0").
+	NoSMTP bool
 }
 
 // PerlURL is c's Perl API URL, which Load has checked; a Config built
@@ -85,6 +94,10 @@ func Load(getenv func(string) string) (Config, error) {
 		Listen:      or("LISTEN", ":5003"),
 		AdminListen: or("ADMIN_LISTEN", "127.0.0.1:5009"),
 		PerlAPI:     or("PERL_API", DefaultPerlAPI),
+		SMTPOpts:    getenv("SMTP_OPTS"),
+		FromAddress: or("FROM_ADDRESS", "do-not-reply@relaychat.party"),
+		SiteURL:     or("API_URL", "https://relaychat.party"),
+		NoSMTP:      getenv("LIERC_NO_SMTP") != "" && getenv("LIERC_NO_SMTP") != "0",
 	}
 	if u, err := url.Parse(c.PerlAPI); err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
 		return Config{}, fmt.Errorf("PERL_API: %q is not an http(s) URL", c.PerlAPI)
