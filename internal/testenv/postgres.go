@@ -130,6 +130,11 @@ func Postgres(t testing.TB) *db.DB {
 	if _, err := c.Exec(ctx, fmt.Sprintf("CREATE DATABASE %s TEMPLATE %s", name, templateDB)); err != nil {
 		t.Fatal(err)
 	}
+	// Production's text search configuration, so search tests stem the same
+	// way (an initdb in a C locale would default to pg_catalog.simple).
+	if _, err := c.Exec(ctx, fmt.Sprintf("ALTER DATABASE %s SET default_text_search_config = 'pg_catalog.english'", name)); err != nil {
+		t.Fatal(err)
+	}
 	d, err := db.Open(ctx, config.Config{
 		DBHost: fmt.Sprintf("127.0.0.1:%d", pgPort),
 		DBUser: "postgres", DBPass: "postgres", DBName: name,

@@ -5,10 +5,10 @@ use warnings;
 use File::Basename qw(dirname);
 use File::Spec;
 
-# The SQL of lib/API/sql/<name>.sql, read once. Whole-line "--" comments are
+# The SQL of internal/db/sql/<name>.sql (shared with the Go server), read once. Whole-line "--" comments are
 # dropped, so the placeholders they mention are never counted.
 
-my $dir = File::Spec->catdir(dirname(__FILE__), "sql");
+my $dir = File::Spec->catdir(dirname(__FILE__), "..", "..", "internal", "db", "sql");
 my %cache;
 
 sub sql {

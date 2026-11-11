@@ -15,10 +15,10 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// readSQL loads one of the Perl API's read queries.
+// readSQL loads one of the channel read queries (internal/db/sql).
 func readSQL(t *testing.T, name string) string {
 	t.Helper()
-	b, err := os.ReadFile(filepath.Join("..", "..", "lib", "API", "sql", name))
+	b, err := os.ReadFile(filepath.Join("..", "db", "sql", name))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -48,7 +48,7 @@ func perlDateSQL(text, sender *string) (string, []any) {
 	var extra []any
 	if text != nil {
 		extra = append(extra, *text)
-		sql += ` AND to_tsvector('english', message->'Params'->1) @@ to_tsquery($5)`
+		sql += ` AND to_tsvector('english', message->'Params'->1) @@ websearch_to_tsquery($5)`
 	}
 	if sender != nil {
 		extra = append(extra, *sender)
