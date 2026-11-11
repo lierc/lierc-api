@@ -1,0 +1,306 @@
+package connections
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"net/http"
+	"strings"
+	"sync"
+	"testing"
+
+	"github.com/lierc/lierc-api/internal/db"
+	"github.com/lierc/lierc-api/internal/liercd"
+	"github.com/lierc/lierc-api/internal/testenv"
+)
+
+func TestMain(m *testing.M) { testenv.Main(m) }
+
+type harness struct {
+	t     *testing.T
+	d     *db.DB
+	fake  *testenv.LiercdServer
+	s     *Service
+	mu    sync.Mutex
+	said  []string // announcements, "<action> <id>"
+	notes int      // NOTIFY highlights
+}
+
+func setup(t *testing.T) (*harness, string) {
+	t.Helper()
+	h := &harness{t: t, d: testenv.Postgres(t), fake: testenv.FakeLiercd(t)}
+	h.s = &Service{
+		DB:     h.d,
+		Liercd: &liercd.Client{BaseURL: h.fake.URL, HTTP: &http.Client{}},
+		Announce: func(_ context.Context, c db.ConnectionChange) {
+			h.mu.Lock()
+			defer h.mu.Unlock()
+			h.said = append(h.said, c.Action+" "+c.Connection)
+		},
+		NotifyHighlights: func(context.Context) error { h.mu.Lock(); h.notes++; h.mu.Unlock(); return nil },
+		CheckHost: func(_ context.Context, host string, _ int) error {
+			if host == "bad.example" {
+				return errors.New("bad.example is a private address")
+			}
+			return nil
+		},
+		Limit: 5,
+	}
+	return h, testenv.AddUser(t, h.d, "alice")
+}
+
+func (h *harness) row(id string) (map[string]any, bool) {
+	h.t.Helper()
+	raw, ok, err := h.d.LookupConfig(context.Background(), id)
+	if err != nil {
+		h.t.Fatal(err)
+	}
+	var m map[string]any
+	if ok {
+		json.Unmarshal(raw, &m)
+	}
+	return m, ok
+}
+
+func (h *harness) calls() []string {
+	var out []string
+	for _, c := range h.fake.Calls() {
+		out = append(out, c.Method+" "+c.Path)
+	}
+	return out
+}
+
+func userMsg(t *testing.T, err error, want string) {
+	t.Helper()
+	msg, ok := IsUserError(err)
+	if !ok || msg != want {
+		t.Errorf("error = %v (user %v), want %q", err, ok, want)
+	}
+}
+
+const valid = `{"Host":"irc.example","Port":6667,"Nick":"me","Channels":["#a"]}`
+
+func TestCreate(t *testing.T) {
+	h, a := setup(t)
+	id, err := h.s.Create(context.Background(), a, []byte(valid))
+	if err != nil || len(id) == 0 {
+		t.Fatalf("Create = %q, %v", id, err)
+	}
+	cfg, ok := h.row(id)
+	if !ok || cfg["Host"] != "irc.example" {
+		t.Errorf("row = %v %v", cfg, ok)
+	}
+	var created bool
+	h.d.Pool.QueryRow(context.Background(), `SELECT created IS NOT NULL FROM connection WHERE id=$1`, id).Scan(&created)
+	if !created || fmt.Sprint(h.said) != "[create "+id+"]" || fmt.Sprint(h.calls()) != "[POST /"+id+"/create]" || h.notes != 1 {
+		t.Errorf("created %v said %v calls %v notes %d", created, h.said, h.calls(), h.notes)
+	}
+	var sent map[string]any
+	json.Unmarshal([]byte(h.fake.Calls()[0].Body), &sent)
+	if sent["Host"] != "irc.example" || sent["Nick"] != "me" {
+		t.Errorf("liercd got %s", h.fake.Calls()[0].Body)
+	}
+}
+
+func TestCreateRefused(t *testing.T) {
+	h, a := setup(t)
+	old := newID
+	newID = func() string { return "fixedid" }
+	t.Cleanup(func() { newID = old })
+	h.fake.Respond("POST", "/fixedid/create", 400, "nok\n")
+	_, err := h.s.Create(context.Background(), a, []byte(valid))
+	userMsg(t, err, "nok")
+	if _, ok := h.row("fixedid"); ok || fmt.Sprint(h.said) != "[create fixedid delete fixedid]" {
+		t.Errorf("row left %v, said %v", ok, h.said)
+	}
+}
+
+func TestCreateUnreachable(t *testing.T) {
+	h, a := setup(t)
+	old := newID
+	newID = func() string { return "fixedid" }
+	t.Cleanup(func() { newID = old })
+	h.s.Liercd = &liercd.Client{BaseURL: "http://127.0.0.1:1", HTTP: &http.Client{}}
+	_, err := h.s.Create(context.Background(), a, []byte(valid))
+	if msg, ok := IsUserError(err); !ok || !strings.Contains(msg, "refused") {
+		t.Errorf("error = %v", err)
+	}
+	if _, ok := h.row("fixedid"); ok {
+		t.Error("row left")
+	}
+}
+
+func TestCreateInvalid(t *testing.T) {
+	h, a := setup(t)
+	for body, want := range map[string]string{
+		`[1]`:           "Invalid connection settings",
+		`x`:             "Invalid connection settings",
+		`{"Port":6667}`: "Host is required",
+		`{"Host":"bad.example","Port":6667,"Nick":"me"}`: "bad.example is a private address",
+	} {
+		_, err := h.s.Create(context.Background(), a, []byte(body))
+		userMsg(t, err, want)
+	}
+	if len(h.fake.Calls()) != 0 {
+		t.Errorf("liercd called: %v", h.calls())
+	}
+}
+
+func TestCreateLimit(t *testing.T) {
+	h, a := setup(t)
+	for i := 0; i < 4; i++ {
+		testenv.AddConnection(t, h.d, fmt.Sprint("c", i), a, "{}")
+	}
+	var wg sync.WaitGroup
+	errs := make([]error, 2)
+	for i := range errs {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			_, errs[i] = h.s.Create(context.Background(), a, []byte(valid))
+		}(i)
+	}
+	wg.Wait()
+	ok, limited := 0, 0
+	for _, err := range errs {
+		if err == nil {
+			ok++
+		} else if msg, _ := IsUserError(err); msg == "You can have at most 5 connections" {
+			limited++
+		} else {
+			t.Errorf("unexpected %v", err)
+		}
+	}
+	if ok != 1 || limited != 1 {
+		t.Errorf("%d ok, %d limited", ok, limited)
+	}
+	_, err := h.s.Create(context.Background(), a, []byte(valid))
+	userMsg(t, err, "You can have at most 5 connections")
+}
+
+func TestEditAliasOnly(t *testing.T) {
+	h, a := setup(t)
+	testenv.AddConnection(t, h.d, "c1", a, `{"Host":"irc.example","Port":"6667","Nick":"me","Channels":["#a"]}`)
+	err := h.s.Edit(context.Background(), a, "c1", []byte(`{"Host":"irc.example","Port":6667,"Nick":"me","Alias":"Net"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg, _ := h.row("c1")
+	if cfg["Alias"] != "Net" || fmt.Sprint(cfg["Channels"]) != "[#a]" || len(h.fake.Calls()) != 0 || fmt.Sprint(h.said) != "[update c1]" || h.notes != 1 {
+		t.Errorf("cfg %v calls %v said %v notes %d", cfg, h.calls(), h.said, h.notes)
+	}
+}
+
+func TestEditReconnects(t *testing.T) {
+	h, a := setup(t)
+	testenv.AddConnection(t, h.d, "c1", a, `{"Host":"irc.example","Port":6667,"Nick":"me","Channels":["#a"]}`)
+	h.fake.Respond("POST", "/c1/destroy", 200, "ok")
+	if err := h.s.Edit(context.Background(), a, "c1", []byte(`{"Host":"irc.other","Port":6667,"Nick":"me"}`)); err != nil {
+		t.Fatal(err)
+	}
+	if fmt.Sprint(h.calls()) != "[POST /c1/destroy POST /c1/create]" || fmt.Sprint(h.said) != "[update c1]" {
+		t.Errorf("calls %v said %v", h.calls(), h.said)
+	}
+	cfg, _ := h.row("c1")
+	if cfg["Host"] != "irc.other" || fmt.Sprint(cfg["Channels"]) != "[#a]" {
+		t.Errorf("cfg %v", cfg)
+	}
+	h.fake.Respond("POST", "/c1/destroy", 404, "nok\n")
+	if err := h.s.Edit(context.Background(), a, "c1", []byte(`{"Host":"irc.third","Port":6667,"Nick":"me"}`)); err != nil {
+		t.Errorf("destroy 404: %v", err)
+	}
+	h.fake.Respond("POST", "/c1/create", 500, "boom")
+	err := h.s.Edit(context.Background(), a, "c1", []byte(`{"Host":"irc.fourth","Port":6667,"Nick":"me"}`))
+	userMsg(t, err, "boom")
+}
+
+func TestEditKeepsNick(t *testing.T) {
+	h, a := setup(t)
+	testenv.AddConnection(t, h.d, "c1", a, `{"Host":"irc.example","Port":6667,"Nick":"me","Channels":[]}`)
+	if err := h.s.Edit(context.Background(), a, "c1", []byte(`{"Host":"irc.example","Port":6667,"Nick":"","Alias":"N"}`)); err != nil {
+		t.Fatal(err)
+	}
+	if cfg, _ := h.row("c1"); cfg["Nick"] != "me" {
+		t.Errorf("nick = %v", cfg["Nick"])
+	}
+	h.fake.Respond("POST", "/c1/destroy", 200, "ok")
+	if err := h.s.Edit(context.Background(), a, "c1", []byte(`{"Host":"irc.example","Port":6667,"Nick":"new"}`)); err != nil {
+		t.Fatal(err)
+	}
+	if cfg, _ := h.row("c1"); cfg["Nick"] != "new" {
+		t.Errorf("nick = %v", cfg["Nick"])
+	}
+	err := h.s.Edit(context.Background(), a, "c1", []byte(`[]`))
+	userMsg(t, err, "Invalid connection settings")
+}
+
+func TestSave(t *testing.T) {
+	h, a := setup(t)
+	testenv.AddConnection(t, h.d, "c1", a, `{"Host":"irc.example","Port":6667,"Nick":"me","Channels":["#a"],"Alias":"Old"}`)
+	if err := h.s.Save(context.Background(), a, "c1", []byte(`{"Alias":"Net","Highlight":["x"]}`)); err != nil {
+		t.Fatal(err)
+	}
+	cfg, _ := h.row("c1")
+	if cfg["Alias"] != "Net" || fmt.Sprint(cfg["Highlight"]) != "[x]" || cfg["Host"] != "irc.example" || fmt.Sprint(cfg["Channels"]) != "[#a]" {
+		t.Errorf("cfg %v", cfg)
+	}
+	if err := h.s.Save(context.Background(), a, "c1", []byte(`{"Alias":""}`)); err != nil {
+		t.Fatal(err)
+	}
+	if cfg, _ := h.row("c1"); cfg["Alias"] != nil {
+		t.Errorf("alias kept: %v", cfg)
+	}
+	if fmt.Sprint(h.said) != "[update c1 update c1]" || h.notes != 2 || len(h.fake.Calls()) != 0 {
+		t.Errorf("said %v notes %d calls %v", h.said, h.notes, h.calls())
+	}
+	userMsg(t, h.s.Save(context.Background(), a, "c1", []byte(`"x"`)), "Invalid connection settings")
+}
+
+func TestDelete(t *testing.T) {
+	h, a := setup(t)
+	for _, c := range []struct {
+		id   string
+		code int
+	}{{"c1", 200}, {"c2", 404}} {
+		testenv.AddConnection(t, h.d, c.id, a, "{}")
+		h.fake.Respond("POST", "/"+c.id+"/destroy", c.code, "x")
+		if err := h.s.Delete(context.Background(), a, c.id); err != nil {
+			t.Errorf("%s: %v", c.id, err)
+		}
+		if _, ok := h.row(c.id); ok {
+			t.Errorf("%s left", c.id)
+		}
+	}
+	if fmt.Sprint(h.said) != "[delete c1 delete c2]" {
+		t.Errorf("said %v", h.said)
+	}
+	testenv.AddConnection(t, h.d, "c3", a, "{}")
+	h.fake.Respond("POST", "/c3/destroy", 500, "x\n")
+	userMsg(t, h.s.Delete(context.Background(), a, "c3"), "x")
+	if _, ok := h.row("c3"); !ok {
+		t.Error("c3 deleted after a failed destroy")
+	}
+}
+
+func TestServerKey(t *testing.T) {
+	k := func(s string) string {
+		var m map[string]any
+		d := json.NewDecoder(strings.NewReader(s))
+		d.UseNumber()
+		d.Decode(&m)
+		return serverKey(m)
+	}
+	if k(`{"Host":"irc.example","Port":"6667"}`) != k(`{"Host":"irc.example","Port":6667}`) {
+		t.Error("string port differs")
+	}
+	if k(`{"Host":"h","Ssl":true}`) != k(`{"Host":"h","Ssl":1}`) || k(`{"Host":"h","Ssl":false}`) != k(`{"Host":"h","Ssl":"0"}`) {
+		t.Error("ssl truth differs")
+	}
+	if k(`{"Host":" IRC.Example "}`) != k(`{"Host":"irc.example"}`) {
+		t.Error("host case differs")
+	}
+	if k(`{"Host":"h","Nick":"a"}`) == k(`{"Host":"h","Nick":"b"}`) {
+		t.Error("nick ignored")
+	}
+}
