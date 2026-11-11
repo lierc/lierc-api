@@ -74,9 +74,9 @@ func run(ctx context.Context, args []string, getenv func(string) string, stderr 
 	}()
 	// The stream and the ported routes, and everything else passed to the
 	// Perl API; /stats is on the admin listener.
-	srv := &http.Server{Handler: proxy.Wrap(cfg.TrustedProxies, api.New(cfg, d, s, proxy.PassThrough(cfg.PerlURL())))}
+	srv := newServer(proxy.Wrap(cfg.TrustedProxies, api.New(cfg, d, s, proxy.PassThrough(cfg.PerlURL()))), serverTimeouts)
 	srv.RegisterOnShutdown(s.CloseStreams)
-	admin := &http.Server{Handler: s.Admin()}
+	admin := newServer(s.Admin(), serverTimeouts)
 
 	ln, err := net.Listen("tcp", cfg.Listen)
 	if err != nil {
@@ -120,4 +120,22 @@ func run(ctx context.Context, args []string, getenv func(string) string, stderr 
 		srv.Close()
 	}
 	return code
+}
+
+// timeouts are the http.Server timeouts both listeners get.
+type timeouts struct{ ReadHeader, Read, Idle time.Duration }
+
+var serverTimeouts = timeouts{ReadHeader: 10 * time.Second, Read: 30 * time.Second, Idle: 120 * time.Second}
+
+// newServer serves h with t's timeouts and no WriteTimeout, which would end
+// every event stream and date search. ReadTimeout doesn't cut long
+// responses short: net/http clears the read deadline before its
+// background read once the request has been read.
+func newServer(h http.Handler, t timeouts) *http.Server {
+	return &http.Server{
+		Handler:           h,
+		ReadHeaderTimeout: t.ReadHeader,
+		ReadTimeout:       t.Read,
+		IdleTimeout:       t.Idle,
+	}
 }
