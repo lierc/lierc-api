@@ -193,9 +193,15 @@ func (s *Server) deregisterLocked(st *stream) {
 }
 
 // Deliver sends one NSQ "logged" message to every stream of the owner of its
-// ConnectionId. The body is passed through untouched.
+// ConnectionId. The body is passed through untouched. The logger sends
+// ConnectionId as a string and MessageId as a number (lierc's LoggedMessage);
+// a message with other types is logged and dropped. A MessageId of 0 or none
+// means the event goes out without an id.
 func (s *Server) Deliver(body []byte) {
-	var m struct{ ConnectionId, MessageId json.RawMessage }
+	var m struct {
+		ConnectionId string
+		MessageId    int64
+	}
 	if err := json.Unmarshal(body, &m); err != nil {
 		log.Printf("stream: bad message: %v", err)
 		return
@@ -217,7 +223,7 @@ func (s *Server) Deliver(body []byte) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	owner, ok, err := s.db.LookupOwner(ctx, perlString(m.ConnectionId))
+	owner, ok, err := s.db.LookupOwner(ctx, m.ConnectionId)
 	if err != nil {
 		log.Printf("stream: lookup owner: %v", err)
 		return
@@ -227,15 +233,15 @@ func (s *Server) Deliver(body []byte) {
 	}
 
 	var id string
-	if perlTrue(m.MessageId) {
-		id = perlString(m.MessageId)
+	if m.MessageId != 0 {
+		id = strconv.FormatInt(m.MessageId, 10)
 	}
 	ev := sseEvent("irc", body, id)
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if n, err := strconv.ParseInt(id, 10, 64); err == nil && len(s.streams[owner]) > 0 {
-		s.raiseLatestLocked(owner, n)
+	if m.MessageId != 0 && len(s.streams[owner]) > 0 {
+		s.raiseLatestLocked(owner, m.MessageId)
 	}
 	for _, st := range s.streams[owner] {
 		s.offerLocked(st, ev)
@@ -284,42 +290,4 @@ func streamEvent(id string) []byte {
 // hiresTime is Time::HiRes::time as Perl prints it (%.15g).
 func hiresTime() string {
 	return strconv.FormatFloat(float64(time.Now().UnixMicro())/1e6, 'g', 15, 64)
-}
-
-// perlTrue is Perl truthiness of a decoded JSON value.
-func perlTrue(v json.RawMessage) bool {
-	s := string(bytes.TrimSpace(v))
-	switch s {
-	case "", "null", "false", `""`, `"0"`:
-		return false
-	}
-	if f, err := strconv.ParseFloat(s, 64); err == nil {
-		return f != 0
-	}
-	return true
-}
-
-// perlString is how Perl interpolates a decoded JSON scalar.
-func perlString(v json.RawMessage) string {
-	s := string(bytes.TrimSpace(v))
-	switch {
-	case s == "" || s == "null":
-		return ""
-	case s == "true":
-		return "1"
-	case s == "false":
-		return "0"
-	case s[0] == '"':
-		var str string
-		if json.Unmarshal(v, &str) == nil {
-			return str
-		}
-	}
-	if _, err := strconv.ParseInt(s, 10, 64); err == nil {
-		return s
-	}
-	if f, err := strconv.ParseFloat(s, 64); err == nil {
-		return strconv.FormatFloat(f, 'g', 15, 64)
-	}
-	return s
 }

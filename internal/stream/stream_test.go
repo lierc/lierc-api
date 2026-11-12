@@ -560,7 +560,7 @@ func TestReplayOrder(t *testing.T) {
 	e.addConn("c2", u, `{"Host":"irc.two"}`)
 	e.fake.Respond("GET", "/c2/status", 200, statusJSON("c2", "me2", true, false, `,
 		"Config":{"Alias":"","Host":"irc.two"},"Isupport":[],
-		"Channels":[{"Name":"#c","Mode":"+s","Topic":{"Topic":"t2","User":"carol","Time":"1700000001"}}]`))
+		"Channels":[{"Name":"#c","Mode":"+s","Topic":{"Topic":"t2","User":"carol","Time":1700000001}}]`))
 	e.addConn("c3", u, `{"Host":"irc.three"}`)
 	e.fake.Respond("GET", "/c3/status", 200, statusJSON("c3", "me3", false, true, `,
 		"Config":{"Host":"irc.three"},"Isupport":["X=1"],
@@ -610,7 +610,7 @@ func TestReplayOrder(t *testing.T) {
 			`"c2" "liercd" 001 ["me2","Welcome to the Internet Relay Network me2"]`,
 			`"c2" "me2" JOIN ["#c"]`,
 			`"c2" "liercd" 332 ["me2","#c","t2"]`,
-			`"c2" "liercd" 333 ["me2","#c","carol","1700000001"]`,
+			`"c2" "liercd" 333 ["me2","#c","carol",1700000001]`,
 			`"c2" "liercd" 324 ["#c","+s"]`,
 		},
 	}
@@ -768,8 +768,17 @@ func TestLiveDelivery(t *testing.T) {
 		{`{"ConnectionId":"ca", "MessageId":42,"Message":{"Command":"PRIVMSG","Params":["#a","hi  there"]}}`, "42"},
 		{`{"ConnectionId":"ca","MessageId":0,"Message":{}}`, ""},
 		{`{"ConnectionId":"ca","Message":{}}`, ""},
-		{`{"ConnectionId":"ca","MessageId":"0"}`, ""},
-		{`{"ConnectionId":"ca","MessageId":"abc"}`, "abc"},
+		{`{"ConnectionId":"ca","MessageId":null}`, ""},
+	}
+	// The logger sends ConnectionId as a string and MessageId as a number;
+	// anything else is logged and dropped, so none of these reach a stream.
+	for _, bad := range []string{
+		`{"ConnectionId":"ca","MessageId":"0"}`,
+		`{"ConnectionId":"ca","MessageId":"abc"}`,
+		`{"ConnectionId":"ca","MessageId":1.5}`,
+		`{"ConnectionId":1,"MessageId":5}`,
+	} {
+		publish("logged", []byte(bad))
 	}
 	for _, m := range msgs {
 		publish("logged", []byte(m.body))
@@ -1080,12 +1089,12 @@ func TestConcurrentWritesRace(t *testing.T) {
 		go func(w int) {
 			defer wg.Done()
 			for i := 0; i < perWorker; i++ {
-				e.s.Deliver([]byte(fmt.Sprintf(`{"ConnectionId":"ca","MessageId":"d%d-%d"}`, w, i)))
+				e.s.Deliver([]byte(fmt.Sprintf(`{"ConnectionId":"ca","MessageId":%d}`, 1+w*perWorker+i)))
 			}
 		}(w)
 	}
 	for i := 0; i < viaNSQ; i++ {
-		publish("logged", []byte(fmt.Sprintf(`{"ConnectionId":"ca","MessageId":"n%d"}`, i)))
+		publish("logged", []byte(fmt.Sprintf(`{"ConnectionId":"ca","MessageId":%d}`, 100000+i)))
 	}
 	wg.Wait()
 
@@ -1098,8 +1107,8 @@ func TestConcurrentWritesRace(t *testing.T) {
 			pings++
 		case strings.Contains(ev.data, `"probe"`):
 		default:
-			var m struct{ MessageId string }
-			if err := json.Unmarshal([]byte(ev.data), &m); err != nil || m.MessageId != ev.id || seen[ev.id] {
+			var m struct{ MessageId json.Number }
+			if err := json.Unmarshal([]byte(ev.data), &m); err != nil || m.MessageId.String() != ev.id || seen[ev.id] {
 				t.Fatalf("bad event %+v", ev)
 			}
 			seen[ev.id] = true
@@ -1327,7 +1336,7 @@ func TestLargeReplaySurvivesLiveEvents(t *testing.T) {
 	const live = 300
 	for i := 0; i < live; i++ {
 		time.Sleep(time.Millisecond)
-		e.s.Deliver([]byte(fmt.Sprintf(`{"ConnectionId":"ca","MessageId":"L%d"}`, i)))
+		e.s.Deliver([]byte(fmt.Sprintf(`{"ConnectionId":"ca","MessageId":%d}`, i+1)))
 		if i%10 == 0 {
 			e.s.pingAll()
 		}
@@ -1407,4 +1416,54 @@ func TestStreamAfterCloseStreamsEnds(t *testing.T) {
 	if n := e.s.count(u); n != 0 {
 		t.Errorf("%d streams still registered", n)
 	}
+}
+
+// liercd's status has fixed types: Registered and Connected booleans, ids,
+// nicks, names, modes and topics strings, a topic's Time a number. A status
+// with any other type is a status the stream can't read, so the replay sends
+// nothing, as for any unreadable status.
+func TestReplayRejectsLooseTypes(t *testing.T) {
+	for name, st := range map[string]string{
+		"string Registered": `{"Id":"c1","Nick":"me","Registered":"1","Status":{"Connected":true}}`,
+		"number Connected":  `{"Id":"c1","Nick":"me","Registered":true,"Status":{"Connected":1}}`,
+		"number Nick":       `{"Id":"c1","Nick":7,"Registered":true,"Status":{"Connected":true}}`,
+		"string topic Time": statusJSON("c1", "me", true, true, `,"Channels":[{"Name":"#a","Topic":{"Topic":"t","User":"u","Time":"1"}}]`),
+	} {
+		t.Run(name, func(t *testing.T) {
+			e := setup(t)
+			u := e.addUser("alice")
+			e.addConn("c1", u, `{"Host":"irc.one"}`)
+			e.fake.Respond("GET", "/c1/status", 200, st)
+			if evs := e.replayEvents(e.open(u)); len(evs) != 0 {
+				t.Errorf("replay sent %d events for a status with a loose type: %+v", len(evs), evs[0])
+			}
+		})
+	}
+}
+
+// Go sends null for a missing topic, nick list, status or channel list; the
+// replay treats each as absent.
+func TestReplayNulls(t *testing.T) {
+	e := setup(t)
+	u := e.addUser("alice")
+	e.addConn("c1", u, `{"Host":"irc.one"}`)
+	e.fake.Respond("GET", "/c1/status", 200,
+		`{"Id":"c1","Nick":"me","Registered":true,"Status":null,"Config":null,"Isupport":null,"CapsAcked":null,`+
+			`"Channels":[{"Name":"#a","Mode":"","Topic":null,"Nicks":null}]}`)
+	c := e.open(u)
+	evs := e.replayEvents(c)
+	checkSnapshot(t, evs[0], map[string]string{"c1": `{"Id":"c1","Name":"","Nick":"me","Connected":false}`})
+	var lines []string
+	for _, ev := range evs[1:] {
+		_, line := decodeIRC(t, ev)
+		lines = append(lines, line)
+	}
+	want := []string{
+		`"c1" "liercd" 001 ["me","Welcome to the Internet Relay Network me"]`,
+		`"c1" "me" JOIN ["#a"]`,
+	}
+	if strings.Join(lines, "\n") != strings.Join(want, "\n") {
+		t.Errorf("replay:\n%s\nwant:\n%s", strings.Join(lines, "\n"), strings.Join(want, "\n"))
+	}
+	c.checkErr()
 }

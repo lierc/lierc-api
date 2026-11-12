@@ -24,65 +24,57 @@ const (
 	rplEndOfNames    = "366"
 )
 
-// status is the part of liercd's GET /:id/status the stream reads. Values that
-// Perl copies into events stay raw so they pass through with their JSON type.
+// status is the part of liercd's GET /:id/status the stream reads, with
+// liercd's types (lierc's IRCClientData). A status with any other type
+// doesn't decode, which fails the replay like any unreadable status. Go
+// sends null for an empty list, topic or status; each reads as absent.
 type status struct {
-	Id     json.RawMessage
-	Nick   json.RawMessage
-	Config struct{ Alias, Host json.RawMessage }
-	Status struct{ Connected json.RawMessage }
+	Id     string
+	Nick   string
+	Config *struct{ Alias, Host string }
+	Status *struct{ Connected bool }
 
-	Registered json.RawMessage
-	Isupport   []json.RawMessage
-	CapsAcked  []json.RawMessage
+	Registered bool
+	Isupport   []string
+	CapsAcked  []string
 	Channels   []channel
 }
 
 type channel struct {
-	Name, Mode json.RawMessage
-	Topic      struct{ Topic, User, Time json.RawMessage }
-	Nicks      *[]json.RawMessage // nil when missing or null
+	Name, Mode string
+	Topic      *struct {
+		Topic, User string
+		Time        int64
+	}
+	Nicks *[]string // nil when missing or null
 }
 
-var liercdPrefix = jsonString("liercd")
+const liercdPrefix = "liercd"
 
-func jsonString(s string) json.RawMessage {
-	b, _ := respond.Marshal(s)
-	return b
-}
-
-type ircPrefix struct{ Name json.RawMessage }
+type ircPrefix struct{ Name string }
 
 type ircMessage struct {
 	Command string
 	Prefix  ircPrefix
-	Params  []json.RawMessage
+	Params  []any // strings, and a topic's time as a number
 	Time    json.Number
 }
 
 type ircPayload struct {
-	ConnectionId json.RawMessage
+	ConnectionId string
 	Message      ircMessage
 }
 
 // ircEvent is Util::irc_event. Time is float seconds, as Time::HiRes::time.
-func ircEvent(id, prefix json.RawMessage, command string, params ...json.RawMessage) []byte {
+func ircEvent(id, prefix, command string, params ...any) []byte {
 	if params == nil {
-		params = []json.RawMessage{}
+		params = []any{}
 	}
 	b, err := respond.Marshal(ircPayload{id, ircMessage{command, ircPrefix{prefix}, params, json.Number(hiresTime())}})
 	if err != nil {
-		panic(err) // raw values came from json.Unmarshal, so they are valid
+		panic(err) // strings and ints always marshal
 	}
 	return sseEvent("irc", b, "")
-}
-
-func joinStrings(vs []json.RawMessage) string {
-	parts := make([]string, len(vs))
-	for i, v := range vs {
-		parts[i] = perlString(v)
-	}
-	return strings.Join(parts, " ")
 }
 
 // replay pushes the fake events that bring a new stream up to date
@@ -116,12 +108,12 @@ func (s *Server) replay(ctx context.Context, st *stream, conns []db.Connection) 
 
 	var registered []*status
 	for _, stat := range statuses {
-		if perlTrue(stat.Registered) {
+		if stat.Registered {
 			registered = append(registered, stat)
 		}
 	}
 	var evs [][]byte
-	emit := func(id, prefix json.RawMessage, command string, params ...json.RawMessage) {
+	emit := func(id, prefix, command string, params ...any) {
 		evs = append(evs, ircEvent(id, prefix, command, params...))
 	}
 
@@ -131,13 +123,12 @@ func (s *Server) replay(ctx context.Context, st *stream, conns []db.Connection) 
 	evs = append(evs, snapshotEvent(statuses))
 	// push_welcome. A missing Isupport would die in Perl; it is treated as empty.
 	for _, stat := range registered {
-		welcome := "Welcome to the Internet Relay Network " + perlString(stat.Nick)
-		emit(stat.Id, liercdPrefix, rplWelcome, stat.Nick, jsonString(welcome))
+		emit(stat.Id, liercdPrefix, rplWelcome, stat.Nick, "Welcome to the Internet Relay Network "+stat.Nick)
 		if len(stat.Isupport) > 0 {
-			emit(stat.Id, liercdPrefix, rplISupport, stat.Nick, jsonString(joinStrings(stat.Isupport)))
+			emit(stat.Id, liercdPrefix, rplISupport, stat.Nick, strings.Join(stat.Isupport, " "))
 		}
 		if len(stat.CapsAcked) > 0 {
-			emit(stat.Id, liercdPrefix, "CAP", jsonString("*"), jsonString("ACK"), jsonString(joinStrings(stat.CapsAcked)))
+			emit(stat.Id, liercdPrefix, "CAP", "*", "ACK", strings.Join(stat.CapsAcked, " "))
 		}
 	}
 	// push_joins
@@ -149,7 +140,7 @@ func (s *Server) replay(ctx context.Context, st *stream, conns []db.Connection) 
 	// push_topics
 	for _, stat := range registered {
 		for _, ch := range stat.Channels {
-			if perlTrue(ch.Topic.Topic) {
+			if ch.Topic != nil && ch.Topic.Topic != "" {
 				emit(stat.Id, liercdPrefix, rplTopic, stat.Nick, ch.Name, ch.Topic.Topic)
 				emit(stat.Id, liercdPrefix, rplTopicTime, stat.Nick, ch.Name, ch.Topic.User, ch.Topic.Time)
 			}
@@ -164,16 +155,16 @@ func (s *Server) replay(ctx context.Context, st *stream, conns []db.Connection) 
 			nicks := *ch.Nicks
 			for len(nicks) > 0 {
 				n := min(50, len(nicks))
-				emit(stat.Id, liercdPrefix, rplNamReply, stat.Nick, jsonString("="), ch.Name, jsonString(joinStrings(nicks[:n])))
+				emit(stat.Id, liercdPrefix, rplNamReply, stat.Nick, "=", ch.Name, strings.Join(nicks[:n], " "))
 				nicks = nicks[n:]
 			}
-			emit(stat.Id, liercdPrefix, rplEndOfNames, stat.Nick, ch.Name, jsonString("End of /NAMES list."))
+			emit(stat.Id, liercdPrefix, rplEndOfNames, stat.Nick, ch.Name, "End of /NAMES list.")
 		}
 	}
 	// push_modes
 	for _, stat := range registered {
 		for _, ch := range stat.Channels {
-			if perlTrue(ch.Mode) {
+			if ch.Mode != "" {
 				emit(stat.Id, liercdPrefix, rplChannelModeIs, ch.Name, ch.Mode)
 			}
 		}
@@ -201,8 +192,8 @@ func (s *Server) saveChannels(ctx context.Context, user string) {
 			continue
 		}
 		var stat struct {
-			Id       json.RawMessage
-			Channels []struct{ Name json.RawMessage }
+			Id       string
+			Channels []struct{ Name string }
 		}
 		if json.Unmarshal(res.Body, &stat) != nil || len(stat.Channels) == 0 {
 			continue
@@ -214,7 +205,7 @@ func (s *Server) saveChannels(ctx context.Context, user string) {
 		if cfg == nil {
 			cfg = map[string]json.RawMessage{}
 		}
-		names := make([]json.RawMessage, len(stat.Channels))
+		names := make([]string, len(stat.Channels))
 		for i, ch := range stat.Channels {
 			names[i] = ch.Name
 		}
@@ -226,14 +217,14 @@ func (s *Server) saveChannels(ctx context.Context, user string) {
 			continue
 		}
 		// Perl updates the row named by the status Id, not the connection id.
-		if err := s.db.UpdateConfig(ctx, perlString(stat.Id), b); err != nil {
+		if err := s.db.UpdateConfig(ctx, stat.Id, b); err != nil {
 			log.Printf("stream: save channels for %s: %v", c.ID, err)
 		}
 	}
 }
 
 type snapshotEntry struct {
-	Id, Name, Nick json.RawMessage
+	Id, Name, Nick string
 	Connected      bool
 }
 
@@ -243,15 +234,18 @@ type snapshotEntry struct {
 func snapshotEvent(statuses []*status) []byte {
 	list := make([]snapshotEntry, 0, len(statuses))
 	for _, stat := range statuses {
-		name := stat.Config.Alias
-		if !perlTrue(name) {
-			name = stat.Config.Host
+		var name string
+		if stat.Config != nil {
+			name = stat.Config.Alias
+			if name == "" {
+				name = stat.Config.Host
+			}
 		}
-		list = append(list, snapshotEntry{stat.Id, name, stat.Nick, perlTrue(stat.Status.Connected)})
+		list = append(list, snapshotEntry{stat.Id, name, stat.Nick, stat.Status != nil && stat.Status.Connected})
 	}
 	b, err := respond.Marshal(list)
 	if err != nil {
-		panic(err) // raw values came from json.Unmarshal, so they are valid
+		panic(err) // strings and bools always marshal
 	}
 	return sseEvent("connections", b, "")
 }
