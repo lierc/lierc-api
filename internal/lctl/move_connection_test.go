@@ -81,7 +81,7 @@ func TestMoveMainToNext(t *testing.T) {
 	if got := m.column("c1"); got != "next" {
 		t.Errorf("column = %q", got)
 	}
-	if got := m.next.Calls(); len(got) != 2 || got[1].Path != "/c1/create" || got[1].Body != `{"Host":"x"}` {
+	if got := m.next.Calls(); len(got) != 2 || got[1].Path != "/c1/create" || !testenv.SameJSON(got[1].Body, `{"Host":"x"}`) {
 		t.Errorf("next calls = %v", got)
 	}
 	if m.main.Running("c1") || !m.next.Running("c1") {

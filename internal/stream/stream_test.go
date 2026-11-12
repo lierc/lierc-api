@@ -672,7 +672,7 @@ func TestReplayRecreates(t *testing.T) {
 	for _, call := range e.fake.Calls() {
 		if call.Method == "POST" && call.Path == "/c4/create" {
 			created = true
-			if call.Body != cfg {
+			if !testenv.SameJSON(call.Body, cfg) {
 				t.Errorf("create body = %q, want %q", call.Body, cfg)
 			}
 		}

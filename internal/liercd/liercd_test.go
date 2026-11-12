@@ -65,7 +65,7 @@ func TestFindOrRecreateCreates(t *testing.T) {
 		t.Fatalf("calls = %+v", got)
 	}
 	for i := range want {
-		if got[i] != want[i] {
+		if got[i].Method != want[i].Method || got[i].Path != want[i].Path || got[i].Body != want[i].Body && !testenv.SameJSON(got[i].Body, want[i].Body) {
 			t.Errorf("call %d = %+v want %+v", i, got[i], want[i])
 		}
 	}
@@ -225,7 +225,7 @@ func TestFindOrRecreateRoutes(t *testing.T) {
 	if err != nil || string(body) != `{"Status":"new"}` {
 		t.Fatalf("got %s %v", body, err)
 	}
-	if got := n.Calls(); len(got) != 3 || got[1] != (testenv.LiercdCall{Method: "POST", Path: "/c1/create", Body: `{"a":1}`}) {
+	if got := n.Calls(); len(got) != 3 || got[1].Method != "POST" || got[1].Path != "/c1/create" || !testenv.SameJSON(got[1].Body, `{"a":1}`) {
 		t.Fatalf("next calls = %+v", got)
 	}
 	if got := m.Calls(); len(got) != 0 {

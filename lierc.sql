@@ -25,7 +25,7 @@ create unique index user_username_lower_key on "user" (lower(username));
 create table connection (
   id      varchar(24) not null,
   "user"  varchar(24) not null,
-  config  json not null,
+  config  jsonb not null,
   liercd  text,
   -- when the user added the connection, and when its settings last
   -- changed through the API or the stream server (not the logger's saves

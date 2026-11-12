@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/lierc/lierc-api/internal/liercd"
+	"github.com/lierc/lierc-api/internal/testenv"
 )
 
 const cfg = `{"Host":"ergo","Port":6667,"Nick":"x"}`
@@ -22,7 +23,7 @@ func TestReconnect(t *testing.T) {
 	}
 	h.has("reconnected c1\n", "reconnected 1, failed 0\n")
 	calls := h.liercd.Calls()
-	if len(calls) != 2 || calls[0].Path != "/c1/destroy" || calls[1].Path != "/c1/create" || calls[1].Body != cfg {
+	if len(calls) != 2 || calls[0].Path != "/c1/destroy" || calls[1].Path != "/c1/create" || !testenv.SameJSON(calls[1].Body, cfg) {
 		t.Fatalf("calls %+v", calls)
 	}
 }

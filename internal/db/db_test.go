@@ -70,7 +70,7 @@ func TestConnections(t *testing.T) {
 	}
 
 	cfgB, ok, err := d.LookupConfig(ctx, "c1")
-	if err != nil || !ok || string(cfgB) != `{"Host":"irc.example.com"}` {
+	if err != nil || !ok || !testenv.SameJSON(string(cfgB), `{"Host":"irc.example.com"}`) {
 		t.Fatalf("LookupConfig = %s %v %v", cfgB, ok, err)
 	}
 	if _, ok, _ := d.LookupConfig(ctx, "zz"); ok {
@@ -87,7 +87,7 @@ func TestConnections(t *testing.T) {
 	if err := d.UpdateConfig(ctx, "c1", []byte(`{"Host":"new"}`)); err != nil {
 		t.Fatal(err)
 	}
-	if cfgB, _, _ = d.LookupConfig(ctx, "c1"); string(cfgB) != `{"Host":"new"}` {
+	if cfgB, _, _ = d.LookupConfig(ctx, "c1"); !testenv.SameJSON(string(cfgB), `{"Host":"new"}`) {
 		t.Fatalf("after update: %s", cfgB)
 	}
 }
