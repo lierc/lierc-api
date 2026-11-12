@@ -47,6 +47,7 @@ func New(cfg config.Config, d *db.DB, streams *stream.Server, lc *liercd.Client)
 	a.search(mux)
 	a.connections(mux)
 	a.accounts(mux)
+	a.logins(mux)
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		respond.Error(w, http.StatusNotFound, "not found")
 	})
