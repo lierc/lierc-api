@@ -54,7 +54,9 @@ func init() {
 var (
 	nickRe = regexp.MustCompile(`^[^#~&@%+\-$][\pL\pN\pP\pS]*$`)
 	// any characters but space, NUL, CR, LF and @, not starting with :
-	userRe    = regexp.MustCompile(`^[^ \x00\r\n@:][^ \x00\r\n@]{0,31}$`)
+	// The username is the USER ident and, with SASL, the SASL login. An @ is
+	// allowed: Ergo reads "alice@phone" as account alice on device phone.
+	userRe    = regexp.MustCompile(`^[^ \x00\r\n:][^ \x00\r\n]{0,31}$`)
 	channelRe = regexp.MustCompile(`^[#&+!][^` + perlSpace + `,\x00-\x1f\x7f]{1,199}\n?$`)
 	aliasRe   = regexp.MustCompile(`^[A-Za-z0-9 .-]{1,32}\n?$`)
 	portRe    = regexp.MustCompile(`^[ \t\n\r\f\v]*([0-9]{1,5})[ \t\n\r\f\v]*\n?$`)
@@ -67,7 +69,7 @@ var (
 const (
 	errNick     = "Nick can only use letters, numbers, punctuation and symbols, not spaces or , * ? . ! @ : < > ' \" ; # /, and can't start with ~ & % + - or $"
 	errNickLong = "Nick must be at most 32 bytes; accented letters and emoji take 2 to 4 each"
-	errUser     = "Username must be up to 32 characters, without spaces or @, and can't start with :"
+	errUser     = "Username must be up to 32 characters, without spaces, and can't start with :"
 	errAlias    = "Network alias can only use letters, digits, spaces, dots and hyphens, up to 32 characters"
 )
 
