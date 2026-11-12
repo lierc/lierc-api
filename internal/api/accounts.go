@@ -50,6 +50,7 @@ func (a *api) accounts(mux *http.ServeMux) {
 	mux.HandleFunc("POST /reset", a.reset)
 	mux.HandleFunc("POST /reset/confirm", a.resetConfirm)
 	mux.HandleFunc("POST /unsubscribe", a.unsubscribe)
+	mux.HandleFunc("GET /unsubscribe", unsubscribePage)
 }
 
 // userBody is GET /auth's answer.
@@ -251,4 +252,17 @@ func (a *api) unsubscribe(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	ok(w)
+}
+
+// unsubscribePage sends a mail client that opens the List-Unsubscribe URL,
+// instead of posting to it, to the unsubscribe page, which asks first. It
+// changes nothing. Only a token of base64url characters is passed on, so
+// nothing else can reach the Location header.
+func unsubscribePage(w http.ResponseWriter, r *http.Request) {
+	loc := "/unsubscribe/"
+	if t := r.URL.Query().Get("token"); t != "" && strings.Trim(t, "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_") == "" {
+		loc += "#" + t
+	}
+	w.Header().Set("Location", loc)
+	w.WriteHeader(http.StatusSeeOther)
 }

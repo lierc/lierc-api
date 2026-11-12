@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/base64"
+	"net/http"
 	"net/url"
 	"strings"
 	"testing"
@@ -79,12 +80,28 @@ func TestUnsubscribeGoneUser(t *testing.T) {
 	}
 }
 
-func TestUnsubscribeGetGone(t *testing.T) {
+// A mail client that opens the List-Unsubscribe URL instead of posting to
+// it lands on the page, with nothing changed.
+func TestUnsubscribeGetRedirects(t *testing.T) {
 	e := setup(t)
 	a := testenv.AddUser(t, e.db, "alice")
-	res := e.do("GET", "/unsubscribe", a)
-	res.Body.Close()
-	if res.StatusCode != 404 {
-		t.Errorf("GET /unsubscribe: %d, want 404", res.StatusCode)
+	tok := e.unsubscribeToken(a)
+	noFollow := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	for _, c := range []struct{ query, want string }{
+		{"?token=" + url.QueryEscape(tok), "/unsubscribe/#" + tok},
+		{"", "/unsubscribe/"},
+		{"?token=" + url.QueryEscape("a b<\r\n>"), "/unsubscribe/"},
+	} {
+		res, err := noFollow.Get(e.srv.URL + "/unsubscribe" + c.query)
+		if err != nil {
+			t.Fatal(err)
+		}
+		res.Body.Close()
+		if res.StatusCode != 303 || res.Header.Get("Location") != c.want {
+			t.Errorf("GET %q: %d %q, want 303 %q", c.query, res.StatusCode, res.Header.Get("Location"), c.want)
+		}
+	}
+	if v := e.emailPref(a); v != "none" {
+		t.Errorf("email pref = %s after GETs, want untouched", v)
 	}
 }
