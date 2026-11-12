@@ -3,6 +3,8 @@ package accounts
 import (
 	"regexp"
 	"strings"
+
+	"golang.org/x/net/publicsuffix"
 )
 
 // IsEmail ports Data::Validate::Email::is_email as Auth.pm calls it (no
@@ -27,8 +29,9 @@ var (
 	domainLabel = regexp.MustCompile(`^(?:[0-9A-Za-z]|[0-9A-Za-z][0-9A-Za-z-]*[0-9A-Za-z])$`)
 )
 
-// isDomain is Data::Validate::Domain::is_domain with default options: no
-// underscores, at least two labels, and a TLD that Net::Domain::TLD knows.
+// isDomain is Data::Validate::Domain::is_domain with default options (no
+// underscores, at least two labels), except that the TLD is checked against
+// the Public Suffix List's ICANN section rather than Perl's Net::Domain::TLD.
 func isDomain(d string) bool {
 	trailingDot := strings.HasSuffix(d, ".")
 	d = strings.TrimSuffix(d, ".")
@@ -48,5 +51,15 @@ func isDomain(d string) bool {
 	if len(labels) < 2 {
 		return false
 	}
-	return tlds[strings.ToLower(labels[len(labels)-1])]
+	return isTLD(strings.ToLower(labels[len(labels)-1]))
+}
+
+// isTLD says whether tld is a top-level domain in the ICANN section of the
+// Public Suffix List, which follows IANA's root zone and leaves out the
+// reserved names (test, example, invalid, localhost). It asks about a name
+// under tld, so a TLD the list has only as a wildcard rule (*.ck) counts.
+// The list is embedded in golang.org/x/net; bumping that module updates it.
+func isTLD(tld string) bool {
+	suffix, icann := publicsuffix.PublicSuffix("x." + tld)
+	return icann && (suffix == tld || strings.HasSuffix(suffix, "."+tld))
 }

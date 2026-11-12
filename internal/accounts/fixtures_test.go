@@ -89,9 +89,21 @@ func TestIsEmailMatchesPerl(t *testing.T) {
 	// Perl's split drops trailing empty fields, so it takes these; Go
 	// refuses them (the documented fix).
 	fixed := map[string]bool{"a@b.com@": true, "a@b.com@@": true}
+	// TLDs now come from the Public Suffix List (TestIsEmailTLDs): reserved
+	// names Perl's list took are refused, and a newer TLD is taken.
+	tldChanged := map[string]bool{
+		"a@example.test": false, "a@foo.localhost": false, "a@x.example": false,
+		"a@x.invalid": false, "a@x.inc": true,
+	}
 	seen := 0
 	for _, c := range fx.Emails {
 		got := IsEmail(c.Email)
+		if want, ok := tldChanged[c.Email]; ok {
+			if got != want || c.Valid == want {
+				t.Errorf("IsEmail(%q) = %v, want %v (Perl %v)", c.Email, got, want, c.Valid)
+			}
+			continue
+		}
 		if fixed[c.Email] {
 			seen++
 			if !c.Valid {
@@ -116,6 +128,36 @@ func TestIrcNickMatchesPerl(t *testing.T) {
 	for _, c := range fx.Nicks {
 		if got := IrcNick(c.Username); got != c.Nick {
 			t.Errorf("IrcNick(%q) = %q, Perl %q", c.Username, got, c.Nick)
+		}
+	}
+}
+
+// The TLD comes from the Public Suffix List (golang.org/x/net/publicsuffix),
+// which tracks IANA's root zone, not Perl's frozen Net::Domain::TLD list.
+func TestIsEmailTLDs(t *testing.T) {
+	for addr, want := range map[string]bool{
+		"a@x.com":       true,
+		"a@x.uk":        true,
+		"a@x.co.uk":     true,
+		"a@x.africa":    true, // newer than Perl's list
+		"a@x.music":     true,
+		"a@x.llc":       true,
+		"a@x.inc":       true,
+		"a@x.AFRICA":    true,
+		"a@x.ck":        true, // a wildcard rule (*.ck) in the list
+		"a@x.xn--p1ai":  true,
+		"a@x.test":      false, // reserved (RFC 2606), which Perl's list took
+		"a@x.example":   false,
+		"a@x.invalid":   false,
+		"a@x.localhost": false,
+		"a@x.yu":        false, // retired
+		"a@x.an":        false,
+		"a@x.zz":        false,
+		"a@x.github.io": true, // a private suffix still ends in a real TLD
+		"a@x.io.":       true,
+	} {
+		if got := IsEmail(addr); got != want {
+			t.Errorf("IsEmail(%q) = %v, want %v", addr, got, want)
 		}
 	}
 }

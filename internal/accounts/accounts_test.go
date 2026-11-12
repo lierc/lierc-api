@@ -319,7 +319,7 @@ func TestRegister(t *testing.T) {
 		{strings.Repeat("a", 33), "a@example.com", "p", "Usernames can only use letters, digits, _ and ., up to 32 characters"},
 		{"a@b", "a@example.com", "p", "Usernames can only use letters, digits, _ and ., up to 32 characters"},
 		{"a", "not an email", "p", "Invalid email address"},
-		{"a", "a@x.inc", "p", "Invalid email address"},
+		{"a", "a@x.zz", "p", "Invalid email address"},
 		// Perl's lc is ASCII-only: the Kelvin sign doesn't become "k"
 		{"a", "K@example.com", "p", "Invalid email address"},
 	} {
@@ -481,7 +481,7 @@ func TestReset(t *testing.T) {
 	h.s.Now = func() time.Time { return now }
 	id := h.addUser("forgot", "forgot@example.com", "p", ptr(true))
 
-	for _, e := range []string{"", "nope", "a@x.inc"} {
+	for _, e := range []string{"", "nope", "a@x.zz"} {
 		wantError(t, h.s.Reset(ctx, e), 400, "Invalid email address")
 	}
 	if err := h.s.Reset(ctx, "unknown@example.com"); err != nil || len(h.mail.all()) != 0 {
