@@ -31,12 +31,16 @@ type env struct {
 	srv  *httptest.Server
 	fake *testenv.LiercdServer
 	s    *stream.Server
+	cfg  config.Config
 }
 
 func setup(t *testing.T) *env { return setupCfg(t, config.Config{Secret: testSecret}) }
 
 func setupCfg(t *testing.T, cfg config.Config) *env {
 	t.Helper()
+	if cfg.UnsubscribeSecret == "" {
+		cfg.UnsubscribeSecret = "test-unsubscribe-secret"
+	}
 	d := testenv.Postgres(t)
 	fake := testenv.FakeLiercd(t)
 	lc := &liercd.Client{BaseURL: fake.URL, HTTP: &http.Client{Transport: &http.Transport{DisableKeepAlives: true}}}
@@ -46,7 +50,7 @@ func setupCfg(t *testing.T, cfg config.Config) *env {
 	t.Cleanup(func() { checkHost = old })
 	srv := httptest.NewServer(New(cfg, d, s, lc))
 	t.Cleanup(srv.Close)
-	return &env{t: t, db: d, srv: srv, fake: fake, s: s}
+	return &env{t: t, db: d, srv: srv, fake: fake, s: s, cfg: cfg}
 }
 
 // do sends method path, logged in as user unless user is "".

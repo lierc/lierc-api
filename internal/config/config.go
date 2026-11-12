@@ -11,8 +11,11 @@ import (
 
 type Config struct {
 	LiercdHost, DBHost, DBUser, DBPass, DBName, Secret string
-	NSQAddr                                            string
-	Listen                                             string
+	// UnsubscribeSecret signs the unsubscribe links in notification
+	// emails (UNSUBSCRIBE_SECRET); lierc's notifier has the same one.
+	UnsubscribeSecret string
+	NSQAddr           string
+	Listen            string
 	// AdminListen is the internal admin listener (ADMIN_LISTEN), serving
 	// /stats without authentication; keep it on loopback.
 	AdminListen    string
@@ -78,15 +81,16 @@ func Load(getenv func(string) string) (Config, error) {
 		DBPass:         or("POSTGRES_PASSWORD", ""),
 		// Stream's Postgres pool hard-codes dbname "lierc" (bin/stream.psgi),
 		// so POSTGRES_DB is ignored.
-		DBName:      "lierc",
-		Secret:      or("API_SECRET", "changeme"),
-		NSQAddr:     or("NSQD_HOST", "127.0.0.1"),
-		Listen:      or("LISTEN", ":5003"),
-		AdminListen: or("ADMIN_LISTEN", "127.0.0.1:5009"),
-		SMTPOpts:    getenv("SMTP_OPTS"),
-		FromAddress: or("FROM_ADDRESS", "do-not-reply@relaychat.party"),
-		SiteURL:     or("API_URL", "https://relaychat.party"),
-		NoSMTP:      getenv("LIERC_NO_SMTP") != "" && getenv("LIERC_NO_SMTP") != "0",
+		DBName:            "lierc",
+		Secret:            or("API_SECRET", "changeme"),
+		UnsubscribeSecret: or("UNSUBSCRIBE_SECRET", "changeme"),
+		NSQAddr:           or("NSQD_HOST", "127.0.0.1"),
+		Listen:            or("LISTEN", ":5003"),
+		AdminListen:       or("ADMIN_LISTEN", "127.0.0.1:5009"),
+		SMTPOpts:          getenv("SMTP_OPTS"),
+		FromAddress:       or("FROM_ADDRESS", "do-not-reply@relaychat.party"),
+		SiteURL:           or("API_URL", "https://relaychat.party"),
+		NoSMTP:            getenv("LIERC_NO_SMTP") != "" && getenv("LIERC_NO_SMTP") != "0",
 	}
 	// NSQD_HOST may carry a port; without one nsqd's default 4150 is used.
 	if _, _, err := net.SplitHostPort(c.NSQAddr); err != nil {

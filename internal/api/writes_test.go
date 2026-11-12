@@ -37,7 +37,7 @@ func (e *env) row(sql string, args ...any) string {
 func TestWritesNeedLogin(t *testing.T) {
 	e := setup(t)
 	for _, rq := range [][2]string{
-		{"POST", "/preference/theme"}, {"GET", "/unsubscribe"}, {"POST", "/connection/c1/channel/%23a/seen"},
+		{"POST", "/preference/theme"}, {"POST", "/connection/c1/channel/%23a/seen"},
 		{"POST", "/connection/c1/nick/bob"}, {"DELETE", "/connection/c1/nick/bob"},
 	} {
 		e.sendWant(rq[0], rq[1], "", "1", 401, `{"status":"error","error":"unauthorized"}`)
@@ -58,15 +58,6 @@ func TestSetPreference(t *testing.T) {
 	e.sendWant("POST", "/preference/bad", a, "ab\xffc", 204, "")
 	if v := e.row(`SELECT value FROM pref WHERE "user"=$1 AND name='bad'`, a); v != "ab�c" {
 		t.Errorf("bad = %q", v)
-	}
-}
-
-func TestUnsubscribe(t *testing.T) {
-	e := setup(t)
-	a := testenv.AddUser(t, e.db, "alice")
-	e.sendWant("GET", "/unsubscribe", a, "", 204, "")
-	if v := e.row(`SELECT value FROM pref WHERE "user"=$1 AND name='email'`, a); v != "false" {
-		t.Errorf("email = %s", v)
 	}
 }
 

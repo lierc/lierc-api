@@ -16,7 +16,6 @@ import (
 // The small writes, ported from lib/API/Controller/*.pm.
 func (a *api) writes(mux *http.ServeMux) {
 	mux.Handle("POST /preference/{pref}", a.users.Require(a.setPreference))
-	mux.Handle("GET /unsubscribe", a.users.Require(a.unsubscribe))
 	mux.Handle("POST /connection/{id}/channel/{channel}/seen", a.users.Require(a.owned(a.setSeen)))
 	mux.Handle("POST /connection/{id}/nick/{nick}", a.users.Require(a.owned(a.addPrivate)))
 	mux.Handle("DELETE /connection/{id}/nick/{nick}", a.users.Require(a.owned(a.deletePrivate)))
@@ -82,11 +81,6 @@ func (a *api) setPreference(w http.ResponseWriter, r *http.Request, user string)
 		return
 	}
 	a.done(w, "set preference", a.db.SetPref(r.Context(), user, name, value))
-}
-
-// unsubscribe turns email notifications off (Pref.pm unsubscribe).
-func (a *api) unsubscribe(w http.ResponseWriter, r *http.Request, user string) {
-	a.done(w, "unsubscribe", a.db.SetPref(r.Context(), user, "email", "false"))
 }
 
 // setSeen records the body's message id as the last one seen in

@@ -49,6 +49,7 @@ func (a *api) accounts(mux *http.ServeMux) {
 	mux.Handle("POST /verify/resend", a.users.RequireAny(a.resend))
 	mux.HandleFunc("POST /reset", a.reset)
 	mux.HandleFunc("POST /reset/confirm", a.resetConfirm)
+	mux.HandleFunc("POST /unsubscribe", a.unsubscribe)
 }
 
 // userBody is GET /auth's answer.
@@ -221,4 +222,33 @@ func (a *api) resetConfirm(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	a.loggedIn(w, r, u)
+}
+
+// unsubscribe turns email notifications off for the user an emailed
+// unsubscribe token names. It needs no login: it's posted by the
+// unsubscribe page, or by a mail provider's one-click button
+// (List-Unsubscribe-Post), with the token in the query. A user who no
+// longer exists gets ok too: nothing will be emailed.
+func (a *api) unsubscribe(w http.ResponseWriter, r *http.Request) {
+	param, good := formParams(w, r)
+	if !good {
+		return
+	}
+	user, valid := accounts.CheckUnsubscribeToken(a.cfg.UnsubscribeSecret, param("token"))
+	if !valid {
+		respond.Error(w, http.StatusBadRequest, "This unsubscribe link isn't valid.")
+		return
+	}
+	var exists bool
+	if err := a.db.Pool.QueryRow(r.Context(), `SELECT EXISTS (SELECT 1 FROM "user" WHERE id = $1)`, user).Scan(&exists); err != nil {
+		respond.Internal(w, "unsubscribe", err)
+		return
+	}
+	if exists {
+		if err := a.db.SetPref(r.Context(), user, "email", "false"); err != nil {
+			respond.Internal(w, "unsubscribe", err)
+			return
+		}
+	}
+	ok(w)
 }
