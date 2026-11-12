@@ -1,14 +1,13 @@
-// Package connconfig is the Go copy of lib/API/ConnectionConfig.pm: the rules
-// the API applies to an IRC connection's settings, and the check that refuses
-// hosts pointing at loopback or private addresses. lctl uses it to judge
-// saved connections as the API judged them, with one deliberate difference:
-// it doesn't follow Perl's type conversions. Text fields must be JSON
-// strings, Port a JSON number, Ssl/SASL JSON booleans, Channels/Highlight
-// lists of strings (null counts as missing). Otherwise it reproduces Perl's
-// behaviour, quirks included: `\s` is Unicode whitespace and `$` also matches
-// before a final newline. testdata/connection-config-cases.json is run by
-// both test suites: Go must match every case with proper JSON types and
-// refuse the rest. A rule changed here must change there too.
+// Package connconfig is the rules the API applies to an IRC connection's
+// settings, and the check that refuses hosts pointing at loopback or private
+// addresses. It began as a copy of the Perl API's lib/API/ConnectionConfig.pm
+// (now only in git history) and keeps its rules, quirks included: `\s` is
+// Unicode whitespace and `$` also matches before a final newline. It doesn't
+// follow Perl's type conversions: text fields must be JSON strings, Port a
+// JSON number, Ssl/SASL JSON booleans, Channels/Highlight lists of strings
+// (null counts as missing). testdata/connection-config-cases.json, generated
+// from the Perl code and now edited by hand, is the record of those rules:
+// a rule changed here must change there too.
 package connconfig
 
 import (
@@ -28,6 +27,8 @@ import (
 
 	foldcase "golang.org/x/text/cases"
 	"golang.org/x/text/unicode/norm"
+
+	"github.com/lierc/lierc-api/internal/config"
 )
 
 // perlSpace is Perl's Unicode \s (the White_Space property) as a character
@@ -309,24 +310,7 @@ func Exempt(getenv func(string) string, host string, port int) bool {
 	if def == "" {
 		return false
 	}
-	p := getenv("DEFAULT_NETWORK_PORT")
-	if p == "" || p == "0" { // Perl's ||
-		p = "6667"
-	}
-	return strings.ToLower(host) == strings.ToLower(def) && float64(port) == perlInt(p)
-}
-
-var numPrefix = regexp.MustCompile(`^[ \t\n\r\f\v]*([+-]?(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)(?:[eE][+-]?[0-9]+)?)`)
-
-// perlInt is Perl's int() of a string: its leading number, truncated; 0 if
-// it doesn't start with one.
-func perlInt(s string) float64 {
-	m := numPrefix.FindStringSubmatch(s)
-	if m == nil {
-		return 0
-	}
-	f, _ := strconv.ParseFloat(m[1], 64)
-	return math.Trunc(f)
+	return strings.ToLower(host) == strings.ToLower(def) && port == config.DefaultNetworkPort(getenv("DEFAULT_NETWORK_PORT"))
 }
 
 // A Resolver returns the addresses a host name resolves to; an error or no

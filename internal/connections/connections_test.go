@@ -184,7 +184,7 @@ func TestCreateLimit(t *testing.T) {
 
 func TestEditAliasOnly(t *testing.T) {
 	h, a := setup(t)
-	testenv.AddConnection(t, h.d, "c1", a, `{"Host":"irc.example","Port":"6667","Nick":"me","Channels":["#a"]}`)
+	testenv.AddConnection(t, h.d, "c1", a, `{"Host":"irc.example","Port":6667,"Nick":"me","Channels":["#a"]}`)
 	err := h.s.Edit(context.Background(), a, "c1", []byte(`{"Host":"irc.example","Port":6667,"Nick":"me","Alias":"Net"}`))
 	if err != nil {
 		t.Fatal(err)
@@ -286,6 +286,9 @@ func TestDelete(t *testing.T) {
 	}
 }
 
+// serverKey reads saved configs as Clean writes them: Port a JSON number,
+// Ssl/SASL JSON booleans. Any other type counts as a change, so the
+// connection reconnects rather than keeping stale settings.
 func TestServerKey(t *testing.T) {
 	k := func(s string) string {
 		var m map[string]any
@@ -294,11 +297,24 @@ func TestServerKey(t *testing.T) {
 		d.Decode(&m)
 		return serverKey(m)
 	}
-	if k(`{"Host":"irc.example","Port":"6667"}`) != k(`{"Host":"irc.example","Port":6667}`) {
-		t.Error("string port differs")
+	// a saved config (json.Number) matches the same config fresh from Clean (int, bool)
+	if k(`{"Host":"h","Port":6667,"Ssl":true}`) != serverKey(map[string]any{"Host": "h", "Port": 6667, "Ssl": true}) {
+		t.Error("saved and cleaned configs differ")
 	}
-	if k(`{"Host":"h","Ssl":true}`) != k(`{"Host":"h","Ssl":1}`) || k(`{"Host":"h","Ssl":false}`) != k(`{"Host":"h","Ssl":"0"}`) {
-		t.Error("ssl truth differs")
+	if k(`{"Host":"h","Port":"6667"}`) == k(`{"Host":"h","Port":6667}`) {
+		t.Error("a string port matched a number")
+	}
+	if k(`{"Host":"h","Ssl":1}`) == k(`{"Host":"h","Ssl":true}`) {
+		t.Error("Ssl 1 matched true")
+	}
+	if k(`{"Host":"h","SASL":"1"}`) == k(`{"Host":"h","SASL":true}`) {
+		t.Error(`SASL "1" matched true`)
+	}
+	if k(`{"Host":"h","Ssl":false}`) != k(`{"Host":"h"}`) {
+		t.Error("a missing Ssl differs from false")
+	}
+	if k(`{"Host":"h","Port":6667}`) == k(`{"Host":"h","Port":6697}`) {
+		t.Error("port ignored")
 	}
 	if k(`{"Host":" IRC.Example "}`) != k(`{"Host":"irc.example"}`) {
 		t.Error("host case differs")

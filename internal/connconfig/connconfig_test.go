@@ -10,8 +10,8 @@ import (
 	"testing"
 )
 
-// The cases are shared with t/connection_config.t; expected values are what
-// lib/API/ConnectionConfig.pm returns.
+// The cases in testdata/connection-config-cases.json: generated from the Perl
+// API's rules, edited by hand since (see the package doc).
 type cases struct {
 	Clean []struct {
 		Name  string          `json:"name"`

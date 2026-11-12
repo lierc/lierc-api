@@ -172,3 +172,16 @@ func TestDefaultNetwork(t *testing.T) {
 		}
 	}
 }
+
+// DefaultNetworkPort is the one reading of DEFAULT_NETWORK_PORT: a whole
+// number from 1 to 65535 (surrounding spaces allowed), or 6667.
+func TestDefaultNetworkPort(t *testing.T) {
+	for in, want := range map[string]int{
+		"": 6667, "0": 6667, "abc": 6667, "6697x": 6667, "70000": 6667, "-1": 6667, "66.5": 6667,
+		"6697": 6697, " 6697 ": 6697, "1": 1, "65535": 65535,
+	} {
+		if got := DefaultNetworkPort(in); got != want {
+			t.Errorf("DefaultNetworkPort(%q) = %d, want %d", in, got, want)
+		}
+	}
+}

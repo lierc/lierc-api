@@ -109,13 +109,9 @@ func Load(getenv func(string) string) (Config, error) {
 	if host := getenv("DEFAULT_NETWORK_HOST"); host != "" {
 		n := &DefaultNetwork{
 			Host:     host,
-			Port:     6667,
+			Port:     DefaultNetworkPort(getenv("DEFAULT_NETWORK_PORT")),
 			Ssl:      getenv("DEFAULT_NETWORK_SSL") != "" && getenv("DEFAULT_NETWORK_SSL") != "0",
 			Channels: strings.Fields(getenv("DEFAULT_NETWORK_CHANNELS")),
-		}
-		// Like Perl's int(... || 6667), a bad port never stops startup.
-		if p, err := strconv.ParseInt(strings.TrimSpace(getenv("DEFAULT_NETWORK_PORT")), 10, 32); err == nil && p >= 1 && p <= 65535 {
-			n.Port = int(p)
 		}
 		c.DefaultNetwork = n
 	}
@@ -130,4 +126,15 @@ func origins(getenv func(string) string) []string {
 		return []string{u}
 	}
 	return []string{}
+}
+
+// DefaultNetworkPort is DEFAULT_NETWORK_PORT as a port: a whole number from
+// 1 to 65535, surrounding spaces allowed, or 6667. A bad value never stops
+// startup. connconfig.Exempt reads it the same way, so the default network
+// is exempt on the port it's created with.
+func DefaultNetworkPort(s string) int {
+	if p, err := strconv.ParseInt(strings.TrimSpace(s), 10, 32); err == nil && p >= 1 && p <= 65535 {
+		return int(p)
+	}
+	return 6667
 }
