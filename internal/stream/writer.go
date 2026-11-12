@@ -174,7 +174,12 @@ func (s *Server) serveStream(w http.ResponseWriter, r *http.Request, user string
 			if alive == nil {
 				alive = func(ctx context.Context, id int64) (bool, error) { return login.Alive(ctx, s.db, id) }
 			}
-			ok, err := alive(ctx, loginID)
+			cctx, cancel := ctx, context.CancelFunc(func() {})
+			if s.LoginCheckTimeout > 0 {
+				cctx, cancel = context.WithTimeout(ctx, s.LoginCheckTimeout)
+			}
+			ok, err := alive(cctx, loginID)
+			cancel()
 			if err != nil {
 				if ctx.Err() == nil {
 					log.Printf("stream %s: login check: %v", st.id, err)

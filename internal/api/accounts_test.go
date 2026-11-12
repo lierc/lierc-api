@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/url"
@@ -14,6 +15,7 @@ import (
 
 	"github.com/lierc/lierc-api/internal/accounts"
 	"github.com/lierc/lierc-api/internal/config"
+	"github.com/lierc/lierc-api/internal/db"
 	"github.com/lierc/lierc-api/internal/login"
 	"github.com/lierc/lierc-api/internal/passwords"
 	"github.com/lierc/lierc-api/internal/testenv"
@@ -352,20 +354,43 @@ func TestLogoutEndsOnlyThisLogin(t *testing.T) {
 	}
 }
 
+// TestLogoutRace: a request that renews a login re-sends its cookie; if
+// logout lands meanwhile, the browser ends up holding that re-sent cookie.
+// It must be dead.
 func TestLogoutRace(t *testing.T) {
 	e := setup(t)
 	id := testenv.AddUser(t, e.db, "alice")
 	e.setPassword(id, "hunter2")
 	a := e.logIn("alice", "hunter2", "")
-	var wg sync.WaitGroup
-	wg.Add(2)
-	go func() { defer wg.Done(); e.withToken("GET", "/preference", a) }()
-	go func() { defer wg.Done(); e.withToken("POST", "/logout", a) }()
-	wg.Wait()
-	res := e.doReq("GET", "/preference", "", "", "Cookie", "chats="+a)
-	res.Body.Close()
+	if _, err := e.db.Pool.Exec(context.Background(), `UPDATE login SET last_used = now() - interval '2 hours' WHERE "user" = $1`, id); err != nil {
+		t.Fatal(err)
+	}
+	res := e.withToken("GET", "/preference", a)
+	resent := chatsCookie(res)
+	if res.StatusCode != 200 || resent == nil || resent.Value != a {
+		t.Fatalf("renewing request: %d %v, want the cookie re-sent", res.StatusCode, res.Header["Set-Cookie"])
+	}
+	if res := e.withToken("POST", "/logout", a); res.StatusCode != 200 {
+		t.Fatalf("logout: %d", res.StatusCode)
+	}
+	res = e.withToken("GET", "/preference", resent.Value)
 	if res.StatusCode != 401 || !expired(chatsCookie(res)) {
-		t.Errorf("after logout: %d %v", res.StatusCode, res.Header["Set-Cookie"])
+		t.Errorf("re-sent cookie after logout: %d %v", res.StatusCode, res.Header["Set-Cookie"])
+	}
+}
+
+// A login whose old login can't be ended still logs in: the old one just
+// expires unused.
+func TestLoginWhenEndingOldLoginFails(t *testing.T) {
+	e := setup(t)
+	id := testenv.AddUser(t, e.db, "alice")
+	e.setPassword(id, "hunter2")
+	old := e.logIn("alice", "hunter2", "")
+	orig := deleteToken
+	deleteToken = func(context.Context, *db.DB, string) error { return errors.New("db down") }
+	t.Cleanup(func() { deleteToken = orig })
+	if tok := e.logIn("alice", "hunter2", old); tok == old {
+		t.Errorf("login reused the old token")
 	}
 }
 

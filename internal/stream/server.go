@@ -34,6 +34,10 @@ type Server struct {
 	// LoginCheck is how often a stream re-checks that its login still exists
 	// and has not expired.
 	LoginCheck time.Duration
+	// LoginCheckTimeout bounds each check, so a stuck query can't stall the
+	// stream; a check that times out keeps the stream open, as a failed one does.
+	// Zero means no limit.
+	LoginCheckTimeout time.Duration
 
 	cfg config.Config
 	db  *db.DB
@@ -51,15 +55,16 @@ type Server struct {
 
 func New(cfg config.Config, d *db.DB, lc *liercd.Client) *Server {
 	return &Server{
-		PingInterval: 5 * time.Second,
-		WriteTimeout: 3 * time.Minute,
-		NSQReconnect: 5 * time.Second,
-		LoginCheck:   time.Minute,
-		cfg:          cfg,
-		db:           d,
-		lc:           lc,
-		streams:      map[string]map[string]*stream{},
-		latest:       map[string]int64{},
+		PingInterval:      5 * time.Second,
+		WriteTimeout:      3 * time.Minute,
+		NSQReconnect:      5 * time.Second,
+		LoginCheck:        time.Minute,
+		LoginCheckTimeout: 10 * time.Second,
+		cfg:               cfg,
+		db:                d,
+		lc:                lc,
+		streams:           map[string]map[string]*stream{},
+		latest:            map[string]int64{},
 	}
 }
 

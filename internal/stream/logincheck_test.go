@@ -101,3 +101,30 @@ func TestStreamCheckErrorKeepsStream(t *testing.T) {
 		t.Fatalf("%d checks, want several", checks.Load())
 	}
 }
+
+// A check that hangs gives up after LoginCheckTimeout and the stream stays
+// open, so a stuck query can't stall the stream's writes.
+func TestStreamCheckTimesOut(t *testing.T) {
+	e := setup(t)
+	e.s.LoginCheck = 50 * time.Millisecond
+	e.s.LoginCheckTimeout = 100 * time.Millisecond
+	user := e.addUser("erin")
+	gaveUp := make(chan error, 10)
+	e.s.alive = func(ctx context.Context, id int64) (bool, error) {
+		<-ctx.Done()
+		gaveUp <- ctx.Err()
+		return false, ctx.Err()
+	}
+	c := e.openToken(testenv.Login(t, e.db, user))
+	select {
+	case err := <-gaveUp:
+		if !errors.Is(err, context.DeadlineExceeded) {
+			t.Fatalf("check ended with %v, want its deadline", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("a hung check never gave up")
+	}
+	if c.ended(300 * time.Millisecond) {
+		t.Fatal("stream ended after a timed-out check")
+	}
+}

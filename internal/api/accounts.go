@@ -80,11 +80,15 @@ func (a *api) showUser(w http.ResponseWriter, r *http.Request, id string) {
 // loggedIn logs u in, answering as GET /auth does.
 // The request's own login, if it has one, is ended first, so logging in
 // again replaces a login instead of piling them up.
+// deleteToken is login.DeleteToken, replaceable in tests.
+var deleteToken = login.DeleteToken
+
 func (a *api) loggedIn(w http.ResponseWriter, r *http.Request, u accounts.User) {
 	if c, err := r.Cookie(login.CookieName); err == nil && login.IsToken(c.Value) {
-		if err := login.DeleteToken(r.Context(), a.db, c.Value); err != nil {
-			respond.Internal(w, "end old login", err)
-			return
+		// the old login only matters to this browser, which is replacing
+		// it; if it can't be ended now it expires unused
+		if err := deleteToken(r.Context(), a.db, c.Value); err != nil {
+			log.Printf("end old login: %v", err)
 		}
 	}
 	agent, ip := auth.Client(r)
