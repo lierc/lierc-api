@@ -176,3 +176,20 @@ func TestResetBadEmailNotCounted(t *testing.T) {
 	e.reset("alice@example.com")
 	rec.wait(t, 1)
 }
+
+func TestLimitKeyBounded(t *testing.T) {
+	long := strings.Repeat("A", 64<<10)
+	k := limitKey(long)
+	if len(k) > maxKeyLen {
+		t.Errorf("key of a 64 KiB field is %d bytes, want at most %d", len(k), maxKeyLen)
+	}
+	if limitKey(" "+strings.ToLower(long)+" ") != k {
+		t.Error("long keys differing only in case and spaces don't match")
+	}
+	if limitKey(long+"B") == k {
+		t.Error("different long fields share a key")
+	}
+	if got := limitKey(" Alice@Example.com "); got != "alice@example.com" {
+		t.Errorf("short key %q, want it as typed, trimmed and lowercased", got)
+	}
+}

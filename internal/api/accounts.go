@@ -1,6 +1,8 @@
 package api
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"log"
 	"math"
 	"net/http"
@@ -131,8 +133,20 @@ func (a *api) login(w http.ResponseWriter, r *http.Request) {
 
 const msgTooMany = "Too many login attempts — try again in a few minutes"
 
-// limitKey is the rate limits' key for a submitted email or username.
-func limitKey(s string) string { return strings.ToLower(strings.TrimSpace(s)) }
+// limitKey is the rate limits' key for a submitted email or username:
+// trimmed and lowercased, and a hash of that when it's longer than any
+// real email, so a flood of huge fields can't fill memory.
+func limitKey(s string) string {
+	k := strings.ToLower(strings.TrimSpace(s))
+	if len(k) > maxKeyLen {
+		sum := sha256.Sum256([]byte(k))
+		return hex.EncodeToString(sum[:])
+	}
+	return k
+}
+
+// maxKeyLen is the longest email address allowed (RFC 5321).
+const maxKeyLen = 254
 
 func (a *api) register(w http.ResponseWriter, r *http.Request) {
 	param, ok := formParams(w, r)
