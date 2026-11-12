@@ -2,7 +2,10 @@ package api
 
 import (
 	"log"
+	"math"
 	"net/http"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/lierc/lierc-api/internal/accounts"
@@ -106,13 +109,30 @@ func (a *api) login(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	key := limitKey(param("email"))
+	if key != "" {
+		if allowed, retry := a.loginLimit.Take(key); !allowed {
+			w.Header().Set("Retry-After", strconv.Itoa(max(1, int(math.Ceil(retry.Seconds())))))
+			respond.Error(w, http.StatusTooManyRequests, msgTooMany)
+			return
+		}
+	}
 	u, err := a.acct.Login(r.Context(), param("email"), param("pass"))
+	// only a wrong password or unknown account counts as a failure
+	if e, isUser := accounts.IsError(err); key != "" && !(isUser && e.Code == http.StatusUnauthorized) {
+		a.loginLimit.Return(key)
+	}
 	if err != nil {
 		accountFailed(w, "login", err)
 		return
 	}
 	a.loggedIn(w, r, u)
 }
+
+const msgTooMany = "Too many login attempts — try again in a few minutes"
+
+// limitKey is the rate limits' key for a submitted email or username.
+func limitKey(s string) string { return strings.ToLower(strings.TrimSpace(s)) }
 
 func (a *api) register(w http.ResponseWriter, r *http.Request) {
 	param, ok := formParams(w, r)
@@ -161,6 +181,13 @@ func (a *api) reset(w http.ResponseWriter, r *http.Request) {
 	param, good := formParams(w, r)
 	if !good {
 		return
+	}
+	// over the limit, the answer is the same and no email goes out
+	if email := param("email"); accounts.IsEmail(email) {
+		if allowed, _ := a.resetLimit.Take(limitKey(email)); !allowed {
+			ok(w)
+			return
+		}
 	}
 	if err := a.acct.Reset(r.Context(), param("email")); err != nil {
 		accountFailed(w, "reset", err)

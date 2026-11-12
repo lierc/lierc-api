@@ -11,10 +11,12 @@ import (
 	"github.com/lierc/lierc-api/internal/connections"
 	"github.com/lierc/lierc-api/internal/liercd"
 	"net/http"
+	"time"
 
 	"github.com/lierc/lierc-api/internal/auth"
 	"github.com/lierc/lierc-api/internal/config"
 	"github.com/lierc/lierc-api/internal/db"
+	"github.com/lierc/lierc-api/internal/ratelimit"
 	"github.com/lierc/lierc-api/internal/stream"
 )
 
@@ -24,12 +26,21 @@ type api struct {
 	users auth.Users
 	conns *connections.Service
 	acct  *accounts.Service
+
+	// per-account limits on failed logins and reset emails
+	loginLimit, resetLimit *ratelimit.Limiter
 }
 
 // New routes the stream server's routes and the ported ones, and
 // answers anything else, any method, with a 404.
 func New(cfg config.Config, d *db.DB, streams *stream.Server, lc *liercd.Client) http.Handler {
-	a := &api{cfg: cfg, db: d, users: auth.Users{Secret: cfg.Secret, DB: d, Secure: cfg.Secure}}
+	a := &api{
+		cfg:        cfg,
+		db:         d,
+		users:      auth.Users{Secret: cfg.Secret, DB: d, Secure: cfg.Secure},
+		loginLimit: ratelimit.New(10, 15*time.Minute),
+		resetLimit: ratelimit.New(3, time.Hour),
+	}
 	a.conns = &connections.Service{
 		DB:               d,
 		Liercd:           lc,
