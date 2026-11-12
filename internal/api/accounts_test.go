@@ -157,7 +157,17 @@ func TestLoginCrossSiteRefused(t *testing.T) {
 func TestLogoutRoute(t *testing.T) {
 	e := setup(t)
 	id := testenv.AddUser(t, e.db, "alice")
-	for _, m := range []string{"POST", "GET"} {
+	// logout is POST only; other methods are unknown paths, and leave the
+	// login alone
+	for _, m := range []string{"GET", "PUT", "DELETE"} {
+		res := e.do(m, "/logout", id)
+		b, _ := io.ReadAll(res.Body)
+		res.Body.Close()
+		if res.StatusCode != 404 || strings.TrimSpace(string(b)) != `{"status":"error","error":"not found"}` || chatsCookie(res) != nil {
+			t.Errorf("%s /logout: %d %s %v, want the 404 and no cookie change", m, res.StatusCode, b, res.Header["Set-Cookie"])
+		}
+	}
+	for _, m := range []string{"POST"} {
 		res := e.do(m, "/logout", id)
 		b, _ := io.ReadAll(res.Body)
 		res.Body.Close()

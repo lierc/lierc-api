@@ -39,7 +39,7 @@ func (a *api) accounts(mux *http.ServeMux) {
 	mux.Handle("GET /auth", a.users.RequireAny(a.showUser))
 	mux.HandleFunc("POST /auth", a.login)
 	mux.HandleFunc("POST /register", a.register)
-	mux.HandleFunc("/logout", a.logout)
+	mux.HandleFunc("POST /logout", a.logout)
 	mux.HandleFunc("POST /verify", a.verify)
 	mux.Handle("POST /verify/resend", a.users.RequireAny(a.resend))
 	mux.HandleFunc("POST /reset", a.reset)
