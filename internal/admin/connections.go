@@ -22,12 +22,6 @@ type Connection struct {
 	Config   json.RawMessage `json:"config"`
 }
 
-// ConnectionDetail is one connection and the rows a delete would remove.
-type ConnectionDetail struct {
-	Connection
-	Counts map[string]int64 `json:"counts"`
-}
-
 func connectionOf(r db.ConnectionRow) Connection {
 	c := Connection{ID: r.ID, User: r.User, Username: r.Username, Instance: r.Instance, Config: redact(r.Config)}
 	if v, _ := connconfig.Decode(r.Config); v != nil {
@@ -64,6 +58,7 @@ func redact(raw json.RawMessage) json.RawMessage {
 func (a *api) connectionRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /admin/connections", a.listConnections)
 	mux.HandleFunc("GET /admin/connections/{id}", a.connectionDetail)
+	mux.HandleFunc("GET /admin/connections/{id}/counts", a.connectionCounts)
 	mux.HandleFunc("GET /admin/connections/{id}/config", a.connectionConfig)
 }
 
@@ -92,22 +87,40 @@ func (a *api) listConnections(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *api) connectionDetail(w http.ResponseWriter, r *http.Request) {
-	id := r.PathValue("id")
-	rows, err := a.store.ListConnections(r.Context(), db.ConnectionFilter{ID: id})
-	if err != nil {
-		internal(w, "get connection", err)
+	row, ok := a.connection(w, r)
+	if !ok {
 		return
 	}
-	if len(rows) == 0 {
-		fail(w, http.StatusNotFound, "no such connection")
+	write(w, http.StatusOK, connectionOf(row))
+}
+
+// connectionCounts is the rows a delete of the connection would remove, per
+// table. It's separate from the view so that looking a connection up (as
+// lctl does to route each liercd call) doesn't count its log.
+func (a *api) connectionCounts(w http.ResponseWriter, r *http.Request) {
+	if _, ok := a.connection(w, r); !ok {
 		return
 	}
-	counts, err := a.store.ConnectionCounts(r.Context(), id)
+	counts, err := a.store.ConnectionCounts(r.Context(), r.PathValue("id"))
 	if err != nil {
 		internal(w, "count connection rows", err)
 		return
 	}
-	write(w, http.StatusOK, ConnectionDetail{Connection: connectionOf(rows[0]), Counts: counts})
+	write(w, http.StatusOK, counts)
+}
+
+// connection is the {id} connection, or answers 404 (or 500) and false.
+func (a *api) connection(w http.ResponseWriter, r *http.Request) (db.ConnectionRow, bool) {
+	rows, err := a.store.ListConnections(r.Context(), db.ConnectionFilter{ID: r.PathValue("id")})
+	if err != nil {
+		internal(w, "get connection", err)
+		return db.ConnectionRow{}, false
+	}
+	if len(rows) == 0 {
+		fail(w, http.StatusNotFound, "no such connection")
+		return db.ConnectionRow{}, false
+	}
+	return rows[0], true
 }
 
 // connectionConfig is the one place a config leaves whole, password and all.

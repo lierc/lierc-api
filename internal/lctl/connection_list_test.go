@@ -1,6 +1,16 @@
 package lctl
 
-import "testing"
+import (
+	"context"
+	"net/http"
+	"net/http/httptest"
+	"sync/atomic"
+	"testing"
+
+	"github.com/lierc/lierc-api/internal/admin"
+	"github.com/lierc/lierc-api/internal/db"
+	"github.com/lierc/lierc-api/internal/liercd"
+)
 
 // listSetup adds a1 (main, connected), a2 (main, empty column, not
 // running), b1 (next, running but not connected) and c1 (next, its owner
@@ -60,5 +70,43 @@ func TestConnectionListUsage(t *testing.T) {
 	}
 	if err := m.run("connection-list", "x"); !asUsage(err, &ue) {
 		t.Errorf("argument: %v", err)
+	}
+}
+
+// countingStore counts ConnectionCounts calls (the four row counts a
+// connection delete's dry run needs).
+type countingStore struct {
+	db.Store
+	counts atomic.Int32
+}
+
+func (s *countingStore) ConnectionCounts(ctx context.Context, id string) (map[string]int64, error) {
+	s.counts.Add(1)
+	return s.Store.ConnectionCounts(ctx, id)
+}
+
+// Routing liercd calls through the admin API (as the admin commands do,
+// having no database) looks up each connection's instance without counting
+// its rows.
+func TestRoutingSkipsCounts(t *testing.T) {
+	m := newMoveHarness(t)
+	listSetup(m)
+	cs := &countingStore{Store: m.db}
+	srv := httptest.NewServer(admin.New(cs, m.announce))
+	t.Cleanup(srv.Close)
+	m.env.Admin = &Admin{BaseURL: srv.URL, HTTP: http.DefaultClient}
+	m.env.Liercd = liercd.NewRoutedForTest(m.mainURL, m.nextURL, m.env.Admin.instanceOf)
+	if err := m.run("connection-list"); err != nil {
+		t.Fatal(err)
+	}
+	want := "a1  main  alice  irc.libera.chat:6697  connected as alice\n" +
+		"a2  main  alice  irc.oftc.net:6667  not running\n" +
+		"b1  next  alice  ?  running, not connected\n" +
+		"c1  next  nobody (no such user)  irc.relaychat.party:6697  not running\n"
+	if got := m.out(); got != want {
+		t.Errorf("output:\n%s\nwant:\n%s", got, want)
+	}
+	if n := cs.counts.Load(); n != 0 {
+		t.Errorf("%d ConnectionCounts calls while routing, want 0", n)
 	}
 }

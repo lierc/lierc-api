@@ -162,9 +162,16 @@ func (a *Admin) Connections(ctx context.Context, instance string, inactiveSince 
 
 // Connection is one connection (its config without the server password);
 // ErrNotFound if there is none.
-func (a *Admin) Connection(ctx context.Context, id string) (admin.ConnectionDetail, error) {
-	var out admin.ConnectionDetail
+func (a *Admin) Connection(ctx context.Context, id string) (admin.Connection, error) {
+	var out admin.Connection
 	return out, a.do(ctx, http.MethodGet, "/admin/connections/"+url.PathEscape(id), nil, &out)
+}
+
+// ConnectionCounts is the rows a delete of the connection would remove, per
+// table (log, log_archive, seen, private).
+func (a *Admin) ConnectionCounts(ctx context.Context, id string) (map[string]int64, error) {
+	var out map[string]int64
+	return out, a.do(ctx, http.MethodGet, "/admin/connections/"+url.PathEscape(id)+"/counts", nil, &out)
 }
 
 // ConnectionConfig is a connection's saved config whole, password and all.

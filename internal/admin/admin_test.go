@@ -166,6 +166,28 @@ func TestUserCounts(t *testing.T) {
 	}
 }
 
+// The view is the connection alone: counting its rows is a separate call,
+// so routing lookups (which only need the instance) don't pay for counts.
+func TestConnectionView(t *testing.T) {
+	e := newEnv(t)
+	a := testenv.AddUser(t, e.d, "alice")
+	testenv.AddConnection(t, e.d, "c1", a, `{"Host":"h","Port":1}`)
+	testenv.AddLog(t, e.d, 1, "c1", a)
+	code, body := e.get("/admin/connections/c1")
+	if code != 200 || strings.Contains(body, `"counts"`) {
+		t.Errorf("view: %d %s, want no counts", code, body)
+	}
+	var c admin.Connection
+	e.getJSON("/admin/connections/c1", &c)
+	if c.ID != "c1" || c.User != a || c.Username != "alice" || c.Instance != "main" {
+		t.Errorf("view = %+v", c)
+	}
+	code, body = e.get("/admin/connections/nosuch")
+	if code != 404 || body != `{"error":"no such connection"}` {
+		t.Errorf("unknown: %d %s", code, body)
+	}
+}
+
 func TestConnectionCounts(t *testing.T) {
 	e := newEnv(t)
 	a := testenv.AddUser(t, e.d, "alice")
@@ -173,13 +195,12 @@ func TestConnectionCounts(t *testing.T) {
 	testenv.AddLog(t, e.d, 1, "c1", a)
 	testenv.AddLog(t, e.d, 2, "c1", a)
 	e.exec(`INSERT INTO private (connection, nick, time) VALUES ('c1', 'n', now())`)
-	var d admin.ConnectionDetail
-	e.getJSON("/admin/connections/c1", &d)
-	if d.ID != "c1" || d.User != a || d.Username != "alice" || d.Counts["log"] != 2 || d.Counts["private"] != 1 ||
-		d.Counts["seen"] != 0 || d.Counts["log_archive"] != 0 || len(d.Counts) != 4 {
-		t.Errorf("detail = %+v", d)
+	var got map[string]int64
+	e.getJSON("/admin/connections/c1/counts", &got)
+	if got["log"] != 2 || got["private"] != 1 || got["seen"] != 0 || got["log_archive"] != 0 || len(got) != 4 {
+		t.Errorf("counts = %v", got)
 	}
-	code, body := e.get("/admin/connections/nosuch")
+	code, body := e.get("/admin/connections/nosuch/counts")
 	if code != 404 || body != `{"error":"no such connection"}` {
 		t.Errorf("unknown: %d %s", code, body)
 	}

@@ -52,9 +52,17 @@ func deleteConnections(ctx context.Context, env *Env, args []string) error {
 		if err != nil {
 			return err
 		}
+		rows, err := env.Admin.ConnectionCounts(ctx, id)
+		if errors.Is(err, ErrNotFound) {
+			fmt.Fprintf(out, "%s: no such connection\n", id)
+			continue
+		}
+		if err != nil {
+			return err
+		}
 		counts := make([]string, len(connectionTables))
 		for i, t := range connectionTables {
-			n := c.Counts[t]
+			n := rows[t]
 			if t == "connection" {
 				n = 1
 			}
