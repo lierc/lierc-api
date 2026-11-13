@@ -66,7 +66,7 @@ func setupWith(t *testing.T, d *db.DB, fake *testenv.LiercdServer, liercdURL str
 	e := &env{t: t, db: d, fake: fake, s: s, replay: make(chan struct{}, 100)}
 	s.replayed = func() { e.replay <- struct{}{} }
 	mux := http.NewServeMux()
-	s.Routes(mux, auth.Users{Secret: testSecret, DB: d})
+	s.Routes(mux, auth.Users{DB: d})
 	e.srv = httptest.NewServer(mux)
 	t.Cleanup(e.srv.Close)
 	e.admin = httptest.NewServer(s.Admin())
@@ -109,7 +109,7 @@ func (e *env) get(path, user string, hdr ...string) *http.Response {
 	e.t.Helper()
 	req, _ := http.NewRequest("GET", e.srv.URL+path, nil)
 	if user != "" {
-		req.AddCookie(&http.Cookie{Name: "chats", Value: testenv.PerlCookie(user, testSecret)})
+		req.AddCookie(&http.Cookie{Name: "chats", Value: testenv.Login(e.t, e.db, user)})
 	}
 	for i := 0; i+1 < len(hdr); i += 2 {
 		req.Header.Set(hdr[i], hdr[i+1])
@@ -136,7 +136,7 @@ func (e *env) post(path, user string) *http.Response {
 	e.t.Helper()
 	req, _ := http.NewRequest("POST", e.srv.URL+path, nil)
 	if user != "" {
-		req.AddCookie(&http.Cookie{Name: "chats", Value: testenv.PerlCookie(user, testSecret)})
+		req.AddCookie(&http.Cookie{Name: "chats", Value: testenv.Login(e.t, e.db, user)})
 	}
 	res, err := noKeepAlive().Do(req)
 	if err != nil {
@@ -416,8 +416,9 @@ func TestStats(t *testing.T) {
 
 func TestUnauthorized(t *testing.T) {
 	e := setup(t)
-	for _, user := range []string{"", "ghost"} {
-		res := e.get("/events", user)
+	// no cookie, and a token no login has
+	for user, hdr := range map[string][]string{"": nil, "unknown token": {"Cookie", "chats=" + strings.Repeat("A", 43)}} {
+		res := e.get("/events", "", hdr...)
 		body, _ := io.ReadAll(res.Body)
 		res.Body.Close()
 		if res.StatusCode != 401 || string(body) != `{"status":"error","error":"unauthorized"}` ||
@@ -941,7 +942,7 @@ func TestWakePingUnknown(t *testing.T) {
 	c := e.open(a)
 
 	req, _ := http.NewRequest("POST", e.srv.URL+"/events/nope/ping", nil)
-	req.AddCookie(&http.Cookie{Name: "chats", Value: testenv.PerlCookie(a, testSecret)})
+	req.AddCookie(&http.Cookie{Name: "chats", Value: testenv.Login(e.t, e.db, a)})
 	res, err := noKeepAlive().Do(req)
 	if err != nil {
 		t.Fatal(err)
@@ -1209,7 +1210,7 @@ func TestWriteTimeout(t *testing.T) {
 	}
 	defer conn.Close()
 	conn.(*net.TCPConn).SetReadBuffer(4096)
-	fmt.Fprintf(conn, "GET /events HTTP/1.1\r\nHost: x\r\nCookie: chats=%s\r\n\r\n", testenv.PerlCookie(u, testSecret))
+	fmt.Fprintf(conn, "GET /events HTTP/1.1\r\nHost: x\r\nCookie: chats=%s\r\n\r\n", testenv.Login(e.t, e.db, u))
 	// Never read from conn again.
 
 	poll(t, "stream registration", func() bool { return e.s.count(u) == 1 })
@@ -1255,7 +1256,7 @@ func TestSlowClientDropped(t *testing.T) {
 	}
 	defer conn.Close() // unblocks the stalled writer so the handler can finish
 	conn.(*net.TCPConn).SetReadBuffer(4096)
-	fmt.Fprintf(conn, "GET /events HTTP/1.1\r\nHost: x\r\nCookie: chats=%s\r\n\r\n", testenv.PerlCookie(u, testSecret))
+	fmt.Fprintf(conn, "GET /events HTTP/1.1\r\nHost: x\r\nCookie: chats=%s\r\n\r\n", testenv.Login(e.t, e.db, u))
 	// Never read from conn again.
 
 	poll(t, "stream registration", func() bool { return e.s.count(u) == 1 })
@@ -1315,7 +1316,7 @@ func TestLargeReplaySurvivesLiveEvents(t *testing.T) {
 	}}
 	hc := &http.Client{Transport: &http.Transport{DisableKeepAlives: true, DialContext: dialer.DialContext}}
 	req, _ := http.NewRequest("GET", e.srv.URL+"/events", nil)
-	req.AddCookie(&http.Cookie{Name: "chats", Value: testenv.PerlCookie(u, testSecret)})
+	req.AddCookie(&http.Cookie{Name: "chats", Value: testenv.Login(e.t, e.db, u)})
 	res, err := hc.Do(req)
 	if err != nil {
 		t.Fatal(err)

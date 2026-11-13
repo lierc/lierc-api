@@ -72,7 +72,7 @@ func (e *env) doReq(method, path, user, body string, hdr ...string) *http.Respon
 		req.Header.Set(hdr[i], hdr[i+1])
 	}
 	if user != "" {
-		req.AddCookie(&http.Cookie{Name: "chats", Value: testenv.PerlCookie(user, testSecret)})
+		req.AddCookie(&http.Cookie{Name: "chats", Value: testenv.Login(e.t, e.db, user)})
 	}
 	c := &http.Client{
 		Transport:     &http.Transport{DisableKeepAlives: true},
@@ -208,12 +208,19 @@ func TestCrossSitePingRefused(t *testing.T) {
 	}
 }
 
+// A stream renews a login that's due for it, sending the cookie again on
+// the stream's response.
 func TestStreamSetsCookie(t *testing.T) {
 	e := setup(t)
 	u := testenv.AddUser(t, e.db, "alice")
-	res, _ := e.openStream("/events", u)
+	token := testenv.Login(t, e.db, u)
+	e.exec(`UPDATE login SET last_used = now() - interval '2 hours'`)
+	res := e.doReq("GET", "/events", "", "", "Cookie", "chats="+token)
 	defer res.Body.Close()
-	if cs := res.Cookies(); len(cs) != 1 || cs[0].Name != "chats" {
+	if res.StatusCode != 200 {
+		t.Fatalf("stream: %d", res.StatusCode)
+	}
+	if cs := res.Cookies(); len(cs) != 1 || cs[0].Name != "chats" || cs[0].Value != token {
 		t.Errorf("stream Set-Cookie = %v", res.Header["Set-Cookie"])
 	}
 }

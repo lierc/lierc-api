@@ -404,19 +404,6 @@ func TestLoginWhenEndingOldLoginFails(t *testing.T) {
 	}
 }
 
-func TestLogoutPerlCookie(t *testing.T) {
-	e := setup(t)
-	id := testenv.AddUser(t, e.db, "alice")
-	res := e.do("POST", "/logout", id)
-	res.Body.Close()
-	if res.StatusCode != 200 || !expired(chatsCookie(res)) {
-		t.Errorf("logout: %d %v", res.StatusCode, res.Header["Set-Cookie"])
-	}
-	if n := e.logins(id); n != 0 {
-		t.Errorf("%d logins, want 0", n)
-	}
-}
-
 func TestResetConfirmEndsAllLogins(t *testing.T) {
 	e := setup(t)
 	id := testenv.AddUser(t, e.db, "alice")

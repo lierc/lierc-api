@@ -45,7 +45,7 @@ func TestTokenShape(t *testing.T) {
 		t.Errorf("token %q: len %d, IsToken %v", tok, len(tok), login.IsToken(tok))
 	}
 	a := strings.Repeat("a", 43)
-	for _, bad := range []string{"", a[:42], a + "a", a[:42] + "+", a[:42] + "/", a[:42] + "=", testenv.PerlCookie("u", "s")} {
+	for _, bad := range []string{"", a[:42], a + "a", a[:42] + "+", a[:42] + "/", a[:42] + "=", "1792769372.78598%3ABQsDAAAAAQoBdQAAAAR1c2Vy%3A0123456789abcdef0123456789abcdef01234567" /* a Perl-format cookie */} {
 		if login.IsToken(bad) {
 			t.Errorf("IsToken(%q) = true", bad)
 		}

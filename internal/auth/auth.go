@@ -1,6 +1,5 @@
 // Package auth checks the login of the "chats" cookie: a random token naming
-// a row of the login table. A Perl-format cookie from before the switch is
-// swapped for a login.
+// a row of the login table.
 package auth
 
 import (
@@ -13,14 +12,11 @@ import (
 	"github.com/lierc/lierc-api/internal/db"
 	"github.com/lierc/lierc-api/internal/login"
 	"github.com/lierc/lierc-api/internal/respond"
-	"github.com/lierc/lierc-api/internal/session"
 )
 
-// Users checks logins against the login table and the cookie secret.
+// Users checks logins against the login table.
 type Users struct {
-	// Secret reads the Perl-format cookies of logins from before the switch.
-	Secret string
-	DB     db.Store
+	DB db.Store
 	// Secure marks the login cookie Secure.
 	Secure bool
 
@@ -69,13 +65,6 @@ func (u Users) Require(h Handler) http.Handler { return u.require(h, false) }
 // email address yet (GET /auth, POST /verify/resend).
 func (u Users) RequireAny(h Handler) http.Handler { return u.require(h, true) }
 
-// perlCutoff is when Perl cookies stop working. After the deploy nothing
-// issues them, so every legitimate browser's copy is swapped for a login or
-// has expired within 7 days; from this time on a Perl cookie is refused, so a
-// copied one can't come back after a password reset or end-login. A later
-// change deletes the Perl path entirely.
-var perlCutoff = time.Date(2026, 11, 20, 0, 0, 0, 0, time.UTC)
-
 func (u Users) clock() time.Time {
 	if u.now != nil {
 		return u.now()
@@ -109,8 +98,9 @@ func (u Users) require(h Handler, any bool) http.Handler {
 	})
 }
 
-// check finds the login for the cookie value v, renewing it or swapping a
-// Perl cookie for a new login, and setting the login cookie as needed.
+// check finds the login for the cookie value v, renewing it and setting the
+// login cookie as needed. Anything but a login token (an old Perl-format
+// cookie, say) is no login.
 func (u Users) check(w http.ResponseWriter, r *http.Request, v string) (login.Login, bool, error) {
 	ctx := r.Context()
 	if login.IsToken(v) {
@@ -131,26 +121,5 @@ func (u Users) check(w http.ResponseWriter, r *http.Request, v string) (login.Lo
 		}
 		return l, true, nil
 	}
-	if !u.clock().Before(perlCutoff) {
-		return login.Login{}, false, nil
-	}
-	user, ok := session.ReadPerl(v, u.Secret)
-	if !ok {
-		return login.Login{}, false, nil
-	}
-	exists, _, err := u.DB.UserState(ctx, user)
-	if err != nil || !exists {
-		return login.Login{}, false, err
-	}
-	agent, ip := Client(r)
-	token, err := login.Create(ctx, u.DB, user, agent, ip)
-	if err != nil {
-		return login.Login{}, false, err
-	}
-	l, ok, err := login.Lookup(ctx, u.DB, token)
-	if err != nil || !ok {
-		return login.Login{}, false, err
-	}
-	login.SetCookie(w, token, u.Secure, u.clock())
-	return l, true, nil
+	return login.Login{}, false, nil
 }

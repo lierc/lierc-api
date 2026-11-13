@@ -37,7 +37,7 @@ func New(cfg config.Config, s db.Store, streams *stream.Server, lc *liercd.Clien
 	a := &api{
 		cfg:        cfg,
 		db:         s,
-		users:      auth.Users{Secret: cfg.Secret, DB: s, Secure: cfg.Secure},
+		users:      auth.Users{DB: s, Secure: cfg.Secure},
 		loginLimit: ratelimit.New(10, 15*time.Minute),
 		resetLimit: ratelimit.New(3, time.Hour),
 	}

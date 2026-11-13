@@ -223,7 +223,7 @@ func TestDateSearchStalledClient(t *testing.T) {
 	}
 	defer conn.Close()
 	conn.(*net.TCPConn).SetReadBuffer(4096)
-	fmt.Fprintf(conn, "GET %s HTTP/1.1\r\nHost: x\r\nCookie: chats=%s\r\n\r\n", datePath, testenv.PerlCookie(a, testSecret))
+	fmt.Fprintf(conn, "GET %s HTTP/1.1\r\nHost: x\r\nCookie: chats=%s\r\n\r\n", datePath, testenv.Login(e.t, e.db, a))
 	// never read
 	select {
 	case <-done:

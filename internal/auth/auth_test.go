@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
@@ -22,6 +21,10 @@ const (
 	secret       = "testsecret"
 	unauthorized = `{"status":"error","error":"unauthorized"}`
 	unverified   = `{"status":"error","error":"Confirm your email address first","unverified":true}`
+	// perl is session.WritePerl("perlvictim0000000000aa", "testsecret",
+	// "1792769372.78598"), a Perl-format cookie made before the Perl code was
+	// deleted
+	perl = "1792769372.78598%3ABQsDAAAAAQoWcGVybHZpY3RpbTAwMDAwMDAwMDBhYQAAAAR1c2Vy%3A954572711b8433fb5cc3b3b98fb26f6d1f58ba5a"
 )
 
 // run serves one request through users.Require (or RequireAny) around a
@@ -46,7 +49,7 @@ func run(users Users, any bool, cookie *string, tweak func(*http.Request)) *http
 
 func serve(t *testing.T, d *db.DB, cookie string) *httptest.ResponseRecorder {
 	t.Helper()
-	return run(Users{Secret: secret, DB: d}, false, &cookie, nil)
+	return run(Users{DB: d}, false, &cookie, nil)
 }
 
 func setCookies(w *httptest.ResponseRecorder) []*http.Cookie {
@@ -91,7 +94,7 @@ func TestRequireRenews(t *testing.T) {
 	token := testenv.Login(t, d, u)
 
 	setLastUsed(t, d, token, 2*time.Hour)
-	w := run(Users{Secret: secret, DB: d, Secure: true}, false, &token, nil)
+	w := run(Users{DB: d, Secure: true}, false, &token, nil)
 	cs := setCookies(w)
 	if w.Code != 200 || len(cs) != 1 || cs[0].Name != "chats" || cs[0].Value != token || !cs[0].Secure {
 		t.Fatalf("%d %v", w.Code, w.Header()["Set-Cookie"])
@@ -126,7 +129,7 @@ func TestRequireBadCookies(t *testing.T) {
 		"unknown": strings.Repeat("A", 43),
 		"deleted": deleted,
 		"expired": expired,
-		"perl":    testenv.PerlCookie(u, "wrongsecret"),
+		"perl":    perl,
 	} {
 		w := serve(t, d, v)
 		if w.Code != 401 || w.Body.String() != unauthorized {
@@ -137,59 +140,9 @@ func TestRequireBadCookies(t *testing.T) {
 			t.Errorf("%s: cookie not expired: %v", name, w.Header()["Set-Cookie"])
 		}
 	}
-	w := run(Users{Secret: secret, DB: d}, false, nil, nil)
+	w := run(Users{DB: d}, false, nil, nil)
 	if w.Code != 401 || w.Body.String() != unauthorized || len(w.Header()["Set-Cookie"]) != 0 {
 		t.Errorf("no cookie: %d %s %v", w.Code, w.Body, w.Header()["Set-Cookie"])
-	}
-}
-
-func TestPerlCookieSwapped(t *testing.T) {
-	d := testenv.Postgres(t)
-	u := testenv.AddUser(t, d, "alice")
-	pc := testenv.PerlCookie(u, secret)
-	w := run(Users{Secret: secret, DB: d}, false, &pc, func(r *http.Request) {
-		r.Header.Set("User-Agent", "test-agent")
-		r.RemoteAddr = "192.0.2.7:1234"
-	})
-	cs := setCookies(w)
-	if w.Code != 200 || w.Body.String() != "user="+u || len(cs) != 1 || !login.IsToken(cs[0].Value) {
-		t.Fatalf("%d %s %v", w.Code, w.Body, w.Header()["Set-Cookie"])
-	}
-	list, err := login.List(context.Background(), d, u)
-	if err != nil || len(list) != 1 || list[0].UserAgent != "test-agent" || list[0].IP != "192.0.2.7" {
-		t.Errorf("logins %+v %v", list, err)
-	}
-	if w := serve(t, d, cs[0].Value); w.Code != 200 || w.Body.String() != "user="+u {
-		t.Errorf("new token: %d %s", w.Code, w.Body)
-	}
-	ghost := testenv.PerlCookie("ghost", secret)
-	if w := serve(t, d, ghost); w.Code != 401 {
-		t.Errorf("unknown user: %d", w.Code)
-	}
-}
-
-func TestPerlCookieParallel(t *testing.T) {
-	d := testenv.Postgres(t)
-	u := testenv.AddUser(t, d, "alice")
-	pc := testenv.PerlCookie(u, secret)
-	var wg sync.WaitGroup
-	codes := make([]int, 8)
-	for i := range codes {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			codes[i] = run(Users{Secret: secret, DB: d}, false, &pc, nil).Code
-		}()
-	}
-	wg.Wait()
-	for _, c := range codes {
-		if c != 200 {
-			t.Errorf("codes %v", codes)
-			break
-		}
-	}
-	if list, err := login.List(context.Background(), d, u); err != nil || len(list) != 8 {
-		t.Errorf("%d logins, %v", len(list), err)
 	}
 }
 
@@ -206,7 +159,7 @@ func TestRequireUnverified(t *testing.T) {
 	if w := serve(t, d, token); w.Code != 403 || w.Body.String() != unverified || len(w.Header()["Set-Cookie"]) != 0 {
 		t.Errorf("unverified: %d %s %v", w.Code, w.Body, w.Header()["Set-Cookie"])
 	}
-	if w := run(Users{Secret: secret, DB: d}, true, &token, nil); w.Code != 200 || w.Body.String() != "user="+u {
+	if w := run(Users{DB: d}, true, &token, nil); w.Code != 200 || w.Body.String() != "user="+u {
 		t.Errorf("RequireAny unverified: %d %s", w.Code, w.Body)
 	}
 	for _, v := range []any{true, nil} {
@@ -222,7 +175,7 @@ func TestLoginIDInContext(t *testing.T) {
 	u := testenv.AddUser(t, d, "alice")
 	var got int64
 	var ok bool
-	users := Users{Secret: secret, DB: d}
+	users := Users{DB: d}
 	h := users.Require(func(w http.ResponseWriter, r *http.Request, user string) { got, ok = LoginID(r.Context()) })
 	do := func(v string) *httptest.ResponseRecorder {
 		req := httptest.NewRequest("GET", "/", nil)
@@ -237,11 +190,6 @@ func TestLoginIDInContext(t *testing.T) {
 	if !ok || got != l.ID {
 		t.Errorf("token: %d %v, want %d", got, ok, l.ID)
 	}
-	w := do(testenv.PerlCookie(u, secret))
-	nl, _, _ := login.Lookup(context.Background(), d, setCookies(w)[0].Value)
-	if !ok || got != nl.ID || got == l.ID {
-		t.Errorf("swapped: %d %v, want %d", got, ok, nl.ID)
-	}
 	if _, ok := LoginID(context.Background()); ok {
 		t.Error("LoginID on a bare context")
 	}
@@ -252,48 +200,13 @@ func TestRenewFailureLetsRequestThrough(t *testing.T) {
 	u := testenv.AddUser(t, d, "alice")
 	token := testenv.Login(t, d, u)
 	setLastUsed(t, d, token, 2*time.Hour)
-	users := Users{Secret: secret, DB: d, touch: func(context.Context, int64) error { return errors.New("boom") }}
+	users := Users{DB: d, touch: func(context.Context, int64) error { return errors.New("boom") }}
 	w := run(users, false, &token, nil)
 	if w.Code != 200 || w.Body.String() != "user="+u {
 		t.Errorf("%d %s", w.Code, w.Body)
 	}
 	if c := w.Header()["Set-Cookie"]; len(c) != 0 {
 		t.Errorf("Set-Cookie %v", c)
-	}
-}
-
-func TestPerlCookieRefusedAfterCutoff(t *testing.T) {
-	d := testenv.Postgres(t)
-	u := testenv.AddUser(t, d, "alice")
-	pc := testenv.PerlCookie(u, secret)
-	at := func(now time.Time) *httptest.ResponseRecorder {
-		return run(Users{Secret: secret, DB: d, now: func() time.Time { return now }}, false, &pc, nil)
-	}
-	rows := func() int {
-		list, err := login.List(context.Background(), d, u)
-		if err != nil {
-			t.Fatal(err)
-		}
-		return len(list)
-	}
-	w := at(perlCutoff)
-	cs := setCookies(w)
-	if w.Code != 401 || w.Body.String() != unauthorized || len(cs) != 1 || cs[0].MaxAge >= 0 || rows() != 0 {
-		t.Fatalf("at cutoff: %d %s %v rows=%d", w.Code, w.Body, w.Header()["Set-Cookie"], rows())
-	}
-	w = at(perlCutoff.Add(-time.Second))
-	if w.Code != 200 || w.Body.String() != "user="+u || rows() != 1 {
-		t.Errorf("before cutoff: %d %s rows=%d", w.Code, w.Body, rows())
-	}
-}
-
-func TestTokenUnaffectedByCutoff(t *testing.T) {
-	d := testenv.Postgres(t)
-	u := testenv.AddUser(t, d, "alice")
-	token := testenv.Login(t, d, u)
-	users := Users{Secret: secret, DB: d, now: func() time.Time { return perlCutoff.Add(30 * 24 * time.Hour) }}
-	if w := run(users, false, &token, nil); w.Code != 200 || w.Body.String() != "user="+u {
-		t.Errorf("%d %s", w.Code, w.Body)
 	}
 }
 
@@ -305,5 +218,28 @@ func TestClient(t *testing.T) {
 		if ua, ip := Client(r); ua != "ua" || ip != want {
 			t.Errorf("%s: %q %q", addr, ua, ip)
 		}
+	}
+}
+
+// A Perl-format cookie, correctly signed with the old API_SECRET, is
+// refused like any other unknown value: no login is made for it, and the
+// cookie is cleared.
+func TestPerlCookieRefused(t *testing.T) {
+	d := testenv.Postgres(t)
+	if _, err := d.Pool.Exec(context.Background(),
+		`INSERT INTO "user" (id, username, email, verified) VALUES ('perlvictim0000000000aa', 'perlvictim', 'p@example.com', true)`); err != nil {
+		t.Fatal(err)
+	}
+	w := serve(t, d, perl)
+	if w.Code != 401 || strings.TrimSpace(w.Body.String()) != unauthorized {
+		t.Errorf("Perl cookie: %d %s, want 401", w.Code, w.Body)
+	}
+	if cs := setCookies(w); len(cs) != 1 || cs[0].Value != "" || cs[0].MaxAge >= 0 {
+		t.Errorf("cookie not cleared: %v", cs)
+	}
+	var n int
+	d.Pool.QueryRow(context.Background(), `SELECT count(*) FROM login`).Scan(&n)
+	if n != 0 {
+		t.Errorf("%d login(s) made for a Perl cookie", n)
 	}
 }

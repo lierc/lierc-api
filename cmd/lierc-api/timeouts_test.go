@@ -77,7 +77,7 @@ func TestRealStreamOutlivesTimeouts(t *testing.T) {
 	s.PingInterval = time.Hour
 	url := serve(t, api.New(cfg, d, s, lc))
 	u := testenv.AddUser(t, d, "alice")
-	cookie := &http.Cookie{Name: "chats", Value: testenv.PerlCookie(u, cfg.Secret)}
+	cookie := &http.Cookie{Name: "chats", Value: testenv.Login(t, d, u)}
 
 	req, _ := http.NewRequest("GET", url+"/events", nil)
 	req.AddCookie(cookie)
