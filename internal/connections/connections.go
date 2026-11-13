@@ -175,18 +175,14 @@ func (s *Service) CreateDefault(ctx context.Context, user string, config map[str
 	return id, err
 }
 
-// saved is connection id's stored config as an object, or empty.
-func (s *Service) saved(ctx context.Context, id string) (map[string]any, error) {
-	raw, ok, err := s.DB.LookupConfig(ctx, id)
-	if err != nil || !ok {
-		return map[string]any{}, err
-	}
+// savedObject is a stored config as an object, or empty.
+func savedObject(raw []byte) map[string]any {
 	v, _ := connconfig.Decode(raw)
 	m, ok := v.(map[string]any)
 	if !ok {
-		return map[string]any{}, nil
+		return map[string]any{}
 	}
-	return m, nil
+	return m
 }
 
 // edited is the request's settings for an existing connection, with the
@@ -229,55 +225,57 @@ func (s *Service) edited(ctx context.Context, id string, raw []byte, saved map[s
 // checked before the running connection is touched. If nothing liercd
 // connects with changed, the settings are just saved; otherwise liercd
 // destroys and recreates it, and the row stays put meanwhile, so the
-// stream always finds its owner.
+// stream always finds its owner. The row is locked from the read of the
+// saved settings to the write, liercd's destroy included, so a channel
+// liercd joins meanwhile (MergeConfig) lands on top instead of being
+// overwritten. A missing connection is invalid.
 func (s *Service) Edit(ctx context.Context, user, id string, raw []byte) error {
 	ctx, cancel := detached(ctx)
 	defer cancel()
-	saved, err := s.saved(ctx, id)
+	var body []byte
+	reconnect := false
+	found, err := s.DB.EditConfig(ctx, id, func(stored []byte) ([]byte, error) {
+		saved := savedObject(stored)
+		config, err := s.edited(ctx, id, raw, saved)
+		if err != nil {
+			return nil, err
+		}
+		if body, err = respond.Marshal(config); err != nil {
+			return nil, err
+		}
+		if len(saved) > 0 && serverKey(saved) == serverKey(config) {
+			return body, nil
+		}
+		reconnect = true
+		res, err := s.liercd(ctx, id+"/destroy", nil)
+		if err != nil {
+			return nil, err
+		}
+		if res.Status != http.StatusOK && res.Status != http.StatusNotFound {
+			return nil, userError(string(res.Body))
+		}
+		return body, nil
+	})
 	if err != nil {
 		return err
 	}
-	config, err := s.edited(ctx, id, raw, saved)
-	if err != nil {
-		return err
+	if !found {
+		return errInvalid
 	}
-	body, err := respond.Marshal(config)
-	if err != nil {
-		return err
+	if reconnect {
+		res, err := s.liercd(ctx, id+"/create", body)
+		if err != nil {
+			return err
+		}
+		if res.Status != http.StatusOK {
+			return userError(string(res.Body))
+		}
 	}
-	if len(saved) > 0 && serverKey(saved) == serverKey(config) {
-		return s.updated(ctx, user, id, body)
-	}
-
-	res, err := s.liercd(ctx, id+"/destroy", nil)
-	if err != nil {
-		return err
-	}
-	if res.Status != http.StatusOK && res.Status != http.StatusNotFound {
-		return userError(string(res.Body))
-	}
-	if err := s.DB.UpdateConfig(ctx, id, body); err != nil {
-		return err
-	}
-	res, err = s.liercd(ctx, id+"/create", body)
-	if err != nil {
-		return err
-	}
-	if res.Status != http.StatusOK {
-		return userError(string(res.Body))
-	}
-	if err := s.NotifyHighlights(ctx); err != nil {
-		return err
-	}
-	s.announce(ctx, user, id, "update")
-	return nil
+	return s.updated(ctx, user, id)
 }
 
-// updated saves body as id's config, reloads highlights and announces it.
-func (s *Service) updated(ctx context.Context, user, id string, body []byte) error {
-	if err := s.DB.UpdateConfig(ctx, id, body); err != nil {
-		return err
-	}
+// updated reloads highlights and announces id's saved config.
+func (s *Service) updated(ctx context.Context, user, id string) error {
 	if err := s.NotifyHighlights(ctx); err != nil {
 		return err
 	}
@@ -300,26 +298,24 @@ func (s *Service) Save(ctx context.Context, user, id string, raw []byte) error {
 	if err != nil {
 		return userError(err.Error())
 	}
-	stored, ok, err := s.DB.LookupConfig(ctx, id)
+	found, err := s.DB.EditConfig(ctx, id, func(stored []byte) ([]byte, error) {
+		config, err := object(stored)
+		if err != nil {
+			return nil, err
+		}
+		delete(config, "Alias")
+		for k, v := range names {
+			config[k] = v
+		}
+		return respond.Marshal(config)
+	})
 	if err != nil {
 		return err
 	}
-	if !ok {
+	if !found {
 		return errInvalid
 	}
-	config, err := object(stored)
-	if err != nil {
-		return err
-	}
-	delete(config, "Alias")
-	for k, v := range names {
-		config[k] = v
-	}
-	body, err := respond.Marshal(config)
-	if err != nil {
-		return err
-	}
-	return s.updated(ctx, user, id, body)
+	return s.updated(ctx, user, id)
 }
 
 // Delete destroys a connection in liercd and deletes its row (Connection.pm

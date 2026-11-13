@@ -218,6 +218,62 @@ func TestEditReconnects(t *testing.T) {
 	userMsg(t, err, "boom")
 }
 
+// mergeDuring makes liercd's answer to POST path wait for a merge of
+// fields into c1, as if liercd joined a channel just then, for up to
+// 300ms: with the row locked the merge waits for the edit instead. It
+// returns the merge's result, once it's done.
+func (h *harness) mergeDuring(path, fields string) <-chan error {
+	done := make(chan error, 1)
+	h.fake.OnCall("POST", path, func() {
+		merged := make(chan error, 1)
+		go func() { merged <- h.d.MergeConfig(context.Background(), "c1", []byte(fields)) }()
+		select {
+		case err := <-merged:
+			done <- err
+		case <-time.After(300 * time.Millisecond):
+			go func() { done <- <-merged }()
+		}
+	})
+	return done
+}
+
+// A channel liercd joins while a reconnecting edit destroys the
+// connection is saved on top of the edit, not overwritten by it.
+func TestEditKeepsMergeDuringDestroy(t *testing.T) {
+	h, a := setup(t)
+	testenv.AddConnection(t, h.d, "c1", a, `{"Host":"irc.example","Port":6667,"Nick":"me","Channels":["#a"]}`)
+	h.fake.Respond("POST", "/c1/destroy", 200, "ok")
+	merged := h.mergeDuring("/c1/destroy", `{"Channels":["#a","#new"]}`)
+	if err := h.s.Edit(context.Background(), a, "c1", []byte(`{"Host":"irc.other","Port":6667,"Nick":"me"}`)); err != nil {
+		t.Fatal(err)
+	}
+	if err := <-merged; err != nil {
+		t.Fatal(err)
+	}
+	cfg, _ := h.row("c1")
+	if cfg["Host"] != "irc.other" || fmt.Sprint(cfg["Channels"]) != "[#a #new]" {
+		t.Errorf("cfg %v", cfg)
+	}
+}
+
+// An edit liercd refuses saves nothing, and a merge waiting on it lands
+// on the old config.
+func TestEditDestroyFailsKeepsMerge(t *testing.T) {
+	h, a := setup(t)
+	testenv.AddConnection(t, h.d, "c1", a, `{"Host":"irc.example","Port":6667,"Nick":"me","Channels":["#a"]}`)
+	h.fake.Respond("POST", "/c1/destroy", 500, "boom")
+	merged := h.mergeDuring("/c1/destroy", `{"Channels":["#a","#new"]}`)
+	err := h.s.Edit(context.Background(), a, "c1", []byte(`{"Host":"irc.other","Port":6667,"Nick":"me"}`))
+	userMsg(t, err, "boom")
+	if err := <-merged; err != nil {
+		t.Fatal(err)
+	}
+	cfg, _ := h.row("c1")
+	if cfg["Host"] != "irc.example" || fmt.Sprint(cfg["Channels"]) != "[#a #new]" {
+		t.Errorf("cfg %v", cfg)
+	}
+}
+
 func TestEditKeepsNick(t *testing.T) {
 	h, a := setup(t)
 	testenv.AddConnection(t, h.d, "c1", a, `{"Host":"irc.example","Port":6667,"Nick":"me","Channels":[]}`)

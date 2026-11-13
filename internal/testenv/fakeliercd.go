@@ -22,6 +22,7 @@ type LiercdServer struct {
 	statuses  map[string]string
 	created   map[string]bool
 	overrides map[string]override
+	onCall    map[string]func()
 	calls     []LiercdCall
 	srv       *httptest.Server
 }
@@ -94,9 +95,26 @@ func (f *LiercdServer) Calls() []LiercdCall {
 	return append([]LiercdCall(nil), f.calls...)
 }
 
+// OnCall runs fn each time method path is requested, before it's
+// answered (and outside the server's lock).
+func (f *LiercdServer) OnCall(method, path string, fn func()) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.onCall == nil {
+		f.onCall = map[string]func(){}
+	}
+	f.onCall[method+" "+path] = fn
+}
+
 // ServeHTTP answers one liercd request.
 func (f *LiercdServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	b, _ := io.ReadAll(r.Body)
+	f.mu.Lock()
+	fn := f.onCall[r.Method+" "+r.URL.Path]
+	f.mu.Unlock()
+	if fn != nil {
+		fn()
+	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.calls = append(f.calls, LiercdCall{r.Method, r.URL.Path, string(b)})

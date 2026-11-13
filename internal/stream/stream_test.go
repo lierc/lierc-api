@@ -1468,3 +1468,30 @@ func TestReplayNulls(t *testing.T) {
 	}
 	c.checkErr()
 }
+
+// A connection deleted after saveChannels lists it is skipped: it isn't
+// recreated, and the others are still saved.
+func TestSaveChannelsSkipsDeleted(t *testing.T) {
+	e := setup(t)
+	u := e.addUser("alice")
+	ctx := context.Background()
+	e.addConn("c1", u, `{"Host":"irc.x","Channels":["#old"]}`)
+	e.addConn("c2", u, `{"Host":"irc.y","Channels":["#old"]}`)
+	for _, id := range []string{"c1", "c2"} {
+		e.fake.Respond("GET", "/"+id+"/status", 200, statusJSON(id, "me", true, true, `,"Channels":[{"Name":"#a"}]`))
+	}
+	e.fake.OnCall("GET", "/c1/status", func() {
+		if err := e.db.DeleteConnection(ctx, "c1"); err != nil {
+			t.Error(err)
+		}
+	})
+	e.s.saveChannels(ctx, u)
+
+	if _, ok, _ := e.db.LookupConfig(ctx, "c1"); ok {
+		t.Error("deleted connection is back")
+	}
+	raw, _, _ := e.db.LookupConfig(ctx, "c2")
+	if !testenv.SameJSON(string(raw), `{"Host":"irc.y","Channels":["#a"]}`) {
+		t.Errorf("c2 config %s", raw)
+	}
+}

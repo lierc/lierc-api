@@ -3,6 +3,7 @@ package stream
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"log"
 	"net/http"
 	"strings"
@@ -177,6 +178,9 @@ func (s *Server) replay(ctx context.Context, st *stream, conns []db.Connection) 
 	}
 }
 
+// errSkip leaves a connection's config as it is.
+var errSkip = errors.New("skip")
+
 // saveChannels stores each connection's current channel list from liercd in
 // its config (Events.pm save_channels). Failures skip that connection.
 func (s *Server) saveChannels(ctx context.Context, user string) {
@@ -198,26 +202,29 @@ func (s *Server) saveChannels(ctx context.Context, user string) {
 		if json.Unmarshal(res.Body, &stat) != nil || len(stat.Channels) == 0 {
 			continue
 		}
-		var cfg map[string]json.RawMessage
-		if json.Unmarshal(c.Config, &cfg) != nil {
-			continue
-		}
-		if cfg == nil {
-			cfg = map[string]json.RawMessage{}
-		}
 		names := make([]string, len(stat.Channels))
 		for i, ch := range stat.Channels {
 			names[i] = ch.Name
 		}
-		if cfg["Channels"], err = respond.Marshal(names); err != nil {
-			continue
-		}
-		b, err := respond.Marshal(cfg)
-		if err != nil {
-			continue
-		}
-		// Perl updates the row named by the status Id, not the connection id.
-		if err := s.db.UpdateConfig(ctx, stat.Id, b); err != nil {
+		// Perl updates the row named by the status Id, not the connection
+		// id. The row is locked from read to write, so a channel liercd
+		// saves meanwhile (MergeConfig) isn't overwritten; a row that's
+		// gone, or isn't an object, is skipped.
+		_, err = s.db.EditConfig(ctx, stat.Id, func(stored []byte) ([]byte, error) {
+			var cfg map[string]json.RawMessage
+			if json.Unmarshal(stored, &cfg) != nil {
+				return nil, errSkip
+			}
+			if cfg == nil {
+				cfg = map[string]json.RawMessage{}
+			}
+			var err error
+			if cfg["Channels"], err = respond.Marshal(names); err != nil {
+				return nil, errSkip
+			}
+			return respond.Marshal(cfg)
+		})
+		if err != nil && !errors.Is(err, errSkip) {
 			log.Printf("stream: save channels for %s: %v", c.ID, err)
 		}
 	}

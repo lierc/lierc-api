@@ -84,7 +84,7 @@ func TestConnections(t *testing.T) {
 		t.Fatal("LookupOwner found missing")
 	}
 
-	if err := d.UpdateConfig(ctx, "c1", []byte(`{"Host":"new"}`)); err != nil {
+	if _, err := d.EditConfig(ctx, "c1", func([]byte) ([]byte, error) { return []byte(`{"Host":"new"}`), nil }); err != nil {
 		t.Fatal(err)
 	}
 	if cfgB, _, _ = d.LookupConfig(ctx, "c1"); !testenv.SameJSON(string(cfgB), `{"Host":"new"}`) {
@@ -94,12 +94,12 @@ func TestConnections(t *testing.T) {
 
 // The stream server's save of the channel list marks the connection
 // updated; created is left as it was.
-func TestUpdateConfigTouchesUpdated(t *testing.T) {
+func TestEditConfigTouchesUpdated(t *testing.T) {
 	d := testenv.Postgres(t)
 	ctx := context.Background()
 	testenv.AddConnection(t, d, "c1", "u1", `{}`)
 
-	if err := d.UpdateConfig(ctx, "c1", []byte(`{"Channels":["#a"]}`)); err != nil {
+	if _, err := d.EditConfig(ctx, "c1", func([]byte) ([]byte, error) { return []byte(`{"Channels":["#a"]}`), nil }); err != nil {
 		t.Fatal(err)
 	}
 	// Compared in SQL: the columns are timestamp without time zone.
