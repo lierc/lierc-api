@@ -232,6 +232,9 @@ func TestConnectionPasswordRedacted(t *testing.T) {
 	testenv.AddConnection(t, e.d, "c1", a, `{"Host":"h","Port":1,"Pass":"hunter2"}`)
 	testenv.AddConnection(t, e.d, "c2", a, `{"Host":"h","Port":1,"Pass":""}`)
 	testenv.AddConnection(t, e.d, "c3", a, `{"Host":"h","Port":1}`)
+	// a config that isn't an object (a double-encoded one) must not leak either
+	testenv.AddConnection(t, e.d, "c4", a, `{}`)
+	e.exec(`UPDATE connection SET config = '"{\"Pass\":\"hunter2\"}"'::jsonb WHERE id = 'c4'`)
 	for _, path := range []string{"/admin/connections", "/admin/connections/c1", "/admin/users/" + a} {
 		code, body := e.get(path)
 		if code != 200 || strings.Contains(body, "hunter2") || !strings.Contains(body, `"Pass":"<set>"`) {
@@ -262,6 +265,12 @@ func TestConnectionPasswordRedacted(t *testing.T) {
 	code, body := e.get("/admin/connections/c1/config")
 	if code != 200 || !strings.Contains(body, "hunter2") {
 		t.Errorf("/config: %d %s", code, body)
+	}
+	if code, body := e.get("/admin/connections/c4"); code != 200 || !strings.Contains(body, `"config":null`) {
+		t.Errorf("c4 view: %d %s", code, body)
+	}
+	if code, body := e.get("/admin/connections/c4/config"); code != 200 || body != `"{\"Pass\":\"hunter2\"}"` {
+		t.Errorf("c4 /config: %d %s", code, body)
 	}
 	if code, _ := e.get("/admin/connections/nosuch/config"); code != 404 {
 		t.Errorf("/config unknown: %d", code)

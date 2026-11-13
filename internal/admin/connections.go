@@ -40,12 +40,14 @@ func connectionOf(r db.ConnectionRow) Connection {
 	return c
 }
 
-// redact replaces a set top-level "Pass" with "<set>". A config that isn't
-// an object, or has no password, comes back as it was.
+// redact replaces a set top-level "Pass" with "<set>". It fails closed: a
+// config that isn't a JSON object (which could hold a password anywhere) or
+// can't be re-encoded comes back as null, never as stored.
 func redact(raw json.RawMessage) json.RawMessage {
+	null := json.RawMessage("null")
 	var m map[string]json.RawMessage
-	if json.Unmarshal(raw, &m) != nil {
-		return raw
+	if json.Unmarshal(raw, &m) != nil || m == nil {
+		return null
 	}
 	switch string(m["Pass"]) {
 	case "", `""`, "null":
@@ -54,7 +56,7 @@ func redact(raw json.RawMessage) json.RawMessage {
 	m["Pass"] = json.RawMessage(`"<set>"`)
 	out, err := respond.Marshal(m) // no HTML escaping: "<set>" stays readable
 	if err != nil {
-		return raw
+		return null
 	}
 	return out
 }
