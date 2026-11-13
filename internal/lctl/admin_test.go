@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestAdminClientErrors(t *testing.T) {
@@ -89,5 +90,28 @@ func TestConnectionInfoNoPassword(t *testing.T) {
 		case "connection-info":
 			h.has("password:    set, sent with PASS")
 		}
+	}
+}
+
+// Deletes of big users can outlast any fixed bound, so they run without a
+// client timeout; every other request keeps one.
+func TestAdminTimeoutSkipsDeletes(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(300 * time.Millisecond)
+		w.Write([]byte(`{"id":1,"counts":{}}`))
+	}))
+	defer srv.Close()
+	a := NewAdmin(srv.URL)
+	a.Timeout = 50 * time.Millisecond
+	ctx := context.Background()
+
+	if _, err := a.DeleteUser(ctx, "u", 0); err != nil {
+		t.Errorf("DeleteUser: %v", err)
+	}
+	if _, err := a.DeleteConnection(ctx, "c", 0); err != nil {
+		t.Errorf("DeleteConnection: %v", err)
+	}
+	if _, err := a.LastLogID(ctx); !errors.Is(err, context.DeadlineExceeded) {
+		t.Errorf("LastLogID: want a timeout, got %v", err)
 	}
 }

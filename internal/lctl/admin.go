@@ -19,6 +19,9 @@ import (
 type Admin struct {
 	BaseURL string
 	HTTP    *http.Client
+	// Timeout bounds every request but the two deletes, which can run as
+	// long as they need to.
+	Timeout time.Duration
 }
 
 // ErrNotFound is the admin API answering 404.
@@ -39,11 +42,21 @@ func (e *unreachable) Unwrap() error        { return e.err }
 
 // NewAdmin is a client for the admin server at base.
 func NewAdmin(base string) *Admin {
-	return &Admin{BaseURL: strings.TrimSuffix(base, "/"), HTTP: &http.Client{Timeout: 5 * time.Minute}}
+	return &Admin{BaseURL: strings.TrimSuffix(base, "/"), HTTP: &http.Client{}, Timeout: 5 * time.Minute}
 }
 
 // do sends a request and decodes a 200 JSON answer into out (nil to ignore it).
 func (a *Admin) do(ctx context.Context, method, path string, query url.Values, out any) error {
+	return a.send(ctx, a.Timeout, method, path, query, out)
+}
+
+// send is do with its own bound; 0 means none.
+func (a *Admin) send(ctx context.Context, timeout time.Duration, method, path string, query url.Values, out any) error {
+	if timeout > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, timeout)
+		defer cancel()
+	}
 	u := strings.TrimSuffix(a.BaseURL, "/") + path
 	if len(query) > 0 {
 		u += "?" + query.Encode()
@@ -209,7 +222,7 @@ type Deleted struct {
 // command began destroying connections.
 func (a *Admin) remove(ctx context.Context, path string, logAfter int64) (Deleted, error) {
 	var out writeResult
-	err := a.do(ctx, http.MethodDelete, path, url.Values{"log_after": {strconv.FormatInt(logAfter, 10)}}, &out)
+	err := a.send(ctx, 0, http.MethodDelete, path, url.Values{"log_after": {strconv.FormatInt(logAfter, 10)}}, &out)
 	if errors.Is(err, ErrUnreachable) {
 		// the caller has already reached the server (LastLogID), so this
 		// request may have arrived before the connection broke
