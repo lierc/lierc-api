@@ -3,11 +3,13 @@ package lctl
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
 	"time"
 
+	"github.com/lierc/lierc-api/internal/admin"
 	"github.com/lierc/lierc-api/internal/connconfig"
 )
 
@@ -32,56 +34,68 @@ func userInfo(ctx context.Context, env *Env, args []string) error {
 		if i > 0 {
 			fmt.Fprintln(out)
 		}
-		var id, username, email string
-		var verified *bool        // NULL: grandfathered
-		var lastLogin *time.Time  // NULL on some old accounts
-		var registered *time.Time // NULL for accounts from before the column
-		var legacy, hash *string
-		err := env.pool().QueryRow(ctx, `SELECT id, username, email, verified, last_login, registered, password, password_hash
-		  FROM "user" WHERE id = $1 OR lower(username) = lower($1) OR lower(email) = lower($1)
-		  ORDER BY id = $1 DESC LIMIT 1`, who).
-			Scan(&id, &username, &email, &verified, &lastLogin, &registered, &legacy, &hash)
-		if isNoRows(err) {
+		u, found, err := findUserDetail(ctx, env, who)
+		if err != nil {
+			return err
+		}
+		if !found {
 			fmt.Fprintf(out, "%s: no such user\n", who)
 			missing++
 			continue
 		}
-		if err != nil {
-			return err
-		}
 
-		state := verifiedState(verified)
 		password := "none"
-		switch {
-		case hash != nil && *hash != "":
+		switch u.Password {
+		case "bcrypt":
 			password = "bcrypt"
-		case legacy != nil && *legacy != "":
+		case "legacy":
 			password = "legacy (not yet moved to bcrypt)"
 		}
-		fmt.Fprintf(out, "%s (%s)\n", username, id)
-		fmt.Fprintf(out, "  email:       %s (%s)\n", email, state)
-		fmt.Fprintf(out, "  last login:  %s\n", when(env.now(), lastLogin, "never"))
-		fmt.Fprintf(out, "  registered:  %s\n", when(env.now(), registered, "unknown"))
+		fmt.Fprintf(out, "%s (%s)\n", u.Username, u.ID)
+		fmt.Fprintf(out, "  email:       %s (%s)\n", u.Email, verifiedState(u.Verified))
+		fmt.Fprintf(out, "  last login:  %s\n", when(env.now(), u.LastLogin, "never"))
+		fmt.Fprintf(out, "  registered:  %s\n", when(env.now(), u.Registered, "unknown"))
 		fmt.Fprintf(out, "  password:    %s\n", password)
 
-		conns, err := env.Store.Connections(ctx, id)
-		if err != nil {
-			return err
-		}
-		fmt.Fprintf(out, "  connections: %d\n", len(conns))
-		for _, c := range conns {
+		fmt.Fprintf(out, "  connections: %d\n", len(u.ConnectionList))
+		for _, c := range u.ConnectionList {
 			fmt.Fprintf(out, "    %s  %s  %s\n", c.ID, describeConfig(c.Config), liercdState(ctx, env, c.ID))
-			inst, err := instanceName(ctx, env, c.ID)
-			if err != nil {
-				return err
-			}
-			fmt.Fprintf(out, "      liercd: %s\n", inst)
+			fmt.Fprintf(out, "      liercd: %s\n", c.Instance)
 		}
 	}
 	if missing > 0 {
 		return fmt.Errorf("%d user(s) not found", missing)
 	}
 	return nil
+}
+
+// findUserDetail is the user named who (id, username or email), with their
+// connections; found is false if there is none.
+func findUserDetail(ctx context.Context, env *Env, who string) (u admin.UserDetail, found bool, err error) {
+	id, found, err := lookupUserID(ctx, env, who)
+	if err != nil || !found {
+		return u, false, err
+	}
+	u, err = env.Admin.User(ctx, id)
+	if errors.Is(err, ErrNotFound) {
+		return u, false, nil
+	}
+	return u, err == nil, err
+}
+
+// lookupUserID is the id of the user named who (id, username or email,
+// case-insensitively); an id match wins over a username or email match.
+func lookupUserID(ctx context.Context, env *Env, who string) (string, bool, error) {
+	list, err := env.Admin.LookupUsers(ctx, who)
+	if err != nil || len(list) == 0 {
+		return "", false, err
+	}
+	for _, u := range list {
+		if u.ID == who {
+			return u.ID, true, nil
+		}
+	}
+	return list[0].ID, true, nil
 }
 
 // describeConfig summarises a saved config without its passwords.

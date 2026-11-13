@@ -31,14 +31,11 @@ this only removes the rows.`
 // case-insensitively). Without one it prints "no such user" and returns ok
 // false.
 func findUser(ctx context.Context, env *Env, who string) (id string, ok bool, err error) {
-	err = env.pool().QueryRow(ctx, `SELECT id FROM "user"
-	  WHERE id = $1 OR lower(username) = lower($1) OR lower(email) = lower($1)
-	  ORDER BY id = $1 DESC LIMIT 1`, who).Scan(&id)
-	if isNoRows(err) {
+	id, ok, err = lookupUserID(ctx, env, who)
+	if err == nil && !ok {
 		fmt.Fprintf(env.Stdout, "%s: no such user\n", who)
-		return "", false, nil
 	}
-	return id, err == nil, err
+	return id, ok, err
 }
 
 func plural(n int64, one, many string) string {
@@ -64,7 +61,7 @@ func logins(ctx context.Context, env *Env, args []string) error {
 	if !ok {
 		return fmt.Errorf("%s: no such user", who)
 	}
-	list, err := login.List(ctx, env.Store, id)
+	list, err := env.Admin.Logins(ctx, id)
 	if err != nil {
 		return err
 	}

@@ -3,6 +3,7 @@ package lctl
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -64,12 +65,9 @@ func connectionInfo(ctx context.Context, env *Env, args []string) error {
 		if i > 0 {
 			fmt.Fprintln(out)
 		}
-		var user, config string
-		var username *string
-		err := env.pool().QueryRow(ctx, `SELECT c."user", c.config::text, u.username FROM connection c
-		  LEFT JOIN "user" u ON u.id = c."user" WHERE c.id = $1`, id).Scan(&user, &config, &username)
+		c, err := env.Admin.Connection(ctx, id)
 		saved := err == nil
-		if err != nil && !isNoRows(err) {
+		if err != nil && !errors.Is(err, ErrNotFound) {
 			return err
 		}
 
@@ -83,24 +81,25 @@ func connectionInfo(ctx context.Context, env *Env, args []string) error {
 		fmt.Fprintln(out, id)
 		var params map[string]any
 		if saved {
-			name := "no such user"
-			if username != nil {
-				name = *username
+			name := c.Username
+			if name == "" {
+				name = "no such user"
 			}
-			fmt.Fprintf(out, "  user:        %s (%s)\n", name, user)
-			inst, err := instanceName(ctx, env, id)
+			fmt.Fprintf(out, "  user:        %s (%s)\n", name, c.User)
+			fmt.Fprintf(out, "  liercd:      %s\n", c.Instance)
+			fmt.Fprintln(out, "saved config:")
+			// the whole config, to check it; only its shape is printed
+			config, err := env.Admin.ConnectionConfig(ctx, id)
 			if err != nil {
 				return err
 			}
-			fmt.Fprintf(out, "  liercd:      %s\n", inst)
-			fmt.Fprintln(out, "saved config:")
-			v, _ := connconfig.Decode([]byte(config))
+			v, _ := connconfig.Decode(config)
 			params, _ = v.(map[string]any)
 			if params != nil {
 				printSavedConfig(out, params)
 			}
 			valid := "yes"
-			if why := connectionProblem(ctx, env, []byte(config), true); why != "" {
+			if why := connectionProblem(ctx, env, config, true); why != "" {
 				valid = "no: " + why
 			}
 			fmt.Fprintf(out, "  valid:       %s\n", valid)
@@ -118,15 +117,6 @@ func connectionInfo(ctx context.Context, env *Env, args []string) error {
 		return fmt.Errorf("%d connection(s) not found", missing)
 	}
 	return nil
-}
-
-// instanceName is the liercd instance a connection is on: "main" or "next".
-func instanceName(ctx context.Context, env *Env, id string) (string, error) {
-	inst, err := env.Store.LookupLiercd(ctx, id)
-	if inst == "" {
-		inst = "main"
-	}
-	return inst, err
 }
 
 // liercdStatus fetches a connection's live state; data is nil when liercd

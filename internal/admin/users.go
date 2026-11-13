@@ -127,7 +127,8 @@ func (a *api) userCounts(w http.ResponseWriter, r *http.Request) {
 	write(w, http.StatusOK, counts)
 }
 
-type loginJSON struct {
+// Login is one of a user's logins.
+type Login struct {
 	ID        int64     `json:"id"`
 	Created   time.Time `json:"created"`
 	LastUsed  time.Time `json:"last_used"`
@@ -145,9 +146,9 @@ func (a *api) userLogins(w http.ResponseWriter, r *http.Request) {
 		internal(w, "list logins", err)
 		return
 	}
-	out := make([]loginJSON, 0, len(infos))
+	out := make([]Login, 0, len(infos))
 	for _, l := range infos {
-		out = append(out, loginJSON{ID: l.ID, Created: l.Created.UTC().Truncate(time.Second),
+		out = append(out, Login{ID: l.ID, Created: l.Created.UTC().Truncate(time.Second),
 			LastUsed: l.LastUsed.UTC().Truncate(time.Second), IP: l.IP, UserAgent: l.UserAgent})
 	}
 	write(w, http.StatusOK, out)

@@ -53,7 +53,8 @@ type Env struct {
 	Getenv          func(string) string
 	Store           db.Store
 	Liercd          *liercd.Client
-	StatsURL        string // API_STATS, default http://127.0.0.1:5009/stats
+	Admin           *Admin // the API's admin server (API_ADMIN)
+	StatsURL        string // API_STATS, default <API_ADMIN>/stats
 	Stdin           io.Reader
 	Stdout, Stderr  io.Writer
 	StdinIsTerminal bool
@@ -163,12 +164,16 @@ func OpenEnv(ctx context.Context, sys System) (*Env, func(), error) {
 	if err != nil {
 		return nil, nil, err
 	}
+	adminURL := strings.TrimSuffix(sys.Getenv("API_ADMIN"), "/")
+	if adminURL == "" {
+		adminURL = "http://127.0.0.1:5009"
+	}
 	stats := sys.Getenv("API_STATS")
 	if stats == "" {
-		stats = "http://127.0.0.1:5009/stats"
+		stats = adminURL + "/stats"
 	}
 	env := &Env{
-		Config: cfg, Getenv: sys.Getenv, Store: d, Liercd: liercd.NewRouted(liercd.Instances{Main: cfg.LiercdHost, Next: cfg.LiercdNextHost}, d.LookupLiercd), StatsURL: stats,
+		Config: cfg, Getenv: sys.Getenv, Store: d, Liercd: liercd.NewRouted(liercd.Instances{Main: cfg.LiercdHost, Next: cfg.LiercdNextHost}, d.LookupLiercd), Admin: NewAdmin(adminURL), StatsURL: stats,
 		Stdin: sys.Stdin, Stdout: sys.Stdout, Stderr: sys.Stderr, StdinIsTerminal: sys.StdinIsTerminal,
 		Resolve: connconfig.SystemResolver, Sleep: sleepCtx,
 		ReadPassword: func() (string, error) {

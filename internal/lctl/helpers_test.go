@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/lierc/lierc-api/internal/admin"
 	"github.com/lierc/lierc-api/internal/db"
 	"github.com/lierc/lierc-api/internal/liercd"
 	"github.com/lierc/lierc-api/internal/testenv"
@@ -29,6 +30,15 @@ type harness struct {
 	// beforeSleep, if set, runs when a command waits.
 	beforeSleep func()
 	sleepErr    error
+	// announced is what the admin server told the stream server.
+	announced []db.ConnectionChange
+	annMu     sync.Mutex
+}
+
+func (h *harness) announce(_ context.Context, c db.ConnectionChange) {
+	h.annMu.Lock()
+	defer h.annMu.Unlock()
+	h.announced = append(h.announced, c)
 }
 
 func newHarness(t *testing.T) *harness {
@@ -47,6 +57,9 @@ func newHarness(t *testing.T) *harness {
 			return h.sleepErr
 		},
 	}
+	srv := httptest.NewServer(admin.New(h.db, h.announce))
+	t.Cleanup(srv.Close)
+	h.env.Admin = &Admin{BaseURL: srv.URL, HTTP: http.DefaultClient}
 	return h
 }
 

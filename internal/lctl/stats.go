@@ -39,20 +39,15 @@ func streamStats(ctx context.Context, env *Env, user string, into any) error {
 }
 
 func usernames(ctx context.Context, env *Env, ids []string) (map[string]string, error) {
-	rows, err := env.pool().Query(ctx, `SELECT id, username FROM "user" WHERE id = ANY($1)`, ids)
+	list, err := env.Admin.UsersByID(ctx, ids)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
 	names := map[string]string{}
-	for rows.Next() {
-		var id, name string
-		if err := rows.Scan(&id, &name); err != nil {
-			return nil, err
-		}
-		names[id] = name
+	for _, u := range list {
+		names[u.ID] = u.Username
 	}
-	return names, rows.Err()
+	return names, nil
 }
 
 func stats(ctx context.Context, env *Env, args []string) error {
@@ -120,12 +115,19 @@ func users(ctx context.Context, env *Env, args []string) error {
 	}
 	for _, arg := range fs.Args() {
 		var w who
-		err := env.pool().QueryRow(ctx, `SELECT id, username FROM "user" WHERE lower(username) = lower($1)`, arg).Scan(&w.id, &w.name)
-		if isNoRows(err) {
-			return fmt.Errorf("unknown user %s", arg)
-		}
+		found, err := env.Admin.LookupUsers(ctx, arg)
 		if err != nil {
 			return err
+		}
+		// a username only: not an id or an email
+		for _, u := range found {
+			if strings.EqualFold(u.Username, arg) {
+				w = who{u.ID, u.Username}
+				break
+			}
+		}
+		if w.id == "" {
+			return fmt.Errorf("unknown user %s", arg)
 		}
 		list = append(list, w)
 	}

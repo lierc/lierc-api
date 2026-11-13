@@ -39,35 +39,19 @@ func inactiveUsers(ctx context.Context, env *Env, args []string) error {
 	}
 
 	cutoff := env.now().Add(-d).UTC()
-	// last_login is a timestamp without a zone, stored in UTC; it's NULL on
-	// some old accounts, listed first as the least recently seen
-	rows, err := env.pool().Query(ctx, `SELECT u.id, u.username, u.email, u.verified, u.last_login, u.registered,
-	    (SELECT count(*) FROM connection c WHERE c."user" = u.id)
-	  FROM "user" u WHERE u.last_login IS NULL OR u.last_login < ($1::timestamptz AT TIME ZONE 'UTC')
-	  ORDER BY u.last_login NULLS FIRST, u.id`, cutoff)
+	list, err := env.Admin.Users(ctx, &cutoff)
 	if err != nil {
 		return err
 	}
-	defer rows.Close()
-	n := 0
-	for rows.Next() {
-		var id, username, email string
-		var verified *bool
-		var lastLogin, registered *time.Time
-		var conns int
-		if err := rows.Scan(&id, &username, &email, &verified, &lastLogin, &registered, &conns); err != nil {
-			return err
-		}
-		if state := verifiedState(verified); state != "verified" {
+	for _, u := range list {
+		email := u.Email
+		if state := verifiedState(u.Verified); state != "verified" {
 			email += " (" + state + ")"
 		}
-		fmt.Fprintf(env.Stdout, "%s  %s  %s  last login %s  registered %s  %d connections\n", id, username, email,
-			when(env.now(), lastLogin, "never"), when(env.now(), registered, "unknown"), conns)
-		n++
+		fmt.Fprintf(env.Stdout, "%s  %s  %s  last login %s  registered %s  %d connections\n", u.ID, u.Username, email,
+			when(env.now(), u.LastLogin, "never"), when(env.now(), u.Registered, "unknown"), u.Connections)
 	}
-	if err := rows.Err(); err != nil {
-		return err
-	}
+	n := len(list)
 	fmt.Fprintf(env.Stderr, "%d user(s) haven't logged in since %s UTC (%s)\n", n, cutoff.Format("2006-01-02 15:04"), *since)
 	return nil
 }
