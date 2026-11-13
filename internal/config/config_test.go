@@ -2,6 +2,7 @@ package config
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -16,7 +17,6 @@ func TestDefaults(t *testing.T) {
 	}
 	want := map[string][2]string{
 		"DBName":         {c.DBName, "lierc"},
-		"Secret":         {c.Secret, "changeme"},
 		"AdminListen":    {c.AdminListen, "127.0.0.1:5009"},
 		"NSQAddr":        {c.NSQAddr, "127.0.0.1:4150"},
 		"Listen":         {c.Listen, ":5003"},
@@ -35,23 +35,55 @@ func TestDefaults(t *testing.T) {
 	if c.DBMaxConns != 20 {
 		t.Errorf("DBMaxConns = %d", c.DBMaxConns)
 	}
+	if c.AccountTokenSecret != "" || c.UnsubscribeSecret != "" {
+		t.Errorf("secrets have defaults: %q %q", c.AccountTokenSecret, c.UnsubscribeSecret)
+	}
 }
 
 func TestOverrides(t *testing.T) {
 	c, err := Load(env(map[string]string{
 		"LISTEN": ":9", "TRUSTED_PROXIES": "10.0.0.1, 10.0.0.2", "NSQD_HOST": "nsq",
 		"LIERCD_HOST": "lc", "LIERCD_NEXT_HOST": "lcn", "POSTGRES_HOST": "pg", "POSTGRES_USER": "u",
-		"POSTGRES_PASSWORD": "p", "ADMIN_LISTEN": "127.0.0.1:7", "API_SECRET": "s",
+		"POSTGRES_PASSWORD": "p", "ADMIN_LISTEN": "127.0.0.1:7", "ACCOUNT_TOKEN_SECRET": "s",
 	}))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if c.Listen != ":9" || c.NSQAddr != "nsq:4150" || c.LiercdHost != "lc" || c.LiercdNextHost != "lcn" ||
-		c.DBHost != "pg" || c.DBUser != "u" || c.DBPass != "p" || c.AdminListen != "127.0.0.1:7" || c.Secret != "s" {
+		c.DBHost != "pg" || c.DBUser != "u" || c.DBPass != "p" || c.AdminListen != "127.0.0.1:7" || c.AccountTokenSecret != "s" {
 		t.Errorf("overrides not applied: %+v", c)
 	}
 	if !reflect.DeepEqual(c.TrustedProxies, []string{"10.0.0.1", "10.0.0.2"}) {
 		t.Errorf("TrustedProxies = %v", c.TrustedProxies)
+	}
+}
+
+// The signing secrets have no default: RequireSecrets names a missing one.
+// API_SECRET is retired and doesn't stand in.
+func TestSecretsRequired(t *testing.T) {
+	for _, c := range []struct {
+		env  map[string]string
+		want string
+	}{
+		{map[string]string{"UNSUBSCRIBE_SECRET": "u"}, "ACCOUNT_TOKEN_SECRET"},
+		{map[string]string{"UNSUBSCRIBE_SECRET": "u", "API_SECRET": "old"}, "ACCOUNT_TOKEN_SECRET"},
+		{map[string]string{"ACCOUNT_TOKEN_SECRET": "a"}, "UNSUBSCRIBE_SECRET"},
+		{map[string]string{"ACCOUNT_TOKEN_SECRET": "a", "UNSUBSCRIBE_SECRET": ""}, "UNSUBSCRIBE_SECRET"},
+	} {
+		cfg, err := Load(env(c.env))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := cfg.RequireSecrets(); err == nil || !strings.Contains(err.Error(), c.want) {
+			t.Errorf("%v: err = %v, want one naming %s", c.env, err, c.want)
+		}
+	}
+	got, err := Load(env(map[string]string{"ACCOUNT_TOKEN_SECRET": "a", "UNSUBSCRIBE_SECRET": "u"}))
+	if err == nil {
+		err = got.RequireSecrets()
+	}
+	if err != nil || got.AccountTokenSecret != "a" || got.UnsubscribeSecret != "u" {
+		t.Errorf("both set: %+v, %v", got, err)
 	}
 }
 

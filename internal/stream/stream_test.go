@@ -60,7 +60,7 @@ func setup(t *testing.T) *env {
 func setupWith(t *testing.T, d *db.DB, fake *testenv.LiercdServer, liercdURL string) *env {
 	t.Helper()
 	lc := &liercd.Client{BaseURL: liercdURL, HTTP: noKeepAlive()}
-	s := New(config.Config{Secret: testSecret}, d, lc)
+	s := New(config.Config{AccountTokenSecret: testSecret}, d, lc)
 	s.PingInterval = time.Hour
 	s.WriteTimeout = 5 * time.Second
 	e := &env{t: t, db: d, fake: fake, s: s, replay: make(chan struct{}, 100)}

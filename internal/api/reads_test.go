@@ -73,7 +73,7 @@ func TestSeenRoute(t *testing.T) {
 }
 
 func TestWebPushKeys(t *testing.T) {
-	e := setupCfg(t, config.Config{Secret: testSecret, VAPIDPublic: "pk"})
+	e := setupCfg(t, config.Config{AccountTokenSecret: testSecret, VAPIDPublic: "pk"})
 	a := testenv.AddUser(t, e.db, "alice")
 	e.want("/notification/web_push_keys", a, 200, `{"vapid_public_key":"pk"}`)
 

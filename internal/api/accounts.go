@@ -35,7 +35,7 @@ func (a *api) accounts(mux *http.ServeMux) {
 		Store:          a.db,
 		Conns:          a.conns,
 		Mail:           newMailer(a.cfg),
-		Secret:         a.cfg.Secret,
+		Secret:         a.cfg.AccountTokenSecret,
 		SiteURL:        a.cfg.SiteURL,
 		NoSMTP:         a.cfg.NoSMTP,
 		DefaultNetwork: a.cfg.DefaultNetwork,

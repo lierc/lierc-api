@@ -34,7 +34,7 @@ type env struct {
 	cfg  config.Config
 }
 
-func setup(t *testing.T) *env { return setupCfg(t, config.Config{Secret: testSecret}) }
+func setup(t *testing.T) *env { return setupCfg(t, config.Config{AccountTokenSecret: testSecret}) }
 
 func setupCfg(t *testing.T, cfg config.Config) *env {
 	t.Helper()
@@ -176,7 +176,7 @@ func TestUnknownPathNotFound(t *testing.T) {
 }
 
 func TestCrossSiteRefused(t *testing.T) {
-	e := setupCfg(t, config.Config{Secret: testSecret, Origins: []string{"https://ok"}})
+	e := setupCfg(t, config.Config{AccountTokenSecret: testSecret, Origins: []string{"https://ok"}})
 	res := e.doReq("POST", "/nope", "", "", "Sec-Fetch-Site", "cross-site")
 	body, _ := io.ReadAll(res.Body)
 	res.Body.Close()
@@ -192,7 +192,7 @@ func TestCrossSiteRefused(t *testing.T) {
 }
 
 func TestCrossSitePingRefused(t *testing.T) {
-	e := setupCfg(t, config.Config{Secret: testSecret, Origins: []string{"https://ok"}})
+	e := setupCfg(t, config.Config{AccountTokenSecret: testSecret, Origins: []string{"https://ok"}})
 	u := testenv.AddUser(t, e.db, "alice")
 	res, id := e.openStream("/events", u)
 	defer res.Body.Close()
@@ -247,7 +247,7 @@ func (f fakeStore) Prefs(context.Context, string) ([]db.Pref, error) { return f.
 // database, GET /preference answers from it. The rest of the store is the
 // real database, which the login check needs.
 func TestAPIRunsOnFakeStore(t *testing.T) {
-	cfg := config.Config{Secret: testSecret}
+	cfg := config.Config{AccountTokenSecret: testSecret}
 	d := testenv.Postgres(t)
 	u := testenv.AddUser(t, d, "alice")
 	lc := &liercd.Client{HTTP: &http.Client{}}

@@ -401,7 +401,7 @@ func TestStreamGetsDelete(t *testing.T) {
 	d := testenv.Postgres(t)
 	fake := testenv.FakeLiercd(t)
 	lc := &liercd.Client{BaseURL: fake.URL, HTTP: &http.Client{Transport: &http.Transport{DisableKeepAlives: true}}}
-	s := stream.New(config.Config{Secret: "secret", UnsubscribeSecret: "unsub"}, d, lc)
+	s := stream.New(config.Config{AccountTokenSecret: "secret", UnsubscribeSecret: "unsub"}, d, lc)
 	mux := http.NewServeMux()
 	s.Routes(mux, auth.Users{DB: d})
 	srv := httptest.NewServer(mux)

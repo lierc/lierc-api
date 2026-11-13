@@ -46,6 +46,9 @@ func run(ctx context.Context, args []string, getenv func(string) string, stderr 
 	logger := log.New(stderr, "", log.LstdFlags)
 
 	cfg, err := config.Load(getenv)
+	if err == nil {
+		err = cfg.RequireSecrets()
+	}
 	if err != nil {
 		logger.Printf("config: %v", err)
 		return 1

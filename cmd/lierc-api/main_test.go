@@ -40,12 +40,14 @@ func TestServesStreamUnauthorized(t *testing.T) {
 	// queries it.
 	cc := d.Pool.Config().ConnConfig
 	env := map[string]string{
-		"POSTGRES_HOST":     net.JoinHostPort(cc.Host, strconv.Itoa(int(cc.Port))),
-		"POSTGRES_USER":     cc.User,
-		"POSTGRES_PASSWORD": cc.Password,
-		"LISTEN":            "127.0.0.1:0",
-		"ADMIN_LISTEN":      "127.0.0.1:0",
-		"NSQD_HOST":         nsqAddr,
+		"POSTGRES_HOST":        net.JoinHostPort(cc.Host, strconv.Itoa(int(cc.Port))),
+		"POSTGRES_USER":        cc.User,
+		"POSTGRES_PASSWORD":    cc.Password,
+		"LISTEN":               "127.0.0.1:0",
+		"ADMIN_LISTEN":         "127.0.0.1:0",
+		"ACCOUNT_TOKEN_SECRET": "acct",
+		"UNSUBSCRIBE_SECRET":   "unsub",
+		"NSQD_HOST":            nsqAddr,
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -87,10 +89,12 @@ func TestServesStreamUnauthorized(t *testing.T) {
 // The server starts and serves without nsqd, and still shuts down cleanly.
 func TestStreamServesWithoutNSQ(t *testing.T) {
 	env := map[string]string{
-		"POSTGRES_HOST": "127.0.0.1:1", // never queried without a cookie
-		"LISTEN":        "127.0.0.1:0",
-		"ADMIN_LISTEN":  "127.0.0.1:0",
-		"NSQD_HOST":     "127.0.0.2:1", // nothing listens here
+		"POSTGRES_HOST":        "127.0.0.1:1", // never queried without a cookie
+		"LISTEN":               "127.0.0.1:0",
+		"ADMIN_LISTEN":         "127.0.0.1:0",
+		"ACCOUNT_TOKEN_SECRET": "acct",
+		"UNSUBSCRIBE_SECRET":   "unsub",
+		"NSQD_HOST":            "127.0.0.2:1", // nothing listens here
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -136,10 +140,12 @@ func TestStreamServesWithoutNSQ(t *testing.T) {
 // /stats is served, without a key, on the admin listener only.
 func TestAdminListenerServesStats(t *testing.T) {
 	env := map[string]string{
-		"POSTGRES_HOST": "127.0.0.1:1", // never queried
-		"LISTEN":        "127.0.0.1:0",
-		"ADMIN_LISTEN":  "127.0.0.1:0",
-		"NSQD_HOST":     "127.0.0.2:1",
+		"POSTGRES_HOST":        "127.0.0.1:1", // never queried
+		"LISTEN":               "127.0.0.1:0",
+		"ADMIN_LISTEN":         "127.0.0.1:0",
+		"ACCOUNT_TOKEN_SECRET": "acct",
+		"UNSUBSCRIBE_SECRET":   "unsub",
+		"NSQD_HOST":            "127.0.0.2:1",
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -196,10 +202,12 @@ func TestAdminListenInUse(t *testing.T) {
 	}
 	defer taken.Close()
 	env := map[string]string{
-		"POSTGRES_HOST": "127.0.0.1:1",
-		"LISTEN":        "127.0.0.1:0",
-		"ADMIN_LISTEN":  taken.Addr().String(),
-		"NSQD_HOST":     "127.0.0.2:1",
+		"POSTGRES_HOST":        "127.0.0.1:1",
+		"LISTEN":               "127.0.0.1:0",
+		"ADMIN_LISTEN":         taken.Addr().String(),
+		"ACCOUNT_TOKEN_SECRET": "acct",
+		"UNSUBSCRIBE_SECRET":   "unsub",
+		"NSQD_HOST":            "127.0.0.2:1",
 	}
 	var logs syncBuffer
 	if code := run(context.Background(), nil, func(k string) string { return env[k] }, &logs, nil); code != 1 {
@@ -207,6 +215,29 @@ func TestAdminListenInUse(t *testing.T) {
 	}
 	if !strings.Contains(logs.String(), "admin listen") {
 		t.Errorf("logs = %q", logs.String())
+	}
+}
+
+// Without a signing secret the API doesn't start: it would otherwise sign
+// verification, reset and unsubscribe links with an empty key.
+func TestRefusesWithoutSecrets(t *testing.T) {
+	for _, missing := range []string{"ACCOUNT_TOKEN_SECRET", "UNSUBSCRIBE_SECRET"} {
+		env := map[string]string{
+			"POSTGRES_HOST":        "127.0.0.1:1",
+			"LISTEN":               "127.0.0.1:0",
+			"ADMIN_LISTEN":         "127.0.0.1:0",
+			"NSQD_HOST":            "127.0.0.2:1",
+			"ACCOUNT_TOKEN_SECRET": "acct",
+			"UNSUBSCRIBE_SECRET":   "unsub",
+		}
+		delete(env, missing)
+		var logs syncBuffer
+		if code := run(context.Background(), nil, func(k string) string { return env[k] }, &logs, nil); code != 1 {
+			t.Errorf("without %s: exit %d, want 1", missing, code)
+		}
+		if !strings.Contains(logs.String(), missing+" is not set") {
+			t.Errorf("without %s: logs = %q", missing, logs.String())
+		}
 	}
 }
 
@@ -248,12 +279,14 @@ func TestAdminRoutesMounted(t *testing.T) {
 	defer admin.Exec(context.Background(), "DROP DATABASE IF EXISTS lierc WITH (FORCE)")
 
 	env := map[string]string{
-		"POSTGRES_HOST":     net.JoinHostPort(cc.Host, strconv.Itoa(int(cc.Port))),
-		"POSTGRES_USER":     cc.User,
-		"POSTGRES_PASSWORD": cc.Password,
-		"LISTEN":            "127.0.0.1:0",
-		"ADMIN_LISTEN":      "127.0.0.1:0",
-		"NSQD_HOST":         "127.0.0.2:1",
+		"POSTGRES_HOST":        net.JoinHostPort(cc.Host, strconv.Itoa(int(cc.Port))),
+		"POSTGRES_USER":        cc.User,
+		"POSTGRES_PASSWORD":    cc.Password,
+		"LISTEN":               "127.0.0.1:0",
+		"ADMIN_LISTEN":         "127.0.0.1:0",
+		"ACCOUNT_TOKEN_SECRET": "acct",
+		"UNSUBSCRIBE_SECRET":   "unsub",
+		"NSQD_HOST":            "127.0.0.2:1",
 	}
 	addrs := make(chan [2]net.Addr, 1)
 	done := make(chan int, 1)

@@ -221,7 +221,7 @@ func TestClient(t *testing.T) {
 	}
 }
 
-// A Perl-format cookie, correctly signed with the old API_SECRET, is
+// A Perl-format cookie, correctly signed with the old Perl cookie secret, is
 // refused like any other unknown value: no login is made for it, and the
 // cookie is cleared.
 func TestPerlCookieRefused(t *testing.T) {

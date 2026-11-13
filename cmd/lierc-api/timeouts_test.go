@@ -71,7 +71,7 @@ func TestStreamOutlivesTimeouts(t *testing.T) {
 func TestRealStreamOutlivesTimeouts(t *testing.T) {
 	d := testenv.Postgres(t)
 	fake := testenv.FakeLiercd(t)
-	cfg := config.Config{Secret: "testsecret"}
+	cfg := config.Config{AccountTokenSecret: "testsecret"}
 	lc := &liercd.Client{BaseURL: fake.URL, HTTP: &http.Client{}}
 	s := stream.New(cfg, d, lc)
 	s.PingInterval = time.Hour

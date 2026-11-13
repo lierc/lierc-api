@@ -60,7 +60,7 @@ func mailEnv(t *testing.T) (*env, *recorder) {
 	old := newMailer
 	newMailer = func(config.Config) accounts.Mailer { return rec }
 	t.Cleanup(func() { newMailer = old })
-	return setupCfg(t, config.Config{Secret: testSecret, SiteURL: "https://site.example"}), rec
+	return setupCfg(t, config.Config{AccountTokenSecret: testSecret, SiteURL: "https://site.example"}), rec
 }
 
 const formType = "application/x-www-form-urlencoded"
@@ -147,7 +147,7 @@ func TestLoginRoute(t *testing.T) {
 }
 
 func TestLoginCrossSiteRefused(t *testing.T) {
-	e := setupCfg(t, config.Config{Secret: testSecret, Origins: []string{"https://ok"}})
+	e := setupCfg(t, config.Config{AccountTokenSecret: testSecret, Origins: []string{"https://ok"}})
 	res, _ := e.form("POST", "/auth", "", url.Values{"email": {"a"}, "pass": {"b"}}, "Sec-Fetch-Site", "cross-site")
 	if res.StatusCode != 403 {
 		t.Errorf("cross-site login: %d, want 403", res.StatusCode)

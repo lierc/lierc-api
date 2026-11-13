@@ -175,7 +175,7 @@ func TestLoginsNeedLogin(t *testing.T) {
 }
 
 func TestLoginsCrossSite(t *testing.T) {
-	e := setupCfg(t, config.Config{Secret: testSecret, Origins: []string{"https://ok"}})
+	e := setupCfg(t, config.Config{AccountTokenSecret: testSecret, Origins: []string{"https://ok"}})
 	alice := testenv.AddUser(t, e.db, "alice")
 	a, b := testenv.Login(t, e.db, alice), testenv.Login(t, e.db, alice)
 	code, _ := e.tokenReq("DELETE", "/login/"+strconv.FormatInt(e.loginID(b), 10), a, "Sec-Fetch-Site", "cross-site")
