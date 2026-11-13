@@ -4,15 +4,14 @@
 package admin
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"log"
 	"net/http"
 	"strconv"
 	"time"
 
 	"github.com/lierc/lierc-api/internal/db"
+	"github.com/lierc/lierc-api/internal/respond"
 )
 
 // Error is the body of every failed request.
@@ -42,15 +41,12 @@ func New(s db.Store, announce func(context.Context, db.ConnectionChange)) http.H
 }
 
 func write(w http.ResponseWriter, code int, v any) {
-	var buf bytes.Buffer
-	enc := json.NewEncoder(&buf)
-	enc.SetEscapeHTML(false)
-	if err := enc.Encode(v); err != nil {
+	b, err := respond.Marshal(v) // no HTML escaping: "<set>" stays readable
+	if err != nil {
 		log.Printf("admin: encode response: %v", err)
 		write(w, http.StatusInternalServerError, Error{"internal error"})
 		return
 	}
-	b := bytes.TrimSuffix(buf.Bytes(), []byte("\n"))
 	h := w.Header()
 	h.Set("Content-Type", "application/json")
 	h.Set("Content-Length", strconv.Itoa(len(b)))

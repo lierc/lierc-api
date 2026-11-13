@@ -174,7 +174,7 @@ func (d *DB) ReplacePasswordAndVerify(ctx context.Context, id, hash string, oldH
 		if firstVerify, err = markVerified(ctx, tx, id); err != nil {
 			return false, false, err
 		}
-		if _, err := tx.Exec(ctx, `DELETE FROM login WHERE "user" = $1`, id); err != nil {
+		if _, err := deleteLogins(ctx, tx, id); err != nil {
 			return false, false, err
 		}
 	}

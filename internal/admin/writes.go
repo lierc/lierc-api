@@ -11,20 +11,29 @@ import (
 	"github.com/lierc/lierc-api/internal/login"
 )
 
-// result is the body of every successful write; unset fields are left out.
-type result struct {
-	Status string           `json:"status"`
-	Counts map[string]int64 `json:"counts,omitempty"`
-	Ended  *int64           `json:"ended,omitempty"`
-	Pruned *int64           `json:"pruned,omitempty"`
+// DeleteResult answers a user or connection delete.
+type DeleteResult struct {
+	Status string `json:"status"`
+	// Counts is the delete's own rows per table.
+	Counts map[string]int64 `json:"counts"`
 	// Swept is the late log rows the sweep removed (0 without log_after);
 	// it is not in Counts.
-	Swept *int64 `json:"swept,omitempty"`
+	Swept int64 `json:"swept"`
 	// SweepError is set when the delete committed but the sweep failed.
 	SweepError string `json:"sweep_error,omitempty"`
 }
 
-func ptr(n int64) *int64 { return &n }
+// EndedResult answers ending a user's logins: how many ended.
+type EndedResult struct {
+	Status string `json:"status"`
+	Ended  int64  `json:"ended"`
+}
+
+// PrunedResult answers a prune: how many rows went.
+type PrunedResult struct {
+	Status string `json:"status"`
+	Pruned int64  `json:"pruned"`
+}
 
 func (a *api) writeRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("DELETE /admin/users/{id}", a.deleteUser)
@@ -78,7 +87,7 @@ func (a *api) remove(w http.ResponseWriter, r *http.Request, del deleteFunc, wha
 			a.announce(ctx, c)
 		}
 	}
-	res := result{Status: "ok", Counts: counts, Swept: ptr(0)}
+	res := DeleteResult{Status: "ok", Counts: counts}
 	if given {
 		user := ""
 		conns := make([]string, 0, len(changes))
@@ -93,7 +102,7 @@ func (a *api) remove(w http.ResponseWriter, r *http.Request, del deleteFunc, wha
 			log.Printf("admin: sweep late logs of %s: %v", what, err)
 			res.SweepError = "internal error"
 		} else {
-			res.Swept = &n
+			res.Swept = n
 		}
 	}
 	write(w, http.StatusOK, res)
@@ -122,7 +131,7 @@ func (a *api) endLogin(w http.ResponseWriter, r *http.Request) {
 		fail(w, http.StatusNotFound, "no such login")
 		return
 	}
-	write(w, http.StatusOK, result{Status: "ok", Ended: ptr(1)})
+	write(w, http.StatusOK, EndedResult{Status: "ok", Ended: 1})
 }
 
 func (a *api) endAllLogins(w http.ResponseWriter, r *http.Request) {
@@ -131,7 +140,7 @@ func (a *api) endAllLogins(w http.ResponseWriter, r *http.Request) {
 		internal(w, "end logins", err)
 		return
 	}
-	write(w, http.StatusOK, result{Status: "ok", Ended: &n})
+	write(w, http.StatusOK, EndedResult{Status: "ok", Ended: n})
 }
 
 func (a *api) pruneLogins(w http.ResponseWriter, r *http.Request) {
@@ -140,7 +149,7 @@ func (a *api) pruneLogins(w http.ResponseWriter, r *http.Request) {
 		internal(w, "prune logins", err)
 		return
 	}
-	write(w, http.StatusOK, result{Status: "ok", Pruned: &n})
+	write(w, http.StatusOK, PrunedResult{Status: "ok", Pruned: n})
 }
 
 func (a *api) pruneSeen(w http.ResponseWriter, r *http.Request) {
@@ -149,5 +158,5 @@ func (a *api) pruneSeen(w http.ResponseWriter, r *http.Request) {
 		internal(w, "prune seen", err)
 		return
 	}
-	write(w, http.StatusOK, result{Status: "ok", Pruned: &n})
+	write(w, http.StatusOK, PrunedResult{Status: "ok", Pruned: n})
 }

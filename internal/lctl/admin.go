@@ -42,7 +42,7 @@ func (e *unreachable) Unwrap() error        { return e.err }
 
 // NewAdmin is a client for the admin server at base.
 func NewAdmin(base string) *Admin {
-	return &Admin{BaseURL: strings.TrimSuffix(base, "/"), HTTP: &http.Client{}, Timeout: 5 * time.Minute}
+	return &Admin{BaseURL: base, HTTP: &http.Client{}, Timeout: 5 * time.Minute}
 }
 
 // do sends a request and decodes a 200 JSON answer into out (nil to ignore it).
@@ -215,16 +215,6 @@ func (a *Admin) StaleSeen(ctx context.Context) (int64, error) {
 // reached the API and been done.
 var ErrMaybeDone = errors.New("the request ended before the API answered; the delete may have finished")
 
-// writeResult is the body of every successful write.
-type writeResult struct {
-	Counts map[string]int64 `json:"counts"`
-	Ended  int64            `json:"ended"`
-	Pruned int64            `json:"pruned"`
-	Swept  int64            `json:"swept"`
-	// SweepError is set when the delete committed but its late-log sweep failed.
-	SweepError string `json:"sweep_error"`
-}
-
 // Deleted is what a delete did. Counts are the delete's own rows per table;
 // Swept is the late log rows removed after it. SweepError, if set, says the
 // delete is done but the sweep failed.
@@ -237,7 +227,7 @@ type Deleted struct {
 // remove sends a delete; logAfter is the log's last id from before the
 // command began destroying connections.
 func (a *Admin) remove(ctx context.Context, path string, logAfter int64) (Deleted, error) {
-	var out writeResult
+	var out admin.DeleteResult
 	err := a.send(ctx, 0, http.MethodDelete, path, url.Values{"log_after": {strconv.FormatInt(logAfter, 10)}}, &out)
 	if errors.Is(err, ErrUnreachable) {
 		// the caller has already reached the server (LastLogID), so this
@@ -265,18 +255,18 @@ func (a *Admin) EndLogin(ctx context.Context, user string, id int64) error {
 
 // EndLogins ends every login of a user and returns how many there were.
 func (a *Admin) EndLogins(ctx context.Context, user string) (int64, error) {
-	var out writeResult
+	var out admin.EndedResult
 	return out.Ended, a.do(ctx, http.MethodDelete, "/admin/users/"+url.PathEscape(user)+"/logins", nil, &out)
 }
 
 // PruneLogins deletes the logins unused for 7 days and returns how many.
 func (a *Admin) PruneLogins(ctx context.Context) (int64, error) {
-	var out writeResult
+	var out admin.PrunedResult
 	return out.Pruned, a.do(ctx, http.MethodPost, "/admin/logins/prune", nil, &out)
 }
 
 // PruneSeen deletes the stale seen rows and returns how many.
 func (a *Admin) PruneSeen(ctx context.Context) (int64, error) {
-	var out writeResult
+	var out admin.PrunedResult
 	return out.Pruned, a.do(ctx, http.MethodPost, "/admin/seen/prune", nil, &out)
 }

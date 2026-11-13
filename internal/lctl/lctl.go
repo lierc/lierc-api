@@ -99,10 +99,6 @@ func Main(ctx context.Context, args []string, sys System) int {
 	return mainGroups(ctx, args, sys, Commands, AdminCommands, OpenEnv)
 }
 
-func mainWith(ctx context.Context, args []string, sys System, cmds []Command, open Opener) int {
-	return mainGroups(ctx, args, sys, cmds, nil, open)
-}
-
 // mainGroups runs a top-level command from cmds, or "admin NAME" from
 // adminCmds.
 func mainGroups(ctx context.Context, args []string, sys System, cmds, adminCmds []Command, open Opener) int {

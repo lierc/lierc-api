@@ -80,7 +80,12 @@ func (d *DB) DeleteLoginByHash(ctx context.Context, tokenHash []byte) error {
 
 // DeleteLogins deletes every login of user and returns how many there were.
 func (d *DB) DeleteLogins(ctx context.Context, user string) (int64, error) {
-	tag, err := d.Pool.Exec(ctx, `DELETE FROM login WHERE "user" = $1`, user)
+	return deleteLogins(ctx, d.Pool, user)
+}
+
+// deleteLogins ends every login of user, in q (the pool or a transaction).
+func deleteLogins(ctx context.Context, q Execer, user string) (int64, error) {
+	tag, err := q.Exec(ctx, `DELETE FROM login WHERE "user" = $1`, user)
 	if err != nil {
 		return 0, err
 	}

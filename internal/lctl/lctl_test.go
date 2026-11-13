@@ -68,7 +68,7 @@ func fakeOpen(sys System) Opener {
 func TestHelpListsCommandsWithoutDB(t *testing.T) {
 	for _, args := range [][]string{{"help"}, {}} {
 		var o out
-		if code := mainWith(context.Background(), args, o.sys("", true), testCommands, noOpen(t)); code != 0 {
+		if code := mainGroups(context.Background(), args, o.sys("", true), testCommands, nil, noOpen(t)); code != 0 {
 			t.Fatalf("%v: exit %d", args, code)
 		}
 		for _, c := range testCommands {
@@ -81,7 +81,7 @@ func TestHelpListsCommandsWithoutDB(t *testing.T) {
 
 func TestRealCommandsAreListed(t *testing.T) {
 	var o out
-	mainWith(context.Background(), []string{"help"}, o.sys("", true), Commands, noOpen(t))
+	mainGroups(context.Background(), []string{"help"}, o.sys("", true), Commands, nil, noOpen(t))
 	for _, c := range Commands {
 		if !strings.Contains(o.stdout.String(), c.Name) {
 			t.Errorf("help is missing %s", c.Name)
@@ -91,7 +91,7 @@ func TestRealCommandsAreListed(t *testing.T) {
 
 func TestUnknownCommand(t *testing.T) {
 	var o out
-	if code := mainWith(context.Background(), []string{"nope"}, o.sys("", true), testCommands, noOpen(t)); code != 2 {
+	if code := mainGroups(context.Background(), []string{"nope"}, o.sys("", true), testCommands, nil, noOpen(t)); code != 2 {
 		t.Fatalf("exit %d, want 2", code)
 	}
 	if !strings.Contains(o.stderr.String(), "usage:") || !strings.Contains(o.stderr.String(), "unknown command nope") {
@@ -102,7 +102,7 @@ func TestUnknownCommand(t *testing.T) {
 func TestRunsCommandWithArgs(t *testing.T) {
 	var o out
 	sys := o.sys("", true)
-	if code := mainWith(context.Background(), []string{"alpha", "a", "b"}, sys, testCommands, fakeOpen(sys)); code != 0 {
+	if code := mainGroups(context.Background(), []string{"alpha", "a", "b"}, sys, testCommands, nil, fakeOpen(sys)); code != 0 {
 		t.Fatalf("exit %d: %s", code, o.stderr.String())
 	}
 	if o.stdout.String() != "alpha ran a,b\n" {
@@ -113,7 +113,7 @@ func TestRunsCommandWithArgs(t *testing.T) {
 func TestUsageErrorExits2(t *testing.T) {
 	var o out
 	sys := o.sys("", true)
-	if code := mainWith(context.Background(), []string{"bad-args"}, sys, testCommands, fakeOpen(sys)); code != 2 {
+	if code := mainGroups(context.Background(), []string{"bad-args"}, sys, testCommands, nil, fakeOpen(sys)); code != 2 {
 		t.Fatalf("exit %d, want 2", code)
 	}
 	if !strings.Contains(o.stderr.String(), "lctl bad-args: needs an argument") {
@@ -124,7 +124,7 @@ func TestUsageErrorExits2(t *testing.T) {
 func TestErrorExits1(t *testing.T) {
 	var o out
 	sys := o.sys("", true)
-	if code := mainWith(context.Background(), []string{"fails"}, sys, testCommands, fakeOpen(sys)); code != 1 {
+	if code := mainGroups(context.Background(), []string{"fails"}, sys, testCommands, nil, fakeOpen(sys)); code != 1 {
 		t.Fatalf("exit %d, want 1", code)
 	}
 	if !strings.Contains(o.stderr.String(), "lctl fails: it broke") {
@@ -135,7 +135,7 @@ func TestErrorExits1(t *testing.T) {
 func TestOpenErrorExits1(t *testing.T) {
 	var o out
 	failing := func(context.Context, System, bool) (*Env, func(), error) { return nil, nil, errors.New("no database") }
-	if code := mainWith(context.Background(), []string{"alpha"}, o.sys("", true), testCommands, failing); code != 1 {
+	if code := mainGroups(context.Background(), []string{"alpha"}, o.sys("", true), testCommands, nil, failing); code != 1 {
 		t.Fatalf("exit %d, want 1", code)
 	}
 	if !strings.Contains(o.stderr.String(), "no database") {
@@ -146,12 +146,12 @@ func TestOpenErrorExits1(t *testing.T) {
 func TestFlags(t *testing.T) {
 	var o out
 	sys := o.sys("", true)
-	if code := mainWith(context.Background(), []string{"flags", "--n", "3"}, sys, testCommands, fakeOpen(sys)); code != 0 || o.stdout.String() != "xxx\n" {
+	if code := mainGroups(context.Background(), []string{"flags", "--n", "3"}, sys, testCommands, nil, fakeOpen(sys)); code != 0 || o.stdout.String() != "xxx\n" {
 		t.Fatalf("exit %d stdout %q stderr %q", code, o.stdout.String(), o.stderr.String())
 	}
 	o = out{}
 	sys = o.sys("", true)
-	if code := mainWith(context.Background(), []string{"flags", "-h"}, sys, testCommands, fakeOpen(sys)); code != 0 {
+	if code := mainGroups(context.Background(), []string{"flags", "-h"}, sys, testCommands, nil, fakeOpen(sys)); code != 0 {
 		t.Fatalf("-h: exit %d", code)
 	}
 	if !strings.Contains(o.stderr.String(), "usage: lctl flags [--n N]") || !strings.Contains(o.stderr.String(), "Takes a number.") {
@@ -159,7 +159,7 @@ func TestFlags(t *testing.T) {
 	}
 	o = out{}
 	sys = o.sys("", true)
-	if code := mainWith(context.Background(), []string{"flags", "--bogus"}, sys, testCommands, fakeOpen(sys)); code != 2 {
+	if code := mainGroups(context.Background(), []string{"flags", "--bogus"}, sys, testCommands, nil, fakeOpen(sys)); code != 2 {
 		t.Fatalf("bad flag: exit %d, want 2", code)
 	}
 }
