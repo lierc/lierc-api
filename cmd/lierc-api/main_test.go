@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/lierc/lierc-api/internal/testenv"
 )
 
@@ -223,4 +224,72 @@ func (b *syncBuffer) String() string {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	return b.b.String()
+}
+
+// The admin JSON API is on the admin listener, beside /stats, and not on
+// the public one.
+func TestAdminRoutesMounted(t *testing.T) {
+	d := testenv.Postgres(t)
+	// run always opens database "lierc"; make one from the same template
+	// the test databases come from.
+	cc := d.Pool.Config().ConnConfig
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	admin, err := pgx.Connect(ctx, "postgres://"+cc.User+":"+cc.Password+"@"+net.JoinHostPort(cc.Host, strconv.Itoa(int(cc.Port)))+"/postgres?sslmode=disable")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer admin.Close(context.Background())
+	if _, err := admin.Exec(ctx, "CREATE DATABASE lierc TEMPLATE lierc_template"); err != nil {
+		t.Fatal(err)
+	}
+	defer admin.Exec(context.Background(), "DROP DATABASE IF EXISTS lierc WITH (FORCE)")
+
+	env := map[string]string{
+		"POSTGRES_HOST":     net.JoinHostPort(cc.Host, strconv.Itoa(int(cc.Port))),
+		"POSTGRES_USER":     cc.User,
+		"POSTGRES_PASSWORD": cc.Password,
+		"LISTEN":            "127.0.0.1:0",
+		"ADMIN_LISTEN":      "127.0.0.1:0",
+		"NSQD_HOST":         "127.0.0.2:1",
+	}
+	addrs := make(chan [2]net.Addr, 1)
+	done := make(chan int, 1)
+	var logs syncBuffer
+	go func() {
+		done <- run(ctx, []string{"stream"}, func(k string) string { return env[k] }, &logs,
+			func(s, a net.Addr) { addrs <- [2]net.Addr{s, a} })
+	}()
+	var a [2]net.Addr
+	select {
+	case a = <-addrs:
+	case code := <-done:
+		t.Fatalf("exited %d early: %s", code, logs.String())
+	case <-time.After(30 * time.Second):
+		t.Fatal("server did not start")
+	}
+	status := func(addr net.Addr, path string) int {
+		t.Helper()
+		resp, err := http.Get("http://" + addr.String() + path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp.Body.Close()
+		return resp.StatusCode
+	}
+	if c := status(a[1], "/admin/log/last"); c != 200 {
+		t.Errorf("admin /admin/log/last = %d, want 200", c)
+	}
+	if c := status(a[1], "/stats"); c != 200 {
+		t.Errorf("admin /stats = %d, want 200", c)
+	}
+	if c := status(a[0], "/admin/log/last"); c != 404 {
+		t.Errorf("public /admin/log/last = %d, want 404", c)
+	}
+	cancel()
+	select {
+	case <-done:
+	case <-time.After(15 * time.Second):
+		t.Fatal("no shutdown")
+	}
 }

@@ -5,6 +5,7 @@ import (
 	"errors"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 // The user table's account columns: signup, login, email confirmation and
@@ -114,6 +115,11 @@ func (d *DB) ClaimVerifyResend(ctx context.Context, id string, minSeconds float6
 		return false, err
 	}
 	return tag.RowsAffected() == 1, nil
+}
+
+// Execer is a pgx.Tx or a pool.
+type Execer interface {
+	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
 }
 
 func replacePasswordHash(ctx context.Context, q Execer, id, hash string, oldHash, oldPassword *string) (int64, error) {

@@ -42,45 +42,10 @@ func connEventBytes(typ string, c connEvent) []byte {
 	return sseEvent(typ, b, "")
 }
 
-// ListenConnections LISTENs on db.ConnectionsChannel, where the API and lctl
-// announce created, edited and deleted connections, and sends each to the
-// owner's streams, until ctx is done. A lost connection is retried every
-// NSQReconnect; notifications sent meanwhile are lost, and the next
-// connections snapshot (on a stream's open) repairs the UI.
-func (s *Server) ListenConnections(ctx context.Context) {
-	for ctx.Err() == nil {
-		err := s.listenOnce(ctx)
-		if ctx.Err() != nil {
-			return
-		}
-		log.Printf("stream: listening for connection changes: %v (retrying in %s)", err, s.NSQReconnect)
-		select {
-		case <-ctx.Done():
-			return
-		case <-time.After(s.NSQReconnect):
-		}
-	}
-}
-
-func (s *Server) listenOnce(ctx context.Context) error {
-	return s.db.ListenConnections(ctx, s.listening, func(payload string) { s.connectionChanged(ctx, payload) })
-}
-
-// connectionChanged parses a connections-channel notification (lctl's, or
-// Perl's) and passes it to ConnectionChanged.
-func (s *Server) connectionChanged(ctx context.Context, payload string) {
-	var c db.ConnectionChange
-	if err := json.Unmarshal([]byte(payload), &c); err != nil || c.User == "" || c.Connection == "" {
-		log.Printf("stream: bad connection change %q", payload)
-		return
-	}
-	s.ConnectionChanged(ctx, c)
-}
-
 // ConnectionChanged sends a connection change to the owner's streams:
 // create and update with the row's name (and nick), delete with just the
-// id, since the row is already gone. The API calls it for its own changes;
-// connectionChanged calls it for lctl's, heard on LISTEN.
+// id, since the row is already gone. The API and the admin API call it
+// for their changes.
 func (s *Server) ConnectionChanged(ctx context.Context, c db.ConnectionChange) {
 	if !s.hasStreams(c.User) {
 		return // nobody to tell; skip the lookup

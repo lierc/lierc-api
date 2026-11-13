@@ -182,30 +182,3 @@ func (d *DB) NotifyHighlights(ctx context.Context) error {
 	_, err := d.Pool.Exec(ctx, `NOTIFY highlights`)
 	return err
 }
-
-// ListenConnections LISTENs on ConnectionsChannel and passes each
-// notification's payload to handle, until ctx is done or the connection
-// fails; it always returns an error. listening, if not nil, runs once the
-// LISTEN is active.
-func (d *DB) ListenConnections(ctx context.Context, listening func(), handle func(payload string)) error {
-	pc, err := d.Pool.Acquire(ctx)
-	if err != nil {
-		return err
-	}
-	// a LISTENing connection mustn't go back to the pool
-	conn := pc.Hijack()
-	defer conn.Close(context.Background())
-	if _, err := conn.Exec(ctx, "LISTEN "+ConnectionsChannel); err != nil {
-		return err
-	}
-	if listening != nil {
-		listening()
-	}
-	for {
-		n, err := conn.WaitForNotification(ctx)
-		if err != nil {
-			return err
-		}
-		handle(n.Payload)
-	}
-}

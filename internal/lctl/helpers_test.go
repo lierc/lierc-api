@@ -68,9 +68,11 @@ func (h *harness) run(name string, args ...string) error {
 	h.t.Helper()
 	h.stdout.Reset()
 	h.stderr.Reset()
-	for _, c := range Commands {
-		if c.Name == name {
-			return c.Run(context.Background(), h.env, args)
+	for _, list := range [][]Command{Commands, AdminCommands} {
+		for _, c := range list {
+			if c.Name == name {
+				return c.Run(context.Background(), h.env, args)
+			}
 		}
 	}
 	h.t.Fatalf("no command %s", name)

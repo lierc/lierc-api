@@ -123,6 +123,19 @@ func (a *Admin) UserCounts(ctx context.Context, id string) (map[string]int64, er
 	return out, a.do(ctx, http.MethodGet, "/admin/users/"+url.PathEscape(id)+"/counts", nil, &out)
 }
 
+// instanceOf is the liercd instance a connection runs on, for routing
+// liercd calls: "next", or "" for main (and for a connection that's gone).
+func (a *Admin) instanceOf(ctx context.Context, id string) (string, error) {
+	c, err := a.Connection(ctx, id)
+	if errors.Is(err, ErrNotFound) {
+		return "", nil
+	}
+	if c.Instance == "next" {
+		return "next", nil
+	}
+	return "", err
+}
+
 // Connections lists connections, by their owner's last login; instance is
 // "", "main" or "next".
 func (a *Admin) Connections(ctx context.Context, instance string, inactiveSince *time.Time) ([]admin.Connection, error) {

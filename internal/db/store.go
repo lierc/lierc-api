@@ -53,7 +53,6 @@ type Store interface {
 
 	// notifications
 	NotifyHighlights(ctx context.Context) error
-	ListenConnections(ctx context.Context, listening func(), handle func(payload string)) error
 
 	// history
 	LogSince(ctx context.Context, user string, after int32) ([]UserMessage, error)

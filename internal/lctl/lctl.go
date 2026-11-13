@@ -50,13 +50,14 @@ func OSSystem() System {
 type Env struct {
 	Config          config.Config
 	Getenv          func(string) string
-	Store           db.Store
+	Store           db.Store // nil unless the command has NeedsDB
 	Liercd          *liercd.Client
 	Admin           *Admin // the API's admin server (API_ADMIN)
 	StatsURL        string // API_STATS, default <API_ADMIN>/stats
 	Stdin           io.Reader
 	Stdout, Stderr  io.Writer
 	StdinIsTerminal bool
+	group           string // "admin " for an admin command, for usage texts
 	// ReadPassword reads a password from the terminal without echo.
 	ReadPassword func() (string, error)
 	// Resolve resolves host names for the connection address check.
@@ -78,6 +79,9 @@ func (e *Env) now() time.Time {
 type Command struct {
 	Name, Summary string
 	Run           func(ctx context.Context, env *Env, args []string) error
+	// NeedsDB is whether the command uses Env.Store. The others talk to
+	// the API's admin server and liercd, and run with Postgres unreachable.
+	NeedsDB bool
 }
 
 // UsageError is a bad command line; lctl exits 2. An empty Msg means the
@@ -87,35 +91,63 @@ type UsageError struct{ Msg string }
 func (e *UsageError) Error() string { return e.Msg }
 
 // Opener builds the Env for a command; the func it returns releases it.
-type Opener func(ctx context.Context, sys System) (*Env, func(), error)
+// The Env has a Store only if needsDB.
+type Opener func(ctx context.Context, sys System, needsDB bool) (*Env, func(), error)
 
 // Main runs lctl with args (without "lctl") and returns the exit code.
 func Main(ctx context.Context, args []string, sys System) int {
-	return mainWith(ctx, args, sys, Commands, OpenEnv)
+	return mainGroups(ctx, args, sys, Commands, AdminCommands, OpenEnv)
 }
 
 func mainWith(ctx context.Context, args []string, sys System, cmds []Command, open Opener) int {
-	if len(args) == 0 || args[0] == "help" || args[0] == "-h" || args[0] == "--help" {
-		help(sys.Stdout, cmds)
+	return mainGroups(ctx, args, sys, cmds, nil, open)
+}
+
+// mainGroups runs a top-level command from cmds, or "admin NAME" from
+// adminCmds.
+func mainGroups(ctx context.Context, args []string, sys System, cmds, adminCmds []Command, open Opener) int {
+	if len(args) == 0 || isHelp(args[0]) {
+		help(sys.Stdout, cmds, adminCmds != nil)
 		return 0
 	}
+	group, label := cmds, ""
+	if args[0] == "admin" && adminCmds != nil {
+		if len(args) == 1 || isHelp(args[1]) {
+			adminHelp(sys.Stdout, adminCmds)
+			return 0
+		}
+		group, label, args = adminCmds, "admin ", args[1:]
+	}
 	var cmd *Command
-	for i := range cmds {
-		if cmds[i].Name == args[0] {
-			cmd = &cmds[i]
+	for i := range group {
+		if group[i].Name == args[0] {
+			cmd = &group[i]
 		}
 	}
 	if cmd == nil {
-		fmt.Fprintf(sys.Stderr, "lctl: unknown command %s\n", args[0])
-		help(sys.Stderr, cmds)
+		if label == "" {
+			for _, c := range adminCmds {
+				if c.Name == args[0] {
+					fmt.Fprintf(sys.Stderr, "lctl: %s is now \"lctl admin %[1]s\"\n", args[0])
+					return 2
+				}
+			}
+			fmt.Fprintf(sys.Stderr, "lctl: unknown command %s\n", args[0])
+			help(sys.Stderr, cmds, adminCmds != nil)
+		} else {
+			fmt.Fprintf(sys.Stderr, "lctl: unknown admin command %s\n", args[0])
+			adminHelp(sys.Stderr, adminCmds)
+		}
 		return 2
 	}
-	env, release, err := open(ctx, sys)
+	name := label + cmd.Name
+	env, release, err := open(ctx, sys, cmd.NeedsDB)
 	if err != nil {
-		fmt.Fprintf(sys.Stderr, "lctl %s: %v\n", cmd.Name, err)
+		fmt.Fprintf(sys.Stderr, "lctl %s: %v\n", name, err)
 		return 1
 	}
 	defer release()
+	env.group = label
 
 	err = cmd.Run(ctx, env, args[1:])
 	var usage *UsageError
@@ -124,20 +156,37 @@ func mainWith(ctx context.Context, args []string, sys System, cmds []Command, op
 		return 0
 	case errors.As(err, &usage):
 		if usage.Msg != "" {
-			fmt.Fprintf(sys.Stderr, "lctl %s: %s\n", cmd.Name, usage.Msg)
+			fmt.Fprintf(sys.Stderr, "lctl %s: %s\n", name, usage.Msg)
 		}
-		fmt.Fprintf(sys.Stderr, "run 'lctl %s -h' for usage\n", cmd.Name)
+		fmt.Fprintf(sys.Stderr, "run 'lctl %s -h' for usage\n", name)
 		return 2
 	default:
-		fmt.Fprintf(sys.Stderr, "lctl %s: %v\n", cmd.Name, err)
+		fmt.Fprintf(sys.Stderr, "lctl %s: %v\n", name, err)
 		return 1
 	}
 }
 
-func help(w io.Writer, cmds []Command) {
+func isHelp(a string) bool { return a == "help" || a == "-h" || a == "--help" }
+
+// help lists the top-level commands, and the admin group if there is one.
+func help(w io.Writer, cmds []Command, admin bool) {
 	fmt.Fprintln(w, "usage: lctl COMMAND [options] [args]   (lctl COMMAND -h for a command's usage)")
 	fmt.Fprintln(w, "over ssh, use ssh -t unless you pipe ids in: ssh -t relaychat sudo lctl COMMAND")
 	fmt.Fprintln(w)
+	list := cmds
+	if admin {
+		list = append(append([]Command{}, cmds...), Command{Name: "admin", Summary: "Commands that go through the API's admin server (lctl admin help lists them)"})
+	}
+	printCommands(w, list)
+}
+
+func adminHelp(w io.Writer, cmds []Command) {
+	fmt.Fprintln(w, "usage: lctl admin COMMAND [options] [args]   (lctl admin COMMAND -h for a command's usage)")
+	fmt.Fprintln(w)
+	printCommands(w, cmds)
+}
+
+func printCommands(w io.Writer, cmds []Command) {
 	width := 0
 	for _, c := range cmds {
 		width = max(width, len(c.Name))
@@ -149,8 +198,9 @@ func help(w io.Writer, cmds []Command) {
 
 // OpenEnv builds the real Env from the environment the services share
 // (/etc/lierc.env in production). The database name is POSTGRES_DB (default
-// lierc), as the Perl API reads it.
-func OpenEnv(ctx context.Context, sys System) (*Env, func(), error) {
+// lierc), as the Perl API reads it. Only a command with NeedsDB gets a
+// Store; liercd's per-connection routing then asks the admin API.
+func OpenEnv(ctx context.Context, sys System, needsDB bool) (*Env, func(), error) {
 	cfg, err := config.Load(sys.Getenv)
 	if err != nil {
 		return nil, nil, err
@@ -159,10 +209,6 @@ func OpenEnv(ctx context.Context, sys System) (*Env, func(), error) {
 		cfg.DBName = name
 	}
 	cfg.DBMaxConns = 4
-	d, err := db.Open(ctx, cfg)
-	if err != nil {
-		return nil, nil, err
-	}
 	adminURL := strings.TrimSuffix(sys.Getenv("API_ADMIN"), "/")
 	if adminURL == "" {
 		adminURL = "http://127.0.0.1:5009"
@@ -171,8 +217,9 @@ func OpenEnv(ctx context.Context, sys System) (*Env, func(), error) {
 	if stats == "" {
 		stats = adminURL + "/stats"
 	}
+	adm := NewAdmin(adminURL)
 	env := &Env{
-		Config: cfg, Getenv: sys.Getenv, Store: d, Liercd: liercd.NewRouted(liercd.Instances{Main: cfg.LiercdHost, Next: cfg.LiercdNextHost}, d.LookupLiercd), Admin: NewAdmin(adminURL), StatsURL: stats,
+		Config: cfg, Getenv: sys.Getenv, Liercd: liercd.NewRouted(liercd.Instances{Main: cfg.LiercdHost, Next: cfg.LiercdNextHost}, adm.instanceOf), Admin: adm, StatsURL: stats,
 		Stdin: sys.Stdin, Stdout: sys.Stdout, Stderr: sys.Stderr, StdinIsTerminal: sys.StdinIsTerminal,
 		Resolve: connconfig.SystemResolver, Sleep: sleepCtx,
 		ReadPassword: func() (string, error) {
@@ -185,7 +232,15 @@ func OpenEnv(ctx context.Context, sys System) (*Env, func(), error) {
 			return string(b), err
 		},
 	}
-	return env, d.Close, nil
+	release := func() {}
+	if needsDB {
+		d, err := db.Open(ctx, cfg)
+		if err != nil {
+			return nil, nil, err
+		}
+		env.Store, release = d, d.Close
+	}
+	return env, release, nil
 }
 
 func sleepCtx(ctx context.Context, d time.Duration) error {
@@ -200,12 +255,14 @@ func sleepCtx(ctx context.Context, d time.Duration) error {
 }
 
 // NewFlags returns a FlagSet for a command whose -h prints
-// "usage: lctl <usage>" and the flags to stderr.
+// "usage: lctl <usage>" (or "lctl admin <usage>" for an admin command) and
+// the flags to stderr.
 func NewFlags(env *Env, name, usage string) *flag.FlagSet {
 	fs := flag.NewFlagSet(name, flag.ContinueOnError)
 	fs.SetOutput(env.Stderr)
+	prefix := env.group
 	fs.Usage = func() {
-		fmt.Fprintf(env.Stderr, "usage: lctl %s\n", usage)
+		fmt.Fprintf(env.Stderr, "usage: lctl %s%s\n", prefix, usage)
 		var any bool
 		fs.VisitAll(func(*flag.Flag) { any = true })
 		if any {

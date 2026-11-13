@@ -206,7 +206,7 @@ func deleteFrom(ctx context.Context, tx pgx.Tx, counts map[string]int64, key, ta
 // web_push, connection, login and the user. It returns a delete change for
 // each connection, to announce once this has returned, with the number of
 // rows deleted per table. SweepLateLogs catches log rows written after. ErrNotFound if there is no
-// such user. It sends no pg_notify.
+// such user.
 func (d *DB) DeleteUserData(ctx context.Context, id string) ([]ConnectionChange, map[string]int64, error) {
 	tx, err := d.Pool.Begin(ctx)
 	if err != nil {
@@ -273,8 +273,7 @@ func (d *DB) DeleteUserData(ctx context.Context, id string) ([]ConnectionChange,
 
 // DeleteConnectionData deletes connection id and its log, log_archive, seen
 // and private rows in one transaction. It returns the connection's delete change and the
-// rows deleted per table. ErrNotFound if there is no such connection. It
-// sends no pg_notify.
+// rows deleted per table. ErrNotFound if there is no such connection.
 func (d *DB) DeleteConnectionData(ctx context.Context, id string) ([]ConnectionChange, map[string]int64, error) {
 	tx, err := d.Pool.Begin(ctx)
 	if err != nil {

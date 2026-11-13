@@ -1,12 +1,12 @@
-// Command lierc-api runs the SSE event stream (`lierc-api stream`) and the
-// admin commands (`lierc-api lctl COMMAND`). The JSON API is still
-// bin/api.psgi.
+// Command lierc-api runs the API and SSE event stream (`lierc-api stream`)
+// and the admin commands (`lierc-api lctl COMMAND`).
 package main
 
 import (
 	"context"
 	"errors"
 	"fmt"
+	adminapi "github.com/lierc/lierc-api/internal/admin"
 	"github.com/lierc/lierc-api/internal/api"
 	"io"
 	"log"
@@ -66,18 +66,19 @@ func run(ctx context.Context, args []string, getenv func(string) string, stderr 
 	lc := liercd.NewRouted(liercd.Instances{Main: cfg.LiercdHost, Next: cfg.LiercdNextHost}, d.LookupLiercd)
 	s := stream.New(cfg, d, lc)
 	go s.Run(ctx)
-	// connection changes the API and lctl announce through Postgres
-	go s.ListenConnections(ctx)
 	go func() {
 		if err := s.Consume(ctx, cfg.NSQAddr); err != nil && ctx.Err() == nil {
 			nsqErr <- err
 		}
 	}()
-	// The whole API, the event stream included; /stats is on the admin
-	// listener.
+	// The whole API, the event stream included; /stats and the /admin/ API
+	// are on the admin listener only.
 	srv := newServer(proxy.Wrap(cfg.TrustedProxies, api.New(cfg, d, s, lc)), serverTimeouts)
 	srv.RegisterOnShutdown(s.CloseStreams)
-	admin := newServer(s.Admin(), serverTimeouts)
+	adminMux := http.NewServeMux()
+	adminMux.Handle("GET /stats", s.Admin())
+	adminMux.Handle("/admin/", adminapi.New(d, s.ConnectionChanged))
+	admin := newServer(adminMux, serverTimeouts)
 
 	ln, err := net.Listen("tcp", cfg.Listen)
 	if err != nil {

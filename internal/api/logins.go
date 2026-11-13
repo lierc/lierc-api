@@ -11,7 +11,7 @@ import (
 )
 
 // logins are a user's own logins, for the UI's Logins dialog: list them,
-// and end one. lctl logins and lctl end-login do the same for any user.
+// and end one. lctl admin logins and lctl admin end-login do the same for any user.
 func (a *api) logins(mux *http.ServeMux) {
 	mux.Handle("GET /logins", a.users.Require(a.listLogins))
 	mux.Handle("DELETE /login/{id}", a.users.Require(a.deleteLogin))

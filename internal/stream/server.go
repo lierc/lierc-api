@@ -48,9 +48,8 @@ type Server struct {
 	latest  map[string]int64              // user -> newest message id, while the user has streams
 	closed  bool                          // set by CloseStreams
 
-	replayed  func()                                            // test hook: runs when a stream's replay goroutine ends
-	listening func()                                            // test hook: runs each time ListenConnections' LISTEN is active
-	alive     func(ctx context.Context, id int64) (bool, error) // test hook: replaces login.Alive
+	replayed func()                                            // test hook: runs when a stream's replay goroutine ends
+	alive    func(ctx context.Context, id int64) (bool, error) // test hook: replaces login.Alive
 }
 
 func New(cfg config.Config, d db.Store, lc *liercd.Client) *Server {

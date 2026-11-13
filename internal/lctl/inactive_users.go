@@ -17,7 +17,7 @@ registered ("unknown" for accounts from before that was recorded) and
 how many connections they have. Changes nothing. Each line starts with
 the id, so the list can be fed to delete-users:
 
-  lctl inactive-users --since 365d | awk '{print $1}' | lctl delete-users
+  lctl admin inactive-users --since 365d | awk '{print $1}' | lctl admin delete-users
 
 The count goes to stderr.`
 

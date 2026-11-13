@@ -4,9 +4,11 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"net/http/httptest"
 	"strings"
 	"testing"
 
+	"github.com/lierc/lierc-api/internal/admin"
 	"github.com/lierc/lierc-api/internal/testenv"
 )
 
@@ -49,14 +51,14 @@ var testCommands = []Command{
 // noOpen fails the test if a command that shouldn't need the database
 // asks for an Env.
 func noOpen(t *testing.T) Opener {
-	return func(ctx context.Context, sys System) (*Env, func(), error) {
+	return func(ctx context.Context, sys System, needsDB bool) (*Env, func(), error) {
 		t.Fatal("opened an Env")
 		return nil, nil, nil
 	}
 }
 
 func fakeOpen(sys System) Opener {
-	return func(ctx context.Context, s System) (*Env, func(), error) {
+	return func(ctx context.Context, s System, needsDB bool) (*Env, func(), error) {
 		return &Env{Stdin: s.Stdin, Stdout: s.Stdout, Stderr: s.Stderr, StdinIsTerminal: s.StdinIsTerminal}, func() {}, nil
 	}
 }
@@ -130,7 +132,7 @@ func TestErrorExits1(t *testing.T) {
 
 func TestOpenErrorExits1(t *testing.T) {
 	var o out
-	failing := func(context.Context, System) (*Env, func(), error) { return nil, nil, errors.New("no database") }
+	failing := func(context.Context, System, bool) (*Env, func(), error) { return nil, nil, errors.New("no database") }
 	if code := mainWith(context.Background(), []string{"alpha"}, o.sys("", true), testCommands, failing); code != 1 {
 		t.Fatalf("exit %d, want 1", code)
 	}
@@ -179,7 +181,7 @@ func TestEnvFromSystem(t *testing.T) {
 	var o out
 	sys := o.sys("", false)
 	sys.Getenv = func(k string) string { return vars[k] }
-	env, closeEnv, err := OpenEnv(context.Background(), sys)
+	env, closeEnv, err := OpenEnv(context.Background(), sys, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -192,7 +194,7 @@ func TestEnvFromSystem(t *testing.T) {
 	}
 	delete(vars, "POSTGRES_DB")
 	delete(vars, "API_STATS")
-	env2, close2, err := OpenEnv(context.Background(), sys)
+	env2, close2, err := OpenEnv(context.Background(), sys, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -265,6 +267,137 @@ func TestRemovedCommands(t *testing.T) {
 			if strings.HasPrefix(strings.TrimSpace(line), name+" ") {
 				t.Errorf("help still lists %s", name)
 			}
+		}
+	}
+}
+
+var portedNames = []string{"users", "user-info", "inactive-users", "delete-users", "connection-list", "connection-info", "reconnect", "stop-inactive", "delete-connections", "logins", "end-login", "prune-logins", "prune-seen", "stats"}
+
+// helpLines is the command names a help text lists.
+func helpLines(s string) map[string]bool {
+	names := map[string]bool{}
+	for _, line := range strings.Split(s, "\n") {
+		if strings.HasPrefix(line, "  ") {
+			if f := strings.Fields(line); len(f) > 0 {
+				names[f[0]] = true
+			}
+		}
+	}
+	return names
+}
+
+func TestAdminGroup(t *testing.T) {
+	ctx := context.Background()
+	// a ported command's -h works with no database
+	var o out
+	if code := Main(ctx, []string{"admin", "user-info", "-h"}, o.sys("", true)); code != 0 {
+		t.Fatalf("admin user-info -h: exit %d: %s", code, o.stderr.String())
+	}
+	if !strings.Contains(o.stderr.String(), "usage: lctl admin user-info USER...") {
+		t.Errorf("-h stderr %q", o.stderr.String())
+	}
+
+	for _, args := range [][]string{{"admin"}, {"admin", "help"}} {
+		o = out{}
+		if code := Main(ctx, args, o.sys("", true)); code != 0 {
+			t.Fatalf("%v: exit %d", args, code)
+		}
+		got := helpLines(o.stdout.String())
+		if len(got) != len(portedNames) {
+			t.Errorf("%v lists %v, want the %d ported commands", args, got, len(portedNames))
+		}
+		for _, n := range portedNames {
+			if !got[n] {
+				t.Errorf("%v is missing %s", args, n)
+			}
+		}
+	}
+
+	o = out{}
+	if code := Main(ctx, []string{"help"}, o.sys("", true)); code != 0 {
+		t.Fatalf("help: exit %d", code)
+	}
+	got := helpLines(o.stdout.String())
+	for _, n := range []string{"archive", "revive", "delete-orphan-logs", "admin"} {
+		if !got[n] {
+			t.Errorf("help is missing %s", n)
+		}
+	}
+	for _, n := range portedNames {
+		if got[n] {
+			t.Errorf("help still lists %s", n)
+		}
+	}
+
+	o = out{}
+	if code := Main(ctx, []string{"user-info", "x"}, o.sys("", true)); code != 2 {
+		t.Errorf("old name: exit %d, want 2", code)
+	}
+	if o.stderr.String() != "lctl: user-info is now \"lctl admin user-info\"\n" {
+		t.Errorf("old name: stderr %q", o.stderr.String())
+	}
+
+	o = out{}
+	if code := Main(ctx, []string{"admin", "archive"}, o.sys("", true)); code != 2 {
+		t.Errorf("admin archive: exit %d, want 2", code)
+	}
+	if !strings.Contains(o.stderr.String(), "unknown admin command archive") {
+		t.Errorf("admin archive: stderr %q", o.stderr.String())
+	}
+}
+
+// The ported commands talk to the admin API (and liercd), never to
+// Postgres; the commands that stay on the database still open it.
+func TestPortedCommandsNeedNoDB(t *testing.T) {
+	h := newHarness(t)
+	u := h.user("alice")
+	testenv.AddConnection(t, h.db, "c1", u, `{"Host":"irc.example.com","Port":6667}`)
+	srv := httptest.NewServer(admin.New(h.db, nil))
+	defer srv.Close()
+
+	vars := map[string]string{
+		"POSTGRES_HOST": "127.0.0.1:1", // nothing listens: a query would fail
+		"API_ADMIN":     srv.URL,
+		"LIERCD_HOST":   strings.TrimPrefix(h.liercd.URL, "http://"),
+	}
+	var o out
+	sys := o.sys("", true)
+	sys.Getenv = func(k string) string { return vars[k] }
+	if code := Main(context.Background(), []string{"admin", "connection-list"}, sys); code != 0 {
+		t.Fatalf("connection-list: exit %d: %s", code, o.stderr.String())
+	}
+	if !strings.Contains(o.stdout.String(), "c1") || !strings.Contains(o.stdout.String(), "alice") {
+		t.Errorf("connection-list stdout %q", o.stdout.String())
+	}
+
+	env, release, err := OpenEnv(context.Background(), sys, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	release()
+	if env.Store != nil {
+		t.Error("OpenEnv without needsDB opened the store")
+	}
+	env, release, err = OpenEnv(context.Background(), sys, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	release()
+	if env.Store == nil {
+		t.Error("OpenEnv with needsDB has no store")
+	}
+
+	// archive uses the store: with Postgres unreachable it fails
+	o = out{}
+	sys = o.sys("", true)
+	sys.Getenv = func(k string) string { return vars[k] }
+	if code := Main(context.Background(), []string{"archive"}, sys); code != 1 {
+		t.Errorf("archive: exit %d, want 1 (stderr %q)", code, o.stderr.String())
+	}
+	for _, c := range append(append([]Command{}, Commands...), AdminCommands...) {
+		want := c.Name == "archive" || c.Name == "revive" || c.Name == "delete-orphan-logs"
+		if c.NeedsDB != want {
+			t.Errorf("%s: NeedsDB = %v, want %v", c.Name, c.NeedsDB, want)
 		}
 	}
 }

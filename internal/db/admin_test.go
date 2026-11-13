@@ -332,20 +332,6 @@ func TestDeleteConnectionData(t *testing.T) {
 	}
 }
 
-// The store methods announce nothing through Postgres: the handler does it
-// in memory after the commit.
-func TestDeleteDoesNotNotify(t *testing.T) {
-	d := testenv.Postgres(t)
-	listen := testenv.ListenConnections(t, d)
-	_, conn := seedCounts(t, d)
-	if _, _, err := d.DeleteConnectionData(context.Background(), conn); err != nil {
-		t.Fatal(err)
-	}
-	if got := listen(300 * time.Millisecond); len(got) != 0 {
-		t.Errorf("notified %v", got)
-	}
-}
-
 func TestPruneStaleSeen(t *testing.T) {
 	d := testenv.Postgres(t)
 	ctx := context.Background()

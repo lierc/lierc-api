@@ -44,7 +44,7 @@ func New(cfg config.Config, s db.Store, streams *stream.Server, lc *liercd.Clien
 	a.conns = &connections.Service{
 		DB:               s,
 		Liercd:           lc,
-		Announce:         streams.ConnectionChanged, // in memory, no pg_notify
+		Announce:         streams.ConnectionChanged, // in memory
 		NotifyHighlights: connections.NotifyHighlights(s),
 		CheckHost:        func(ctx context.Context, host string, port int) error { return checkHost(ctx, host, port) },
 		Limit:            5,

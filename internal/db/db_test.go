@@ -234,7 +234,7 @@ func TestNotifyHighlights(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer conn.Release()
-	if _, err := conn.Exec(lctx, "LISTEN highlights"); err != nil {
+	if _, err := conn.Exec(lctx, "listen highlights"); err != nil {
 		t.Fatal(err)
 	}
 	if err := d.NotifyHighlights(ctx); err != nil {
@@ -242,32 +242,5 @@ func TestNotifyHighlights(t *testing.T) {
 	}
 	if n, err := conn.Conn().WaitForNotification(lctx); err != nil || n.Channel != "highlights" {
 		t.Errorf("notification = %+v, %v", n, err)
-	}
-}
-
-func TestListenConnections(t *testing.T) {
-	d := testenv.Postgres(t)
-	lctx, cancel := context.WithTimeout(ctx, 10*time.Second)
-	defer cancel()
-	ready := make(chan struct{})
-	got := make(chan string, 1)
-	done := make(chan error, 1)
-	go func() {
-		done <- d.ListenConnections(lctx, func() { close(ready) }, func(p string) { got <- p })
-	}()
-	select {
-	case <-ready:
-	case <-time.After(10 * time.Second):
-		t.Fatal("never listening")
-	}
-	if _, err := d.Pool.Exec(ctx, `SELECT pg_notify($1, 'hello')`, db.ConnectionsChannel); err != nil {
-		t.Fatal(err)
-	}
-	if p := <-got; p != "hello" {
-		t.Errorf("payload = %q", p)
-	}
-	cancel()
-	if err := <-done; err == nil {
-		t.Error("ListenConnections returned nil after cancel")
 	}
 }

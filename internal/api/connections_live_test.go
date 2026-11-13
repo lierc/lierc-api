@@ -59,8 +59,8 @@ func waitEvent(t *testing.T, ch <-chan [2]string, typ, id string) map[string]any
 	}
 }
 
-// API changes reach an open stream with no LISTEN running: the API calls
-// the stream server in memory, not through pg_notify.
+// API changes reach an open stream: the API calls the stream server in
+// memory.
 func TestConnectionEventsWithoutNotify(t *testing.T) {
 	e := setup(t)
 	a := testenv.AddUser(t, e.db, "alice")
