@@ -35,6 +35,7 @@ func New(s db.Store, announce func(context.Context, db.ConnectionChange)) http.H
 	})
 	a.userRoutes(mux)
 	a.connectionRoutes(mux)
+	a.writeRoutes(mux)
 	mux.HandleFunc("GET /admin/log/last", a.lastLog)
 	mux.HandleFunc("GET /admin/seen/stale", a.staleSeen)
 	return mux

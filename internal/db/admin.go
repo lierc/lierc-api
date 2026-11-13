@@ -1,8 +1,11 @@
 package db
 
 import (
+	"errors"
+
 	"context"
 	"encoding/json"
+	"github.com/jackc/pgx/v5"
 	"time"
 )
 
@@ -173,4 +176,166 @@ func (d *DB) StaleSeenCount(ctx context.Context) (int64, error) {
 	var n int64
 	err := d.Pool.QueryRow(ctx, `SELECT count(*) FROM seen WHERE `+staleSeen).Scan(&n)
 	return n, err
+}
+
+// ErrNotFound is returned when the user or connection to delete isn't there.
+var ErrNotFound = errors.New("not found")
+
+// PruneStaleSeen deletes the seen rows StaleSeenCount counts.
+func (d *DB) PruneStaleSeen(ctx context.Context) (int64, error) {
+	tag, err := d.Pool.Exec(ctx, `DELETE FROM seen WHERE `+staleSeen)
+	if err != nil {
+		return 0, err
+	}
+	return tag.RowsAffected(), nil
+}
+
+// deleteFrom deletes from table where cond and adds the count under key.
+func deleteFrom(ctx context.Context, tx pgx.Tx, counts map[string]int64, key, table, cond string, args ...any) error {
+	tag, err := tx.Exec(ctx, `DELETE FROM `+table+` WHERE `+cond, args...)
+	if err != nil {
+		return err
+	}
+	counts[key] += tag.RowsAffected()
+	return nil
+}
+
+// DeleteUserData deletes user id and everything of theirs in one
+// transaction: log and log_archive (also the rows of connections deleted
+// before the user, which carry the user's id), seen, private, pref,
+// web_push, connection, login and the user. It then sweeps log rows with
+// id > logAfter (if logAfter > 0) that the logger wrote late, and returns a
+// delete change for each connection, to announce once this has returned,
+// with the number of rows deleted per table. ErrNotFound if there is no
+// such user. It sends no pg_notify.
+func (d *DB) DeleteUserData(ctx context.Context, id string, logAfter int64) ([]ConnectionChange, map[string]int64, error) {
+	tx, err := d.Pool.Begin(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+	defer tx.Rollback(context.WithoutCancel(ctx))
+
+	var found string
+	if err := tx.QueryRow(ctx, `SELECT id FROM "user" WHERE id = $1 FOR UPDATE`, id).Scan(&found); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, nil, ErrNotFound
+		}
+		return nil, nil, err
+	}
+	rows, err := tx.Query(ctx, `SELECT id FROM connection WHERE "user" = $1 ORDER BY id`, id)
+	if err != nil {
+		return nil, nil, err
+	}
+	conns := []string{}
+	changes := []ConnectionChange{}
+	for rows.Next() {
+		var c string
+		if err := rows.Scan(&c); err != nil {
+			rows.Close()
+			return nil, nil, err
+		}
+		conns = append(conns, c)
+		changes = append(changes, ConnectionChange{User: id, Connection: c, Action: "delete"})
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return nil, nil, err
+	}
+
+	counts := map[string]int64{}
+	both := `"user" = $1 OR connection = ANY($2)`
+	steps := []struct {
+		key, table, cond string
+		args             []any
+	}{
+		{"log", "log", both, []any{id, conns}},
+		// after the log delete, so a block the archiver moved in between is caught
+		{"log_archive", "log_archive", both, []any{id, conns}},
+		{"seen", "seen", both, []any{id, conns}},
+		{"private", "private", `connection = ANY($1)`, []any{conns}},
+		{"pref", "pref", `"user" = $1`, []any{id}},
+		{"web_push", "web_push", `"user" = $1`, []any{id}},
+		{"connection", "connection", `"user" = $1`, []any{id}},
+		{"login", "login", `"user" = $1`, []any{id}},
+	}
+	for _, s := range steps {
+		if err := deleteFrom(ctx, tx, counts, s.key, s.table, s.cond, s.args...); err != nil {
+			return nil, nil, err
+		}
+	}
+	if _, err := tx.Exec(ctx, `DELETE FROM "user" WHERE id = $1`, id); err != nil {
+		return nil, nil, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, nil, err
+	}
+
+	if logAfter > 0 {
+		if err := d.sweepLate(ctx, counts, logAfter, id, conns); err != nil {
+			return nil, nil, err
+		}
+	}
+	return changes, counts, nil
+}
+
+// DeleteConnectionData deletes connection id and its log, log_archive, seen
+// and private rows in one transaction, then sweeps late log rows as
+// DeleteUserData does. It returns the connection's delete change and the
+// rows deleted per table. ErrNotFound if there is no such connection. It
+// sends no pg_notify.
+func (d *DB) DeleteConnectionData(ctx context.Context, id string, logAfter int64) ([]ConnectionChange, map[string]int64, error) {
+	tx, err := d.Pool.Begin(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+	defer tx.Rollback(context.WithoutCancel(ctx))
+
+	var owner string
+	if err := tx.QueryRow(ctx, `SELECT "user" FROM connection WHERE id = $1 FOR UPDATE`, id).Scan(&owner); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, nil, ErrNotFound
+		}
+		return nil, nil, err
+	}
+	counts := map[string]int64{}
+	for _, s := range []struct{ key, table, cond string }{
+		{"log", "log", "connection = $1"},
+		// after the log delete, so a block the archiver moved in between is caught
+		{"log_archive", "log_archive", "connection = $1"},
+		{"seen", "seen", "connection = $1"},
+		{"private", "private", "connection = $1"},
+		{"connection", "connection", "id = $1"},
+	} {
+		if err := deleteFrom(ctx, tx, counts, s.key, s.table, s.cond, id); err != nil {
+			return nil, nil, err
+		}
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, nil, err
+	}
+	if logAfter > 0 {
+		if err := d.sweepLate(ctx, counts, logAfter, "", []string{id}); err != nil {
+			return nil, nil, err
+		}
+	}
+	return []ConnectionChange{{User: owner, Connection: id, Action: "delete"}}, counts, nil
+}
+
+// sweepLate deletes the log rows of user (none when empty) or of conns newer than logAfter: ones the logger wrote after the
+// delete. It looks only at those, by id, so it reads seconds of log. It
+// also clears log_archive of the same rows' owners.
+func (d *DB) sweepLate(ctx context.Context, counts map[string]int64, logAfter int64, user string, conns []string) error {
+	const cond = `($1::text <> '' AND "user" = $1) OR connection = ANY($2)`
+	tag, err := d.Pool.Exec(ctx, `DELETE FROM log WHERE id > $3 AND (`+cond+`)`, user, conns, logAfter)
+	if err != nil {
+		return err
+	}
+	counts["log"] += tag.RowsAffected()
+	// the archiver may have moved some of them since
+	tag, err = d.Pool.Exec(ctx, `DELETE FROM log_archive WHERE `+cond, user, conns)
+	if err != nil {
+		return err
+	}
+	counts["log_archive"] += tag.RowsAffected()
+	return nil
 }

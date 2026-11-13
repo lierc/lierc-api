@@ -96,6 +96,11 @@ type Store interface {
 	ConnectionCounts(ctx context.Context, id string) (map[string]int64, error)
 	LastLogID(ctx context.Context) (int64, error)
 	StaleSeenCount(ctx context.Context) (int64, error)
+
+	// the admin API's writes
+	DeleteUserData(ctx context.Context, id string, logAfter int64) ([]ConnectionChange, map[string]int64, error)
+	DeleteConnectionData(ctx context.Context, id string, logAfter int64) ([]ConnectionChange, map[string]int64, error)
+	PruneStaleSeen(ctx context.Context) (int64, error)
 }
 
 var _ Store = (*DB)(nil)

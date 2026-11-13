@@ -2,6 +2,7 @@ package db_test
 
 import (
 	"context"
+	"errors"
 	"reflect"
 	"testing"
 	"time"
@@ -277,5 +278,85 @@ func TestStaleSeenCount(t *testing.T) {
 	exec(t, d, `INSERT INTO seen ("user", connection, channel, message_id, updated) VALUES ('`+u+`', 'c', '#old', 1, now() - interval '2 months')`)
 	if n, err := d.StaleSeenCount(ctx); err != nil || n != 2 {
 		t.Errorf("got %d, %v", n, err)
+	}
+}
+
+func TestDeleteUserData(t *testing.T) {
+	d := testenv.Postgres(t)
+	ctx := context.Background()
+	user, _ := seedCounts(t, d)
+	want, _ := d.UserCounts(ctx, user)
+	changes, counts, err := d.DeleteUserData(ctx, user, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(counts, want) {
+		t.Errorf("counts = %v, want %v", counts, want)
+	}
+	if len(changes) != 2 {
+		t.Fatalf("changes = %v", changes)
+	}
+	for _, c := range changes {
+		if c.User != user || c.Action != "delete" || (c.Connection != "conn1" && c.Connection != "conn2") {
+			t.Errorf("change %+v", c)
+		}
+	}
+	got, _ := d.UserCounts(ctx, user)
+	for k, v := range got {
+		if v != 0 {
+			t.Errorf("%s = %d after delete", k, v)
+		}
+	}
+	if _, _, err := d.DeleteUserData(ctx, user, 0); !errors.Is(err, db.ErrNotFound) {
+		t.Errorf("again: %v, want ErrNotFound", err)
+	}
+}
+
+func TestDeleteConnectionData(t *testing.T) {
+	d := testenv.Postgres(t)
+	ctx := context.Background()
+	user, conn := seedCounts(t, d)
+	changes, counts, err := d.DeleteConnectionData(ctx, conn, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]int64{"log": 2, "log_archive": 1, "seen": 1, "private": 1, "connection": 1}
+	if !reflect.DeepEqual(counts, want) {
+		t.Errorf("counts = %v, want %v", counts, want)
+	}
+	if !reflect.DeepEqual(changes, []db.ConnectionChange{{User: user, Connection: conn, Action: "delete"}}) {
+		t.Errorf("changes = %v", changes)
+	}
+	if _, _, err := d.DeleteConnectionData(ctx, conn, 0); !errors.Is(err, db.ErrNotFound) {
+		t.Errorf("again: %v, want ErrNotFound", err)
+	}
+}
+
+// The store methods announce nothing through Postgres: the handler does it
+// in memory after the commit.
+func TestDeleteDoesNotNotify(t *testing.T) {
+	d := testenv.Postgres(t)
+	listen := testenv.ListenConnections(t, d)
+	_, conn := seedCounts(t, d)
+	if _, _, err := d.DeleteConnectionData(context.Background(), conn, 0); err != nil {
+		t.Fatal(err)
+	}
+	if got := listen(300 * time.Millisecond); len(got) != 0 {
+		t.Errorf("notified %v", got)
+	}
+}
+
+func TestPruneStaleSeen(t *testing.T) {
+	d := testenv.Postgres(t)
+	ctx := context.Background()
+	u := testenv.AddUser(t, d, "u")
+	testenv.AddConnection(t, d, "c", u, `{}`)
+	exec(t, d, `INSERT INTO seen ("user", connection, channel, message_id) VALUES ('`+u+`', 'c', '#fresh', 1), ('`+u+`', 'gone', '#orphan', 1)`)
+	exec(t, d, `INSERT INTO seen ("user", connection, channel, message_id, updated) VALUES ('`+u+`', 'c', '#old', 1, now() - interval '2 months')`)
+	if n, err := d.PruneStaleSeen(ctx); err != nil || n != 2 {
+		t.Errorf("got %d, %v", n, err)
+	}
+	if n, _ := d.StaleSeenCount(ctx); n != 0 {
+		t.Errorf("stale left: %d", n)
 	}
 }
