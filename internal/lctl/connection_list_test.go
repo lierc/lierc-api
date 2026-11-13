@@ -35,16 +35,18 @@ func TestConnectionList(t *testing.T) {
 	if err := m.run("connection-list"); err != nil {
 		t.Fatal(err)
 	}
-	want := "a1  main  alice  irc.libera.chat:6697  connected as alice\n" +
-		"a2  main  alice  irc.oftc.net:6667  not running\n" +
-		"b1  next  alice  ?  running, not connected\n" +
-		"c1  next  nobody (no such user)  irc.relaychat.party:6697  not running\n"
+	// what's saved only: liercd isn't asked (connection-info shows live state)
+	want := "a1  main  alice  irc.libera.chat:6697\n" +
+		"a2  main  alice  irc.oftc.net:6667\n" +
+		"b1  next  alice  ?\n" +
+		"c1  next  nobody (no such user)  irc.relaychat.party:6697\n"
 	if got := m.out(); got != want {
 		t.Errorf("output:\n%s\nwant:\n%s", got, want)
 	}
 	if got := m.stderr.String(); got != "4 connection(s)\n" {
 		t.Errorf("stderr = %q", got)
 	}
+	m.calledNothing()
 }
 
 func TestConnectionListInstance(t *testing.T) {
@@ -96,16 +98,11 @@ func TestRoutingSkipsCounts(t *testing.T) {
 	t.Cleanup(srv.Close)
 	m.env.Admin = &Admin{BaseURL: srv.URL, HTTP: http.DefaultClient}
 	m.env.Liercd = liercd.NewRoutedForTest(m.mainURL, m.nextURL, m.env.Admin.instanceOf)
-	if err := m.run("connection-list"); err != nil {
+	// user-info asks liercd about each connection, routed by id
+	if err := m.run("user-info", "alice"); err != nil {
 		t.Fatal(err)
 	}
-	want := "a1  main  alice  irc.libera.chat:6697  connected as alice\n" +
-		"a2  main  alice  irc.oftc.net:6667  not running\n" +
-		"b1  next  alice  ?  running, not connected\n" +
-		"c1  next  nobody (no such user)  irc.relaychat.party:6697  not running\n"
-	if got := m.out(); got != want {
-		t.Errorf("output:\n%s\nwant:\n%s", got, want)
-	}
+	m.has("connected as alice\n", "running, not connected\n", "not running\n")
 	if n := cs.counts.Load(); n != 0 {
 		t.Errorf("%d ConnectionCounts calls while routing, want 0", n)
 	}

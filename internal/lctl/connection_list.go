@@ -8,10 +8,10 @@ import (
 
 const connectionListUsage = `connection-list [--instance main|next]
 
-Lists saved connections, one per line: id, liercd instance, owner, the
-saved Host:Port, and its live state in liercd (connected as NICK, running
-but not connected, or not running). With --instance, only that liercd's
-connections. The count goes to stderr.`
+Lists saved connections, one per line: id, liercd instance, owner and the
+saved Host:Port. It doesn't ask liercd: connection-info shows a
+connection's live state. With --instance, only that liercd's connections.
+The count goes to stderr.`
 
 func connectionList(ctx context.Context, env *Env, args []string) error {
 	fs := NewFlags(env, "connection-list", connectionListUsage)
@@ -41,8 +41,7 @@ func connectionList(ctx context.Context, env *Env, args []string) error {
 		if user == "" {
 			user = c.User + " (no such user)"
 		}
-		fmt.Fprintf(env.Stdout, "%s  %s  %s  %s  %s\n",
-			c.ID, c.Instance, user, hostPort(string(c.Config)), liercdState(ctx, env, c.ID))
+		fmt.Fprintf(env.Stdout, "%s  %s  %s  %s\n", c.ID, c.Instance, user, hostPort(string(c.Config)))
 	}
 	fmt.Fprintf(env.Stderr, "%d connection(s)\n", len(conns))
 	return nil

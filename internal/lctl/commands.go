@@ -15,7 +15,7 @@ var AdminCommands = []Command{
 	{Name: "inactive-users", Summary: "List users who haven't logged in within --since (e.g. 90d)", Run: inactiveUsers},
 	{Name: "stop-inactive", Summary: "Stop the running liercd connections of users who haven't logged in within --since; dry run unless --stop", Run: stopInactive},
 	{Name: "connection-info", Summary: "Show a connection: owner, saved config, validity, and its live state in liercd", Run: connectionInfo},
-	{Name: "connection-list", Summary: "List connections, one line each: id, instance, owner, host:port, live state; --instance main|next filters", Run: connectionList},
+	{Name: "connection-list", Summary: "List saved connections, one line each: id, instance, owner, host:port; --instance main|next filters", Run: connectionList},
 	{Name: "delete-users", Summary: "Delete users and all their data; dry run unless --delete", Run: deleteUsers},
 	{Name: "delete-connections", Summary: "Delete connections and their data, keeping the users; dry run unless --delete", Run: deleteConnections},
 	{Name: "logins", Summary: "List a user's logins: id, started, last used, IP, browser", Run: logins},
