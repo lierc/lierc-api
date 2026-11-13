@@ -48,30 +48,15 @@ func stopInactive(ctx context.Context, env *Env, args []string) error {
 	}
 
 	cutoff := env.now().Add(-d).UTC()
-	// the same users as inactive-users; last_login is UTC without a zone
-	rows, err := env.pool().Query(ctx, `SELECT c.id, coalesce(c.liercd, ''), c.config, u.id, u.username
-	  FROM connection c JOIN "user" u ON u.id = c."user"
-	  WHERE u.last_login IS NULL OR u.last_login < ($1::timestamptz AT TIME ZONE 'UTC')
-	  ORDER BY u.last_login NULLS FIRST, u.id, c.id`, cutoff)
+	// the same users as inactive-users
+	list, err := env.Admin.Connections(ctx, "", &cutoff)
 	if err != nil {
 		return err
 	}
 	type conn struct{ id, instance, config, user, username string }
 	var conns []conn
-	for rows.Next() {
-		var c conn
-		if err := rows.Scan(&c.id, &c.instance, &c.config, &c.user, &c.username); err != nil {
-			rows.Close()
-			return err
-		}
-		if c.instance == "" {
-			c.instance = "main"
-		}
-		conns = append(conns, c)
-	}
-	rows.Close()
-	if err := rows.Err(); err != nil {
-		return err
+	for _, c := range list {
+		conns = append(conns, conn{c.ID, c.Instance, string(c.Config), c.User, c.Username})
 	}
 
 	out := env.Stdout

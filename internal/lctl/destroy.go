@@ -2,31 +2,37 @@ package lctl
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
 	"time"
-
-	"github.com/lierc/lierc-api/internal/db"
 )
 
-// connectionTables hold a connection's data, in delete order.
+// connectionTables hold a connection's data, in the order they are listed.
 var connectionTables = []string{"log", "seen", "private", "connection"}
 
-func connectionWhere(table string) string {
-	if table == "connection" {
-		return "id = $1"
+// lateRows is how many of the log rows a delete removed arrived after
+// before was counted: the sweep's share of the reported count.
+func lateRows(before, deleted int64) int64 {
+	if deleted > before {
+		return deleted - before
 	}
-	return "connection = $1"
+	return 0
 }
 
 // destroyAndDelete destroys each connection in liercd (200 or 404 is fine,
 // anything else skips it), waits settle for QUIT messages to reach the log,
-// then deletes each connection's rows from tables in one transaction per
-// connection and sweeps log rows that arrived late.
-func destroyAndDelete(ctx context.Context, env *Env, ids []string, settle time.Duration,
-	tables []string, where func(table string) string) (deleted, skipped int, err error) {
+// then has the API delete each connection's rows, which also sweeps log
+// rows that arrived late. The log's last id is read first: that is the
+// sweep's starting point, and it fails, before liercd is touched, if the
+// admin server is down.
+func destroyAndDelete(ctx context.Context, env *Env, ids []string, settle time.Duration) (deleted, skipped int, err error) {
 	out := env.Stdout
+	logAfter, err := env.Admin.LastLogID(ctx)
+	if err != nil {
+		return 0, 0, err
+	}
 	var ready []string
 	for _, id := range ids {
 		if problem := destroy(ctx, env, id); problem != "" {
@@ -43,72 +49,39 @@ func destroyAndDelete(ctx context.Context, env *Env, ids []string, settle time.D
 		return 0, skipped, err
 	}
 
-	var done []string
+	var late int64
 	for _, id := range ready {
 		if err := ctx.Err(); err != nil {
-			return len(done), skipped, err
+			return deleted, skipped, err
 		}
-		counts, err := deleteRows(ctx, env, id, tables, where)
+		// what the log holds now, so the sweep's rows can be told apart
+		var logBefore int64
+		if c, err := env.Admin.Connection(ctx, id); err == nil {
+			logBefore = c.Counts["log"]
+		}
+		counts, err := env.Admin.DeleteConnection(ctx, id, logAfter)
+		if errors.Is(err, ErrMaybeDone) {
+			return deleted, skipped, err
+		}
 		if err != nil {
 			fmt.Fprintf(out, "%s: failed, nothing deleted: %v\n", id, err)
 			skipped++
 			continue
 		}
-		parts := make([]string, len(tables))
-		for i, t := range tables {
-			parts[i] = fmt.Sprintf("%s=%d", t, counts[i])
+		n := lateRows(logBefore, counts["log"])
+		late += n
+		counts["log"] -= n
+		parts := make([]string, len(connectionTables))
+		for i, t := range connectionTables {
+			parts[i] = fmt.Sprintf("%s=%d", t, counts[t])
 		}
 		fmt.Fprintf(out, "%s: deleted (%s)\n", id, strings.Join(parts, " "))
-		done = append(done, id)
+		deleted++
 	}
-
-	if len(done) > 0 {
-		tag, err := env.pool().Exec(ctx, `DELETE FROM log WHERE connection = ANY($1)`, done)
-		if err != nil {
-			return len(done), skipped, err
-		}
-		if n := tag.RowsAffected(); n > 0 {
-			fmt.Fprintf(out, "removed %d late log row(s)\n", n)
-		}
-		if _, err := env.pool().Exec(ctx, `DELETE FROM log_archive WHERE connection = ANY($1)`, done); err != nil {
-			return len(done), skipped, err
-		}
+	if late > 0 {
+		fmt.Fprintf(out, "removed %d late log row(s)\n", late)
 	}
-	return len(done), skipped, nil
-}
-
-func deleteRows(ctx context.Context, env *Env, id string, tables []string, where func(string) string) ([]int64, error) {
-	tx, err := env.pool().Begin(ctx)
-	if err != nil {
-		return nil, err
-	}
-	defer tx.Rollback(context.Background())
-	// tell the stream server, once this commits, so the UI drops the panels
-	if err := db.NotifyConnectionDeletes(ctx, tx, "id = $1", id); err != nil {
-		return nil, err
-	}
-	counts := make([]int64, len(tables))
-	for i, t := range tables {
-		tag, err := tx.Exec(ctx, `DELETE FROM `+quoteTable(t)+` WHERE `+where(t), id)
-		if err != nil {
-			return nil, err
-		}
-		counts[i] = tag.RowsAffected()
-		if t == "log" {
-			// after the log delete, so a block the archiver moved in between is caught
-			if _, err := tx.Exec(ctx, `DELETE FROM log_archive WHERE `+where(t), id); err != nil {
-				return nil, err
-			}
-		}
-	}
-	return counts, tx.Commit(ctx)
-}
-
-func quoteTable(t string) string {
-	if t == "user" {
-		return `"user"`
-	}
-	return t
+	return deleted, skipped, nil
 }
 
 // destroy stops a connection in liercd; it returns "" on 200 or 404, or a

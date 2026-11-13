@@ -41,15 +41,11 @@ func deleteConnections(ctx context.Context, env *Env, args []string) error {
 		return &UsageError{Msg: "give connection ids as arguments or on stdin"}
 	}
 	out := env.Stdout
-	pool := env.pool()
 
 	var found []string
 	for _, id := range ids {
-		var user, config string
-		var username *string
-		err := pool.QueryRow(ctx, `SELECT c."user", c.config::text, u.username FROM connection c
-		  LEFT JOIN "user" u ON u.id = c."user" WHERE c.id = $1`, id).Scan(&user, &config, &username)
-		if isNoRows(err) {
+		c, err := env.Admin.Connection(ctx, id)
+		if errors.Is(err, ErrNotFound) {
 			fmt.Fprintf(out, "%s: no such connection\n", id)
 			continue
 		}
@@ -58,17 +54,17 @@ func deleteConnections(ctx context.Context, env *Env, args []string) error {
 		}
 		counts := make([]string, len(connectionTables))
 		for i, t := range connectionTables {
-			var n int
-			if err := pool.QueryRow(ctx, `SELECT count(*) FROM `+t+` WHERE `+connectionWhere(t), id).Scan(&n); err != nil {
-				return err
+			n := c.Counts[t]
+			if t == "connection" {
+				n = 1
 			}
 			counts[i] = fmt.Sprintf("%s=%d", t, n)
 		}
-		name := "no such user"
-		if username != nil {
-			name = *username
+		name := c.Username
+		if name == "" {
+			name = "no such user"
 		}
-		fmt.Fprintf(out, "%s (user %s, %s, %s): %s\n", id, user, name, hostPort(config), strings.Join(counts, " "))
+		fmt.Fprintf(out, "%s (user %s, %s, %s): %s\n", id, c.User, name, hostPort(string(c.Config)), strings.Join(counts, " "))
 		found = append(found, id)
 	}
 
@@ -80,8 +76,7 @@ func deleteConnections(ctx context.Context, env *Env, args []string) error {
 		return nil
 	}
 
-	deleted, skipped, err := destroyAndDelete(ctx, env, found, time.Duration(*settle)*time.Second,
-		connectionTables, connectionWhere)
+	deleted, skipped, err := destroyAndDelete(ctx, env, found, time.Duration(*settle)*time.Second)
 	fmt.Fprintf(out, "deleted %d connection(s), skipped %d\n", deleted, skipped)
 	if err != nil {
 		return err

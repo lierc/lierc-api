@@ -2,11 +2,10 @@ package lctl
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strconv"
 	"time"
-
-	"github.com/lierc/lierc-api/internal/login"
 )
 
 const loginsUsage = `logins USER
@@ -117,20 +116,20 @@ func endLogin(ctx context.Context, env *Env, args []string) error {
 		return fmt.Errorf("%s: no such user", who)
 	}
 	if *all {
-		n, err := login.DeleteAll(ctx, env.Store, id)
+		n, err := env.Admin.EndLogins(ctx, id)
 		if err != nil {
 			return err
 		}
 		fmt.Fprintf(env.Stdout, "ended %s\n", plural(n, "login", "logins"))
 		return nil
 	}
-	deleted, err := login.Delete(ctx, env.Store, id, loginID)
-	if err != nil {
-		return err
-	}
-	if !deleted {
+	err = env.Admin.EndLogin(ctx, id, loginID)
+	if errors.Is(err, ErrNotFound) {
 		fmt.Fprintln(env.Stdout, "no such login")
 		return fmt.Errorf("no such login")
+	}
+	if err != nil {
+		return err
 	}
 	fmt.Fprintln(env.Stdout, "ended 1 login")
 	return nil
@@ -144,7 +143,7 @@ func pruneLogins(ctx context.Context, env *Env, args []string) error {
 	if fs.NArg() != 0 {
 		return &UsageError{Msg: "prune-logins takes no arguments"}
 	}
-	n, err := login.Prune(ctx, env.Store)
+	n, err := env.Admin.PruneLogins(ctx)
 	if err != nil {
 		return err
 	}

@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/lierc/lierc-api/internal/db"
+	"sort"
 	"strings"
 	"time"
 )
@@ -25,29 +25,8 @@ transaction: a user is either fully deleted or left as they were. A last
 sweep removes any log rows that still arrived late (it looks only at rows
 written after the command started, so it takes moments).`
 
-// What each table holds for a user, in delete order. A where clause uses
-// the user id, their connection ids, or both ($1 user, $2 connections).
-var userTables = []struct{ name, where, kind string }{
-	// log (and log_archive, deleted with it) also by user id: rows of a
-	// connection deleted before the user still carry the user's id
-	{"log", `"user" = $1 OR connection = ANY($2)`, "both"},
-	{"seen", `"user" = $1 OR connection = ANY($2)`, "both"},
-	{"private", `connection = ANY($1)`, "conns"},
-	{"pref", `"user" = $1`, "user"},
-	{"web_push", `"user" = $1`, "user"},
-	{"connection", `"user" = $1`, "user"},
-	{`"user"`, `id = $1`, "user"},
-}
-
-func tableArgs(kind, id string, conns []string) []any {
-	switch kind {
-	case "conns":
-		return []any{conns}
-	case "both":
-		return []any{id, conns}
-	}
-	return []any{id}
-}
+// userTables are the tables a user's dry run lists, in this order.
+var userTables = []string{"log", "seen", "private", "pref", "web_push", "connection", "user"}
 
 type foundUser struct {
 	id, username, email string
@@ -72,14 +51,12 @@ func deleteUsers(ctx context.Context, env *Env, args []string) error {
 		return &UsageError{Msg: "give user ids as arguments or on stdin"}
 	}
 	out := env.Stdout
-	pool := env.pool()
 
 	skipped := 0
 	var found []foundUser
 	for _, id := range ids {
-		u := foundUser{id: id}
-		err := pool.QueryRow(ctx, `SELECT username, email FROM "user" WHERE id = $1`, id).Scan(&u.username, &u.email)
-		if isNoRows(err) {
+		d, err := env.Admin.User(ctx, id)
+		if errors.Is(err, ErrNotFound) {
 			fmt.Fprintf(out, "%s: no such user, skipped\n", id)
 			skipped++
 			continue
@@ -87,33 +64,20 @@ func deleteUsers(ctx context.Context, env *Env, args []string) error {
 		if err != nil {
 			return err
 		}
-		rows, err := pool.Query(ctx, `SELECT id FROM connection WHERE "user" = $1 ORDER BY id`, id)
+		u := foundUser{id: id, username: d.Username, email: d.Email, conns: []string{}}
+		for _, c := range d.ConnectionList {
+			u.conns = append(u.conns, c.ID)
+		}
+		sort.Strings(u.conns)
+
+		have, err := env.Admin.UserCounts(ctx, id)
 		if err != nil {
 			return err
 		}
-		for rows.Next() {
-			var c string
-			if err := rows.Scan(&c); err != nil {
-				rows.Close()
-				return err
-			}
-			u.conns = append(u.conns, c)
-		}
-		rows.Close()
-		if err := rows.Err(); err != nil {
-			return err
-		}
-		if u.conns == nil {
-			u.conns = []string{}
-		}
-
+		have["user"] = 1
 		counts := make([]string, len(userTables))
 		for i, t := range userTables {
-			var n int
-			if err := pool.QueryRow(ctx, `SELECT count(*) FROM `+t.name+` WHERE `+t.where, tableArgs(t.kind, id, u.conns)...).Scan(&n); err != nil {
-				return err
-			}
-			counts[i] = fmt.Sprintf("%s=%d", strings.Trim(t.name, `"`), n)
+			counts[i] = fmt.Sprintf("%s=%d", t, have[t])
 		}
 		fmt.Fprintf(out, "%s (%s, %s): %s\n", id, u.username, u.email, strings.Join(counts, " "))
 		found = append(found, u)
@@ -124,10 +88,11 @@ func deleteUsers(ctx context.Context, env *Env, args []string) error {
 		return nil
 	}
 
-	// log rows from here on are new: the last sweep looks only at those,
-	// not at each user's whole (just deleted) history
-	var lastLogID int64
-	if err := pool.QueryRow(ctx, `SELECT coalesce(max(id), 0) FROM log`).Scan(&lastLogID); err != nil {
+	// log rows from here on are new: the API's last sweep looks only at
+	// those, not at each user's whole (just deleted) history. This is also
+	// the first call that must reach the admin server, before liercd is touched.
+	logAfter, err := env.Admin.LastLogID(ctx)
+	if err != nil {
 		return err
 	}
 
@@ -159,32 +124,33 @@ func deleteUsers(ctx context.Context, env *Env, args []string) error {
 	}
 
 	var deleted []foundUser
+	late := map[string]int64{}
 	for _, u := range ready {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		if err := deleteUser(ctx, env, u); err != nil {
+		// what the log holds now, so the sweep's rows can be told apart
+		var logBefore int64
+		if c, err := env.Admin.UserCounts(ctx, u.id); err == nil {
+			logBefore = c["log"]
+		}
+		counts, err := env.Admin.DeleteUser(ctx, u.id, logAfter)
+		if errors.Is(err, ErrMaybeDone) {
+			return err
+		}
+		if err != nil {
 			fmt.Fprintf(out, "%s: failed, nothing deleted: %v\n", u.id, err)
 			skipped++
 			continue
 		}
+		late[u.id] = lateRows(logBefore, counts["log"])
 		fmt.Fprintf(out, "%s: deleted\n", u.id)
 		deleted = append(deleted, u)
 	}
 
-	// anything the logger still wrote after the deletes: only rows newer than
-	// the start, by id (the primary key), so this reads seconds of log
-	// rather than walking every row just deleted
 	for _, u := range deleted {
-		tag, err := pool.Exec(ctx, `DELETE FROM log WHERE id > $1 AND ("user" = $2 OR connection = ANY($3))`, lastLogID, u.id, u.conns)
-		if err != nil {
-			return err
-		}
-		if n := tag.RowsAffected(); n > 0 {
+		if n := late[u.id]; n > 0 {
 			fmt.Fprintf(out, "%s: removed %d late log row(s)\n", u.id, n)
-		}
-		if _, err := pool.Exec(ctx, `DELETE FROM log_archive WHERE "user" = $1 OR connection = ANY($2)`, u.id, u.conns); err != nil {
-			return err
 		}
 	}
 
@@ -193,28 +159,4 @@ func deleteUsers(ctx context.Context, env *Env, args []string) error {
 		return fmt.Errorf("%d user(s) not deleted", len(found)-len(deleted))
 	}
 	return nil
-}
-
-func deleteUser(ctx context.Context, env *Env, u foundUser) error {
-	tx, err := env.pool().Begin(ctx)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback(context.Background())
-	// tell the stream server, once this commits, so the UI drops the panels
-	if err := db.NotifyConnectionDeletes(ctx, tx, `"user" = $1`, u.id); err != nil {
-		return err
-	}
-	for _, t := range userTables {
-		if _, err := tx.Exec(ctx, `DELETE FROM `+t.name+` WHERE `+t.where, tableArgs(t.kind, u.id, u.conns)...); err != nil {
-			return err
-		}
-		if t.name == "log" {
-			// after the log delete, so a block the archiver moved in between is caught
-			if _, err := tx.Exec(ctx, `DELETE FROM log_archive WHERE `+t.where, tableArgs(t.kind, u.id, u.conns)...); err != nil {
-				return err
-			}
-		}
-	}
-	return tx.Commit(ctx)
 }

@@ -2,11 +2,9 @@ package lctl
 
 import (
 	"context"
-	"time"
 
 	"errors"
 	"github.com/lierc/lierc-api/internal/db"
-	"github.com/lierc/lierc-api/internal/testenv"
 	"strings"
 	"testing"
 )
@@ -41,6 +39,9 @@ func TestDeleteConnectionsDelete(t *testing.T) {
 		t.Fatal(err)
 	}
 	h.has("c1: deleted (log=1 seen=1 private=1 connection=1)\n", "deleted 1 connection(s), skipped 0\n")
+	if got := h.announced; len(got) != 1 || got[0] != (db.ConnectionChange{User: u, Connection: "c1", Action: "delete"}) {
+		t.Errorf("announced %+v, want one delete of c1", got)
+	}
 	if got := strings.Join(h.calls("POST", "/destroy"), ","); got != "c1" {
 		t.Errorf("destroyed %s", got)
 	}
@@ -125,14 +126,12 @@ func TestDeleteConnectionsNotifies(t *testing.T) {
 	u := h.user("ann")
 	h.conn("c1", u, cfg)
 	h.conn("c2", u, cfg)
-	changes := testenv.ListenConnections(t, h.db)
 	h.liercd.Respond("POST", "/c1/destroy", 200, "ok")
 	h.liercd.Respond("POST", "/c2/destroy", 500, "no")
 	if err := h.run("delete-connections", "--delete", "--settle", "0", "c1", "c2"); err == nil || !strings.Contains(err.Error(), "1 connection(s) skipped") {
 		t.Fatalf("err %v, want c2 skipped", err)
 	}
-	got := changes(2 * time.Second)
-	if len(got) != 1 || got[0] != (db.ConnectionChange{User: u, Connection: "c1", Action: "delete"}) {
-		t.Errorf("notified %+v", got)
+	if got := h.announced; len(got) != 1 || got[0] != (db.ConnectionChange{User: u, Connection: "c1", Action: "delete"}) {
+		t.Errorf("announced %+v", got)
 	}
 }

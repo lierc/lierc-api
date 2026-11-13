@@ -2,10 +2,10 @@ package lctl
 
 import (
 	"context"
-	"time"
-
 	"errors"
-	"github.com/lierc/lierc-api/internal/testenv"
+	"io"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 )
@@ -265,20 +265,78 @@ func TestDeleteUsersNotifiesEachConnection(t *testing.T) {
 	h.conn("c1", u, `{}`)
 	h.conn("c2", u, `{}`)
 	h.conn("c3", other, `{}`)
-	changes := testenv.ListenConnections(t, h.db)
 	h.liercd.Respond("POST", "/*/destroy", 200, "ok")
 	if err := h.run("delete-users", "--delete", "--settle", "0", u); err != nil {
 		t.Fatal(err)
 	}
-	got := changes(2 * time.Second)
 	conns := map[string]bool{}
-	for _, c := range got {
+	for _, c := range h.announced {
 		if c.User != u || c.Action != "delete" {
 			t.Errorf("change %+v", c)
 		}
 		conns[c.Connection] = true
 	}
-	if len(got) != 2 || !conns["c1"] || !conns["c2"] {
-		t.Errorf("notified %+v, want c1 and c2", got)
+	if len(h.announced) != 2 || !conns["c1"] || !conns["c2"] {
+		t.Errorf("announced %+v, want c1 and c2", h.announced)
+	}
+}
+
+// With the admin server down, delete-users --delete stops before liercd is
+// touched: nothing was destroyed, nothing deleted.
+func TestDeleteUsersAdminDown(t *testing.T) {
+	h := newHarness(t)
+	u := seedUser(h, "ann")
+	srv := httptest.NewServer(http.NotFoundHandler())
+	srv.Close()
+	h.env.Admin = &Admin{BaseURL: srv.URL, HTTP: http.DefaultClient}
+	err := h.run("delete-users", "--delete", u)
+	if !errors.Is(err, ErrUnreachable) || !strings.HasSuffix(err.Error(), "); nothing was changed") {
+		t.Fatalf("got %v", err)
+	}
+	if calls := h.liercd.Calls(); len(calls) != 0 {
+		t.Errorf("liercd was called: %v", calls)
+	}
+	if n := h.userRows(u, "ann1", "ann2"); n != 12 {
+		t.Errorf("%d rows, want 12", n)
+	}
+}
+
+// A delete whose request ends without an answer may have been done: the
+// error says so rather than "nothing was changed".
+func TestDeleteMayHaveFinished(t *testing.T) {
+	h := newHarness(t)
+	u := h.user("ann")
+	h.conn("c1", u, cfg)
+	// answers /admin/log/last, hangs up on DELETE, and passes reads to the real server
+	real := h.env.Admin
+	proxy := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodDelete:
+			if conn, _, err := w.(http.Hijacker).Hijack(); err == nil {
+				conn.Close()
+			}
+		case r.URL.Path == "/admin/log/last":
+			w.Write([]byte(`{"id":7}`))
+		default:
+			res, err := real.HTTP.Get(real.BaseURL + r.URL.RequestURI())
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusBadGateway)
+				return
+			}
+			defer res.Body.Close()
+			w.WriteHeader(res.StatusCode)
+			io.Copy(w, res.Body)
+		}
+	}))
+	defer proxy.Close()
+	h.env.Admin = &Admin{BaseURL: proxy.URL, HTTP: http.DefaultClient}
+	h.liercd.Respond("POST", "/*/destroy", 200, "ok")
+
+	const want = "the request ended before the API answered; the delete may have finished"
+	for _, c := range [][]string{{"delete-users", "--delete", "--settle", "0", u}, {"delete-connections", "--delete", "--settle", "0", "c1"}} {
+		err := h.run(c[0], c[1:]...)
+		if err == nil || !strings.Contains(err.Error(), want) {
+			t.Errorf("%s: %v, want %q", c[0], err, want)
+		}
 	}
 }

@@ -17,7 +17,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jackc/pgx/v5"
 	"golang.org/x/term"
 
 	"github.com/lierc/lierc-api/internal/config"
@@ -265,10 +264,3 @@ func sorted[V any](m map[string]V) []string {
 	sort.Strings(keys)
 	return keys
 }
-
-func isNoRows(err error) bool { return errors.Is(err, pgx.ErrNoRows) }
-
-// pool is the database pool, for the commands that still run SQL of their
-// own. They go through the admin API instead; until then they need the
-// Postgres store.
-func (e *Env) pool() *db.Pool { return e.Store.(*db.DB).Pool }

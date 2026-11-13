@@ -36,6 +36,9 @@ func reconnect(ctx context.Context, env *Env, args []string) error {
 			return err
 		}
 		if err := reconnectOne(ctx, env, id); err != nil {
+			if errors.Is(err, ErrUnreachable) {
+				return err // nothing more can be looked up
+			}
 			fmt.Fprintln(out, err)
 			failed++
 			continue
@@ -53,12 +56,15 @@ func reconnect(ctx context.Context, env *Env, args []string) error {
 // reconnectOne destroys connection id in liercd and creates it again from
 // its saved config. A failed destroy leaves it alone.
 func reconnectOne(ctx context.Context, env *Env, id string) error {
-	config, ok, err := env.Store.LookupConfig(ctx, id)
+	config, err := env.Admin.ConnectionConfig(ctx, id)
+	if errors.Is(err, ErrNotFound) {
+		return fmt.Errorf("unknown connection %s", id)
+	}
+	if errors.Is(err, ErrUnreachable) {
+		return err
+	}
 	if err != nil {
 		return fmt.Errorf("looking up %s: %v", id, err)
-	}
-	if !ok {
-		return fmt.Errorf("unknown connection %s", id)
 	}
 	if problem := destroy(ctx, env, id); problem != "" {
 		return fmt.Errorf("destroying %s: liercd said %s", id, problem)

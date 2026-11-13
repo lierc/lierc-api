@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -166,4 +167,63 @@ func (a *Admin) StaleSeen(ctx context.Context) (int64, error) {
 		Count int64 `json:"count"`
 	}
 	return out.Count, a.do(ctx, http.MethodGet, "/admin/seen/stale", nil, &out)
+}
+
+// ErrMaybeDone is a delete's request ending without an answer: it may have
+// reached the API and been done.
+var ErrMaybeDone = errors.New("the request ended before the API answered; the delete may have finished")
+
+// writeResult is the body of every successful write.
+type writeResult struct {
+	Counts map[string]int64 `json:"counts"`
+	Ended  int64            `json:"ended"`
+	Pruned int64            `json:"pruned"`
+}
+
+// remove sends a delete; logAfter is the log's last id from before the
+// command began destroying connections.
+func (a *Admin) remove(ctx context.Context, path string, logAfter int64) (map[string]int64, error) {
+	var out writeResult
+	err := a.do(ctx, http.MethodDelete, path, url.Values{"log_after": {strconv.FormatInt(logAfter, 10)}}, &out)
+	if errors.Is(err, ErrUnreachable) {
+		// the caller has already reached the server (LastLogID), so this
+		// request may have arrived before the connection broke
+		return nil, ErrMaybeDone
+	}
+	return out.Counts, err
+}
+
+// DeleteUser deletes a user and their data, then sweeps log rows with an id
+// above logAfter. It returns the rows deleted per table, the sweep's
+// included in "log". ErrNotFound if there is no such user.
+func (a *Admin) DeleteUser(ctx context.Context, id string, logAfter int64) (map[string]int64, error) {
+	return a.remove(ctx, "/admin/users/"+url.PathEscape(id), logAfter)
+}
+
+// DeleteConnection deletes a connection and its data like DeleteUser.
+func (a *Admin) DeleteConnection(ctx context.Context, id string, logAfter int64) (map[string]int64, error) {
+	return a.remove(ctx, "/admin/connections/"+url.PathEscape(id), logAfter)
+}
+
+// EndLogin ends one login of a user; ErrNotFound if there is no such login.
+func (a *Admin) EndLogin(ctx context.Context, user string, id int64) error {
+	return a.do(ctx, http.MethodDelete, "/admin/users/"+url.PathEscape(user)+"/logins/"+strconv.FormatInt(id, 10), nil, nil)
+}
+
+// EndLogins ends every login of a user and returns how many there were.
+func (a *Admin) EndLogins(ctx context.Context, user string) (int64, error) {
+	var out writeResult
+	return out.Ended, a.do(ctx, http.MethodDelete, "/admin/users/"+url.PathEscape(user)+"/logins", nil, &out)
+}
+
+// PruneLogins deletes the logins unused for 7 days and returns how many.
+func (a *Admin) PruneLogins(ctx context.Context) (int64, error) {
+	var out writeResult
+	return out.Pruned, a.do(ctx, http.MethodPost, "/admin/logins/prune", nil, &out)
+}
+
+// PruneSeen deletes the stale seen rows and returns how many.
+func (a *Admin) PruneSeen(ctx context.Context) (int64, error) {
+	var out writeResult
+	return out.Pruned, a.do(ctx, http.MethodPost, "/admin/seen/prune", nil, &out)
 }
