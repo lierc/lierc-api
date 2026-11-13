@@ -5,7 +5,9 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -120,3 +122,62 @@ func (h *harness) calls(method, suffix string) []string {
 }
 
 func asUsage(err error, target **UsageError) bool { return errors.As(err, target) }
+
+// moveHarness routes env.Liercd to two fake liercds that log into one
+// ordered list.
+type moveHarness struct {
+	*harness
+	main, next       *testenv.LiercdServer
+	mainURL, nextURL string
+	mu               sync.Mutex
+	order            []string
+	// after, if set, runs after each fake answers a request.
+	after func(name, method, path string)
+}
+
+func newMoveHarness(t *testing.T) *moveHarness {
+	m := &moveHarness{harness: newHarness(t), main: testenv.NewLiercd(), next: testenv.NewLiercd()}
+	serve := func(name string, f *testenv.LiercdServer) string {
+		s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			m.mu.Lock()
+			m.order = append(m.order, name+" "+r.Method+" "+r.URL.Path)
+			m.mu.Unlock()
+			f.ServeHTTP(w, r)
+			if m.after != nil {
+				m.after(name, r.Method, r.URL.Path)
+			}
+		}))
+		t.Cleanup(s.Close)
+		return s.URL
+	}
+	m.mainURL, m.nextURL = serve("main", m.main), serve("next", m.next)
+	m.env.Liercd = liercd.NewRoutedForTest(m.mainURL, m.nextURL, m.db.LookupLiercd)
+	m.env.Config.LiercdNextHost = "next.example"
+	return m
+}
+
+func (m *moveHarness) column(id string) string {
+	m.t.Helper()
+	inst, err := m.db.LookupLiercd(context.Background(), id)
+	if err != nil {
+		m.t.Fatal(err)
+	}
+	return inst
+}
+
+func (m *moveHarness) calls() string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return strings.Join(m.order, "|")
+}
+
+func (m *moveHarness) calledNothing() {
+	m.t.Helper()
+	if len(m.order) != 0 {
+		m.t.Errorf("liercd was called: %v", m.order)
+	}
+}
+
+func testenv_conn(h *harness, id, user, config string) {
+	h.exec(`INSERT INTO connection (id, "user", config) VALUES ($1, $2, $3)`, id, user, config)
+}

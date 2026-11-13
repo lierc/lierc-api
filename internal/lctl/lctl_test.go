@@ -246,3 +246,25 @@ func TestReadIDsEmptyStdin(t *testing.T) {
 		t.Fatalf("got %v %v", ids, err)
 	}
 }
+
+func TestRemovedCommands(t *testing.T) {
+	names := []string{"fix-config-encoding", "convert-legacy-passwords", "move-connection", "move-connections", "check-connections", "reset"}
+	for _, name := range names {
+		var o out
+		if code := Main(context.Background(), []string{name}, o.sys("", true)); code != 2 {
+			t.Errorf("%s: exit %d, want 2", name, code)
+		}
+		if !strings.Contains(o.stderr.String(), "unknown command "+name) {
+			t.Errorf("%s: stderr %q lacks unknown command", name, o.stderr.String())
+		}
+	}
+	var o out
+	Main(context.Background(), []string{"help"}, o.sys("", true))
+	for _, name := range names {
+		for _, line := range strings.Split(o.stdout.String(), "\n") {
+			if strings.HasPrefix(strings.TrimSpace(line), name+" ") {
+				t.Errorf("help still lists %s", name)
+			}
+		}
+	}
+}
