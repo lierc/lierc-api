@@ -18,8 +18,10 @@ import (
 
 func TestMain(m *testing.M) { testenv.Main(m) }
 
-func TestUnknownSubcommand(t *testing.T) {
-	for _, args := range [][]string{{"bogus"}, {}, {"api"}, {"stream", "extra"}} {
+// lierc-api takes no arguments: it just runs the server. The old "stream"
+// subcommand and "lctl" (now its own binary) are usage errors.
+func TestArgumentsRefused(t *testing.T) {
+	for _, args := range [][]string{{"bogus"}, {"stream"}, {"lctl", "help"}, {"stream", "extra"}} {
 		var buf bytes.Buffer
 		if code := run(context.Background(), args, func(string) string { return "" }, &buf, nil); code != 2 {
 			t.Errorf("%v: exit %d, want 2", args, code)
@@ -51,7 +53,7 @@ func TestServesStreamUnauthorized(t *testing.T) {
 	done := make(chan int, 1)
 	var logs bytes.Buffer
 	go func() {
-		done <- run(ctx, []string{"stream"}, func(k string) string { return env[k] }, &logs, func(a, _ net.Addr) { addr <- a })
+		done <- run(ctx, nil, func(k string) string { return env[k] }, &logs, func(a, _ net.Addr) { addr <- a })
 	}()
 
 	var a net.Addr
@@ -96,7 +98,7 @@ func TestStreamServesWithoutNSQ(t *testing.T) {
 	done := make(chan int, 1)
 	var logs syncBuffer
 	go func() {
-		done <- run(ctx, []string{"stream"}, func(k string) string { return env[k] }, &logs, func(a, _ net.Addr) { addr <- a })
+		done <- run(ctx, nil, func(k string) string { return env[k] }, &logs, func(a, _ net.Addr) { addr <- a })
 	}()
 	var a net.Addr
 	select {
@@ -145,7 +147,7 @@ func TestAdminListenerServesStats(t *testing.T) {
 	done := make(chan int, 1)
 	var logs syncBuffer
 	go func() {
-		done <- run(ctx, []string{"stream"}, func(k string) string { return env[k] }, &logs,
+		done <- run(ctx, nil, func(k string) string { return env[k] }, &logs,
 			func(s, a net.Addr) { addrs <- [2]net.Addr{s, a} })
 	}()
 	var a [2]net.Addr
@@ -200,7 +202,7 @@ func TestAdminListenInUse(t *testing.T) {
 		"NSQD_HOST":     "127.0.0.2:1",
 	}
 	var logs syncBuffer
-	if code := run(context.Background(), []string{"stream"}, func(k string) string { return env[k] }, &logs, nil); code != 1 {
+	if code := run(context.Background(), nil, func(k string) string { return env[k] }, &logs, nil); code != 1 {
 		t.Errorf("exit %d, want 1", code)
 	}
 	if !strings.Contains(logs.String(), "admin listen") {
@@ -257,7 +259,7 @@ func TestAdminRoutesMounted(t *testing.T) {
 	done := make(chan int, 1)
 	var logs syncBuffer
 	go func() {
-		done <- run(ctx, []string{"stream"}, func(k string) string { return env[k] }, &logs,
+		done <- run(ctx, nil, func(k string) string { return env[k] }, &logs,
 			func(s, a net.Addr) { addrs <- [2]net.Addr{s, a} })
 	}()
 	var a [2]net.Addr

@@ -1,5 +1,6 @@
-// Command lierc-api runs the API and SSE event stream (`lierc-api stream`)
-// and the admin commands (`lierc-api lctl COMMAND`).
+// Command lierc-api runs the API, the SSE event stream and the admin
+// listener. It takes no arguments; the admin commands are the separate lctl
+// binary (cmd/lctl).
 package main
 
 import (
@@ -19,7 +20,6 @@ import (
 
 	"github.com/lierc/lierc-api/internal/config"
 	"github.com/lierc/lierc-api/internal/db"
-	"github.com/lierc/lierc-api/internal/lctl"
 	"github.com/lierc/lierc-api/internal/liercd"
 	"github.com/lierc/lierc-api/internal/proxy"
 	"github.com/lierc/lierc-api/internal/stream"
@@ -32,17 +32,15 @@ const shutdownTimeout = 10 * time.Second
 func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
 	defer stop()
-	if len(os.Args) > 1 && os.Args[1] == "lctl" {
-		os.Exit(lctl.Main(ctx, os.Args[2:], lctl.OSSystem()))
-	}
 	os.Exit(run(ctx, os.Args[1:], os.Getenv, os.Stderr, nil))
 }
 
-// run executes one command and returns the process exit code. onListen, if
-// non-nil, is called with the stream and admin addresses once both are bound.
+// run runs the server and returns the process exit code; any argument is a
+// usage error. onListen, if non-nil, is called with the stream and admin
+// addresses once both are bound.
 func run(ctx context.Context, args []string, getenv func(string) string, stderr io.Writer, onListen func(stream, admin net.Addr)) int {
-	if len(args) != 1 || args[0] != "stream" {
-		fmt.Fprintln(stderr, "usage: lierc-api stream | lierc-api lctl COMMAND")
+	if len(args) != 0 {
+		fmt.Fprintln(stderr, "usage: lierc-api (no arguments; the admin commands are lctl)")
 		return 2
 	}
 	logger := log.New(stderr, "", log.LstdFlags)
@@ -91,7 +89,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, stderr 
 		logger.Printf("admin listen: %v", err)
 		return 1
 	}
-	logger.Printf("lierc-api stream listening on %s, admin on %s", ln.Addr(), adminLn.Addr())
+	logger.Printf("lierc-api listening on %s, admin on %s", ln.Addr(), adminLn.Addr())
 	if onListen != nil {
 		onListen(ln.Addr(), adminLn.Addr())
 	}

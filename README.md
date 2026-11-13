@@ -9,13 +9,15 @@ route for route; that code is in this repository's git history, and the
 JSON fixtures in `testdata/fixtures` record its behaviour, which the Go tests
 check against.
 
-The same binary, `lierc-api`, also carries `lctl`, the admin command
-(`lierc-api lctl help`).
+The image also carries `lctl`, the admin command (`lctl help`), a binary of
+its own.
 
 Layout
 ------
 
-- `cmd/lierc-api`: the server (`lierc-api stream`) and `lctl`.
+- `cmd/lierc-api`: the server (`lierc-api`, no arguments).
+- `cmd/lctl`, `internal/lctl`: the admin command; `internal/admin`: the
+  admin JSON API it talks to.
 - `internal/api`: the HTTP routes, behind a same-origin check.
 - `internal/stream`: the event stream, NSQ consumers and the admin `/stats`.
 - `internal/accounts`, `internal/passwords`, `internal/mail`: login,
@@ -36,9 +38,9 @@ The easiest way is the dev stack in `lierc-docker-compose`. To run it by
 hand you need PostgreSQL with `lierc.sql` loaded, nsqd and liercd:
 
 ```
-go build ./cmd/lierc-api
+go build ./cmd/lierc-api ./cmd/lctl
 POSTGRES_HOST=127.0.0.1 LIERCD_HOST=127.0.0.1 NSQD_HOST=127.0.0.1 \
-  LISTEN=127.0.0.1:5003 ADMIN_LISTEN=127.0.0.1:5009 ./lierc-api stream
+  LISTEN=127.0.0.1:5003 ADMIN_LISTEN=127.0.0.1:5009 ./lierc-api
 ```
 
 `internal/config` lists every setting and its default.

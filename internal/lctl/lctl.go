@@ -1,4 +1,4 @@
-// Package lctl is lierc-api's admin command (`lierc-api lctl COMMAND`), run
+// Package lctl is lierc-api's admin command (the lctl binary, cmd/lctl), run
 // in production by the host's /usr/local/bin/lctl wrapper in a one-off
 // container with the services' environment and host network. Each command
 // lives in its own file; this one holds what they share. Anything that
@@ -165,7 +165,7 @@ func isHelp(a string) bool { return a == "help" || a == "-h" || a == "--help" }
 // help lists the top-level commands, and the admin group if there is one.
 func help(w io.Writer, cmds []Command, admin bool) {
 	fmt.Fprintln(w, "usage: lctl COMMAND [options] [args]   (lctl COMMAND -h for a command's usage)")
-	fmt.Fprintln(w, "over ssh, use ssh -t unless you pipe ids in: ssh -t relaychat sudo lctl COMMAND")
+	fmt.Fprintln(w, "over ssh, use ssh -t unless you pipe ids in: ssh -t relaychat lctl COMMAND")
 	fmt.Fprintln(w)
 	list := cmds
 	if admin {
