@@ -63,19 +63,19 @@ func TestConfigChangeMissingConnection(t *testing.T) {
 	}
 }
 
-// flaky fails its first MergeConfig.
+// flaky fails its first fails MergeConfigs.
 type flaky struct {
 	db.Store
-	mu     sync.Mutex
-	failed bool
+	mu    sync.Mutex
+	fails int
 }
 
 func (f *flaky) MergeConfig(ctx context.Context, id string, fields []byte) error {
 	f.mu.Lock()
-	first := !f.failed
-	f.failed = true
+	fail := f.fails > 0
+	f.fails--
 	f.mu.Unlock()
-	if first {
+	if fail {
 		return errors.New("database is down")
 	}
 	return f.Store.MergeConfig(ctx, id, fields)
@@ -87,11 +87,24 @@ func TestConfigChangeRetried(t *testing.T) {
 	e := setup(t)
 	e.s.NSQReconnect = 50 * time.Millisecond
 	e.addConn("c1", e.addUser("alice"), `{"Host":"irc.x"}`)
-	e.s.db = &flaky{Store: e.db}
+	e.s.db = &flaky{Store: e.db, fails: 1}
 	if err := e.s.configChanged([]byte(`{"Id":"c1","Config":{"Nick":"x"}}`)); err == nil {
 		t.Fatal("database error: returned nil, so it wouldn't be retried")
 	}
-	e.s.db = &flaky{Store: e.db}
+	e.s.db = &flaky{Store: e.db, fails: 1}
+	consume(t, e.s, addr)
+	publish("config", []byte(`{"Id":"c1","Config":{"Nick":"y"}}`))
+	e.awaitConfig("c1", `{"Host":"irc.x","Nick":"y"}`)
+}
+
+// A database that's down for longer than go-nsq's default 5 attempts
+// doesn't lose the change: it's retried until it's saved.
+func TestConfigChangeRetriedPastMaxAttempts(t *testing.T) {
+	addr, publish := testenv.NSQD(t)
+	e := setup(t)
+	e.s.NSQReconnect = 20 * time.Millisecond
+	e.addConn("c1", e.addUser("alice"), `{"Host":"irc.x"}`)
+	e.s.db = &flaky{Store: e.db, fails: 5}
 	consume(t, e.s, addr)
 	publish("config", []byte(`{"Id":"c1","Config":{"Nick":"y"}}`))
 	e.awaitConfig("c1", `{"Host":"irc.x","Nick":"y"}`)

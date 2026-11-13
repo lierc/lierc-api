@@ -51,15 +51,19 @@ func (s *Server) consumer(topic string, handle func([]byte)) (*nsq.Consumer, err
 	})
 }
 
-// consumerOn is a consumer of topic on channel, one message at a time; a
+// consumerOn is a consumer of topic on channel, one message at a time. A
 // message handle fails is delivered again, NSQReconnect times the
-// attempts later.
+// attempts later, for as long as it takes (go-nsq would otherwise drop it
+// after 5 attempts); meanwhile the consumer backs off from NSQReconnect
+// doubling, up to go-nsq's 2 minutes.
 func (s *Server) consumerOn(topic, channel string, handle func([]byte) error) (*nsq.Consumer, error) {
 	cfg := nsq.NewConfig()
 	// Without nsqlookupd, go-nsq waits LookupdPollInterval (default 60s)
 	// before each attempt to reconnect to a lost nsqd.
 	cfg.LookupdPollInterval = s.NSQReconnect
 	cfg.DefaultRequeueDelay = s.NSQReconnect
+	cfg.BackoffMultiplier = s.NSQReconnect
+	cfg.MaxAttempts = 0
 	c, err := nsq.NewConsumer(topic, channel, cfg)
 	if err != nil {
 		return nil, err
