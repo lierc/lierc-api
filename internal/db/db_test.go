@@ -244,3 +244,127 @@ func TestNotifyHighlights(t *testing.T) {
 		t.Errorf("notification = %+v, %v", n, err)
 	}
 }
+
+func savedConfig(t *testing.T, d *db.DB, id string) string {
+	t.Helper()
+	b, _, err := d.LookupConfig(context.Background(), id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(b)
+}
+
+// liercd's changes replace only the fields they name.
+func TestMergeConfig(t *testing.T) {
+	d := testenv.Postgres(t)
+	ctx := context.Background()
+	testenv.AddConnection(t, d, "c1", "u1", `{"Host":"h","Channels":["#a"]}`)
+	testenv.AddConnection(t, d, "c2", "u1", `[]`)
+
+	if err := d.MergeConfig(ctx, "c1", []byte(`{"Channels":["#b"]}`)); err != nil {
+		t.Fatal(err)
+	}
+	if got := savedConfig(t, d, "c1"); !testenv.SameJSON(got, `{"Host":"h","Channels":["#b"]}`) {
+		t.Errorf("merged %s", got)
+	}
+	if err := d.MergeConfig(ctx, "zz", []byte(`{"Nick":"x"}`)); err != nil {
+		t.Errorf("missing connection: %v", err)
+	}
+	if err := d.MergeConfig(ctx, "c2", []byte(`{"Nick":"x"}`)); err != nil {
+		t.Errorf("non-object config: %v", err)
+	}
+	if got := savedConfig(t, d, "c2"); !testenv.SameJSON(got, `[]`) {
+		t.Errorf("non-object config changed to %s", got)
+	}
+	if err := d.MergeConfig(ctx, "c1", []byte(`[1]`)); err != nil {
+		t.Errorf("non-object fields: %v", err)
+	}
+	if got := savedConfig(t, d, "c1"); !testenv.SameJSON(got, `{"Host":"h","Channels":["#b"]}`) {
+		t.Errorf("non-object fields changed it to %s", got)
+	}
+}
+
+// EditConfig hands the edit the saved config and stores what it returns.
+func TestEditConfig(t *testing.T) {
+	d := testenv.Postgres(t)
+	ctx := context.Background()
+	testenv.AddConnection(t, d, "c1", "u1", `{"Host":"h"}`)
+
+	var saw string
+	found, err := d.EditConfig(ctx, "c1", func(saved []byte) ([]byte, error) {
+		saw = string(saved)
+		return []byte(`{"Host":"new"}`), nil
+	})
+	if err != nil || !found {
+		t.Fatalf("EditConfig = %v, %v", found, err)
+	}
+	if !testenv.SameJSON(saw, `{"Host":"h"}`) {
+		t.Errorf("edit saw %s", saw)
+	}
+	if got := savedConfig(t, d, "c1"); !testenv.SameJSON(got, `{"Host":"new"}`) {
+		t.Errorf("saved %s", got)
+	}
+	var updatedNow bool
+	if err := d.Pool.QueryRow(ctx, `SELECT updated > NOW() - interval '1 minute' FROM connection WHERE id='c1'`).Scan(&updatedNow); err != nil || !updatedNow {
+		t.Errorf("updated is not now (%v)", err)
+	}
+
+	called := false
+	found, err = d.EditConfig(ctx, "zz", func([]byte) ([]byte, error) { called = true; return nil, nil })
+	if err != nil || found || called {
+		t.Errorf("missing connection: found %v, err %v, edit called %v", found, err, called)
+	}
+}
+
+// An edit that fails changes nothing.
+func TestEditConfigRollsBack(t *testing.T) {
+	d := testenv.Postgres(t)
+	testenv.AddConnection(t, d, "c1", "u1", `{"Host":"h"}`)
+	no := errors.New("no")
+	found, err := d.EditConfig(context.Background(), "c1", func([]byte) ([]byte, error) { return []byte(`{"Host":"x"}`), no })
+	if !errors.Is(err, no) || !found {
+		t.Fatalf("EditConfig = %v, %v; want true, the edit's error", found, err)
+	}
+	if got := savedConfig(t, d, "c1"); !testenv.SameJSON(got, `{"Host":"h"}`) {
+		t.Errorf("saved %s after a failed edit", got)
+	}
+}
+
+// A merge made during an edit waits for it, then lands on top: the
+// edit can't overwrite a channel liercd joined meanwhile.
+func TestEditConfigBlocksMerge(t *testing.T) {
+	d := testenv.Postgres(t)
+	ctx := context.Background()
+	testenv.AddConnection(t, d, "c1", "u1", `{"Host":"h","Channels":["#a"]}`)
+
+	inside, release := make(chan struct{}), make(chan struct{})
+	edited := make(chan error, 1)
+	go func() {
+		_, err := d.EditConfig(ctx, "c1", func([]byte) ([]byte, error) {
+			close(inside)
+			<-release
+			return []byte(`{"Host":"edited","Channels":["#a"]}`), nil
+		})
+		edited <- err
+	}()
+	<-inside
+	merged := make(chan error, 1)
+	go func() { merged <- d.MergeConfig(ctx, "c1", []byte(`{"Channels":["#new"]}`)) }()
+	select {
+	case err := <-merged:
+		close(release)
+		<-edited
+		t.Fatalf("merge didn't wait for the edit (%v)", err)
+	case <-time.After(200 * time.Millisecond):
+	}
+	close(release)
+	if err := <-edited; err != nil {
+		t.Fatal(err)
+	}
+	if err := <-merged; err != nil {
+		t.Fatal(err)
+	}
+	if got := savedConfig(t, d, "c1"); !testenv.SameJSON(got, `{"Host":"edited","Channels":["#new"]}`) {
+		t.Errorf("saved %s", got)
+	}
+}

@@ -46,6 +46,8 @@ type Store interface {
 	LookupLiercd(ctx context.Context, id string) (string, error)
 	LookupOwner(ctx context.Context, id string) (string, bool, error)
 	UpdateConfig(ctx context.Context, id string, config []byte) error
+	MergeConfig(ctx context.Context, id string, fields []byte) error
+	EditConfig(ctx context.Context, id string, edit func(saved []byte) ([]byte, error)) (found bool, err error)
 	SetLiercd(ctx context.Context, id, instance string) error
 	SaveConnectionLimited(ctx context.Context, id, user string, config []byte, max int) (bool, error)
 	SaveConnection(ctx context.Context, id, user string, config []byte) error
