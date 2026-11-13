@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"net"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -399,5 +401,42 @@ func TestPortedCommandsNeedNoDB(t *testing.T) {
 		if c.NeedsDB != want {
 			t.Errorf("%s: NeedsDB = %v, want %v", c.Name, c.NeedsDB, want)
 		}
+	}
+}
+
+// revive runs from the liercd units' startup, so it mustn't depend on the
+// API: its liercd calls route through the store, not the admin server.
+func TestReviveRoutesWithoutAdmin(t *testing.T) {
+	h := newHarness(t)
+	u := h.user("recent")
+	h.exec(`UPDATE "user" SET last_login = now() - interval '1 hour' WHERE id = $1`, u)
+	testenv.AddConnection(t, h.db, "stopped", u, `{"Host":"irc.example.com","Port":6667}`)
+
+	closed := httptest.NewServer(nil)
+	closed.Close() // nothing answers at its address
+	cc := h.db.Pool.Config().ConnConfig
+	vars := map[string]string{
+		"POSTGRES_HOST":     net.JoinHostPort(cc.Host, strconv.Itoa(int(cc.Port))),
+		"POSTGRES_USER":     cc.User,
+		"POSTGRES_PASSWORD": cc.Password,
+		"POSTGRES_DB":       cc.Database,
+		"API_ADMIN":         closed.URL,
+		"LIERCD_HOST":       strings.TrimPrefix(h.liercd.URL, "http://"),
+	}
+	var o out
+	sys := o.sys("", true)
+	sys.Getenv = func(k string) string { return vars[k] }
+	if code := Main(context.Background(), []string{"revive"}, sys); code != 0 {
+		t.Fatalf("revive: exit %d: %s", code, o.stderr.String())
+	}
+	if !strings.Contains(o.stdout.String(), "started stopped") {
+		t.Errorf("stdout %q", o.stdout.String())
+	}
+	var got []string
+	for _, c := range h.liercd.Calls() {
+		got = append(got, c.Method+" "+c.Path)
+	}
+	if want := "GET /stopped/status,POST /stopped/create"; strings.Join(got, ",") != want {
+		t.Errorf("liercd calls %v, want %s", got, want)
 	}
 }
