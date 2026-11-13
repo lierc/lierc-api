@@ -35,7 +35,7 @@ func newHarness(t *testing.T) *harness {
 	h := &harness{t: t, db: testenv.Postgres(t), liercd: testenv.FakeLiercd(t), vars: map[string]string{}, hosts: map[string][]string{}}
 	h.env = &Env{
 		Getenv: func(k string) string { return h.vars[k] },
-		DB:     h.db,
+		Store:  h.db,
 		Liercd: &liercd.Client{BaseURL: h.liercd.URL, HTTP: http.DefaultClient},
 		Stdin:  strings.NewReader(""), Stdout: &h.stdout, Stderr: &h.stderr, StdinIsTerminal: true,
 		Resolve: func(ctx context.Context, host string) ([]string, error) { return h.hosts[host], nil },

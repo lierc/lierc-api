@@ -41,7 +41,7 @@ func deleteConnections(ctx context.Context, env *Env, args []string) error {
 		return &UsageError{Msg: "give connection ids as arguments or on stdin"}
 	}
 	out := env.Stdout
-	pool := env.DB.Pool
+	pool := env.pool()
 
 	var found []string
 	for _, id := range ids {

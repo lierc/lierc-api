@@ -51,7 +51,7 @@ func OSSystem() System {
 type Env struct {
 	Config          config.Config
 	Getenv          func(string) string
-	DB              *db.DB
+	Store           db.Store
 	Liercd          *liercd.Client
 	StatsURL        string // API_STATS, default http://127.0.0.1:5009/stats
 	Stdin           io.Reader
@@ -168,7 +168,7 @@ func OpenEnv(ctx context.Context, sys System) (*Env, func(), error) {
 		stats = "http://127.0.0.1:5009/stats"
 	}
 	env := &Env{
-		Config: cfg, Getenv: sys.Getenv, DB: d, Liercd: liercd.NewRouted(liercd.Instances{Main: cfg.LiercdHost, Next: cfg.LiercdNextHost}, d.LookupLiercd), StatsURL: stats,
+		Config: cfg, Getenv: sys.Getenv, Store: d, Liercd: liercd.NewRouted(liercd.Instances{Main: cfg.LiercdHost, Next: cfg.LiercdNextHost}, d.LookupLiercd), StatsURL: stats,
 		Stdin: sys.Stdin, Stdout: sys.Stdout, Stderr: sys.Stderr, StdinIsTerminal: sys.StdinIsTerminal,
 		Resolve: connconfig.SystemResolver, Sleep: sleepCtx,
 		ReadPassword: func() (string, error) {
@@ -262,3 +262,8 @@ func sorted[V any](m map[string]V) []string {
 }
 
 func isNoRows(err error) bool { return errors.Is(err, pgx.ErrNoRows) }
+
+// pool is the database pool, for the commands that still run SQL of their
+// own. They go through the admin API instead; until then they need the
+// Postgres store.
+func (e *Env) pool() *db.Pool { return e.Store.(*db.DB).Pool }

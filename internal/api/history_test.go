@@ -115,7 +115,7 @@ func TestChannelEventsRoutes(t *testing.T) {
 	}
 	o := archive.Options{Keep: 2, Block: 2, MinAge: time.Hour, Now: time.Now()}
 	for n := 0; n < 10; n++ {
-		if _, ok, err := archive.MoveBlock(context.Background(), e.db.Pool.Pool, archive.Channel{Connection: "c1", Channel: "#a"}, o); err != nil || !ok {
+		if _, ok, err := archive.MoveBlock(context.Background(), e.db, archive.Channel{Connection: "c1", Channel: "#a"}, o); err != nil || !ok {
 			break
 		}
 	}

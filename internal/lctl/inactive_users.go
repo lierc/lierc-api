@@ -41,7 +41,7 @@ func inactiveUsers(ctx context.Context, env *Env, args []string) error {
 	cutoff := env.now().Add(-d).UTC()
 	// last_login is a timestamp without a zone, stored in UTC; it's NULL on
 	// some old accounts, listed first as the least recently seen
-	rows, err := env.DB.Pool.Query(ctx, `SELECT u.id, u.username, u.email, u.verified, u.last_login, u.registered,
+	rows, err := env.pool().Query(ctx, `SELECT u.id, u.username, u.email, u.verified, u.last_login, u.registered,
 	    (SELECT count(*) FROM connection c WHERE c."user" = u.id)
 	  FROM "user" u WHERE u.last_login IS NULL OR u.last_login < ($1::timestamptz AT TIME ZONE 'UTC')
 	  ORDER BY u.last_login NULLS FIRST, u.id`, cutoff)

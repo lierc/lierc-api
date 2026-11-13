@@ -53,7 +53,7 @@ func reconnect(ctx context.Context, env *Env, args []string) error {
 // reconnectOne destroys connection id in liercd and creates it again from
 // its saved config. A failed destroy leaves it alone.
 func reconnectOne(ctx context.Context, env *Env, id string) error {
-	config, ok, err := env.DB.LookupConfig(ctx, id)
+	config, ok, err := env.Store.LookupConfig(ctx, id)
 	if err != nil {
 		return fmt.Errorf("looking up %s: %v", id, err)
 	}

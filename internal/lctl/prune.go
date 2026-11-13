@@ -16,13 +16,13 @@ func pruneSeen(ctx context.Context, env *Env, args []string) error {
 	}
 	if !*del {
 		var n int
-		if err := env.DB.Pool.QueryRow(ctx, `SELECT count(*) FROM seen WHERE `+staleSeen).Scan(&n); err != nil {
+		if err := env.pool().QueryRow(ctx, `SELECT count(*) FROM seen WHERE `+staleSeen).Scan(&n); err != nil {
 			return err
 		}
 		fmt.Fprintf(env.Stdout, "%d seen row(s) to delete; run with --delete to delete them\n", n)
 		return nil
 	}
-	tag, err := env.DB.Pool.Exec(ctx, `DELETE FROM seen WHERE `+staleSeen)
+	tag, err := env.pool().Exec(ctx, `DELETE FROM seen WHERE `+staleSeen)
 	if err != nil {
 		return err
 	}

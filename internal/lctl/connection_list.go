@@ -30,7 +30,7 @@ func connectionList(ctx context.Context, env *Env, args []string) error {
 	if stored == "main" {
 		stored = ""
 	}
-	rows, err := env.DB.Pool.Query(ctx, `SELECT c.id, coalesce(nullif(c.liercd, ''), 'main'),
+	rows, err := env.pool().Query(ctx, `SELECT c.id, coalesce(nullif(c.liercd, ''), 'main'),
 	    c."user", coalesce(u.username, ''), c.config::text
 	  FROM connection c LEFT JOIN "user" u ON u.id = c."user"
 	  WHERE ($1 = '' OR coalesce(c.liercd, '') = $2)

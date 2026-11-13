@@ -66,7 +66,7 @@ func connectionInfo(ctx context.Context, env *Env, args []string) error {
 		}
 		var user, config string
 		var username *string
-		err := env.DB.Pool.QueryRow(ctx, `SELECT c."user", c.config::text, u.username FROM connection c
+		err := env.pool().QueryRow(ctx, `SELECT c."user", c.config::text, u.username FROM connection c
 		  LEFT JOIN "user" u ON u.id = c."user" WHERE c.id = $1`, id).Scan(&user, &config, &username)
 		saved := err == nil
 		if err != nil && !isNoRows(err) {
@@ -122,7 +122,7 @@ func connectionInfo(ctx context.Context, env *Env, args []string) error {
 
 // instanceName is the liercd instance a connection is on: "main" or "next".
 func instanceName(ctx context.Context, env *Env, id string) (string, error) {
-	inst, err := env.DB.LookupLiercd(ctx, id)
+	inst, err := env.Store.LookupLiercd(ctx, id)
 	if inst == "" {
 		inst = "main"
 	}

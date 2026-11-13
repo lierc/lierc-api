@@ -39,7 +39,7 @@ func streamStats(ctx context.Context, env *Env, user string, into any) error {
 }
 
 func usernames(ctx context.Context, env *Env, ids []string) (map[string]string, error) {
-	rows, err := env.DB.Pool.Query(ctx, `SELECT id, username FROM "user" WHERE id = ANY($1)`, ids)
+	rows, err := env.pool().Query(ctx, `SELECT id, username FROM "user" WHERE id = ANY($1)`, ids)
 	if err != nil {
 		return nil, err
 	}
@@ -120,7 +120,7 @@ func users(ctx context.Context, env *Env, args []string) error {
 	}
 	for _, arg := range fs.Args() {
 		var w who
-		err := env.DB.Pool.QueryRow(ctx, `SELECT id, username FROM "user" WHERE lower(username) = lower($1)`, arg).Scan(&w.id, &w.name)
+		err := env.pool().QueryRow(ctx, `SELECT id, username FROM "user" WHERE lower(username) = lower($1)`, arg).Scan(&w.id, &w.name)
 		if isNoRows(err) {
 			return fmt.Errorf("unknown user %s", arg)
 		}

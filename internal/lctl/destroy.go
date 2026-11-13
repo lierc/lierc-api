@@ -63,14 +63,14 @@ func destroyAndDelete(ctx context.Context, env *Env, ids []string, settle time.D
 	}
 
 	if len(done) > 0 {
-		tag, err := env.DB.Pool.Exec(ctx, `DELETE FROM log WHERE connection = ANY($1)`, done)
+		tag, err := env.pool().Exec(ctx, `DELETE FROM log WHERE connection = ANY($1)`, done)
 		if err != nil {
 			return len(done), skipped, err
 		}
 		if n := tag.RowsAffected(); n > 0 {
 			fmt.Fprintf(out, "removed %d late log row(s)\n", n)
 		}
-		if _, err := env.DB.Pool.Exec(ctx, `DELETE FROM log_archive WHERE connection = ANY($1)`, done); err != nil {
+		if _, err := env.pool().Exec(ctx, `DELETE FROM log_archive WHERE connection = ANY($1)`, done); err != nil {
 			return len(done), skipped, err
 		}
 	}
@@ -78,7 +78,7 @@ func destroyAndDelete(ctx context.Context, env *Env, ids []string, settle time.D
 }
 
 func deleteRows(ctx context.Context, env *Env, id string, tables []string, where func(string) string) ([]int64, error) {
-	tx, err := env.DB.Pool.Begin(ctx)
+	tx, err := env.pool().Begin(ctx)
 	if err != nil {
 		return nil, err
 	}

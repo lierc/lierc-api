@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/lierc/lierc-api/internal/db"
 	"github.com/lierc/lierc-api/internal/testenv"
 )
 
@@ -23,12 +24,14 @@ func opts() Options {
 }
 
 type tdb struct {
-	t    *testing.T
-	pool *pgxpool.Pool
+	t     *testing.T
+	pool  *pgxpool.Pool
+	store db.Store
 }
 
 func newDB(t *testing.T) *tdb {
-	return &tdb{t: t, pool: testenv.Postgres(t).Pool.Pool}
+	d := testenv.Postgres(t)
+	return &tdb{t: t, pool: d.Pool.Pool, store: d}
 }
 
 func (d *tdb) exec(sql string, args ...any) {
@@ -115,7 +118,7 @@ func moveAll(t *testing.T, d *tdb, c Channel, o Options) []Block {
 	t.Helper()
 	var bs []Block
 	for i := 0; i < 100; i++ {
-		b, ok, err := MoveBlock(context.Background(), d.pool, c, o)
+		b, ok, err := MoveBlock(context.Background(), d.store, c, o)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -221,7 +224,7 @@ func TestMovePerConnection(t *testing.T) {
 	}
 	// c1: 5 messages, keep 3 → 2 movable; c2: 10 messages → 7 movable, but
 	// Candidates counts only up to a block (2).
-	cs, err := Candidates(context.Background(), d.pool, opts())
+	cs, err := Candidates(context.Background(), d.store, opts())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -281,7 +284,7 @@ func TestMoveElements(t *testing.T) {
 
 	o := opts()
 	o.Block = 4
-	b, ok, err := MoveBlock(context.Background(), d.pool, Channel{Connection: "c1", Channel: "#chan"}, o)
+	b, ok, err := MoveBlock(context.Background(), d.store, Channel{Connection: "c1", Channel: "#chan"}, o)
 	if err != nil || !ok {
 		t.Fatalf("MoveBlock: %v %v", ok, err)
 	}
@@ -348,7 +351,7 @@ func TestCandidatesConnections(t *testing.T) {
 	}
 	o := opts()
 	o.Connections = []string{"c1"}
-	cs, err := Candidates(context.Background(), d.pool, o)
+	cs, err := Candidates(context.Background(), d.store, o)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -361,7 +364,7 @@ func TestCandidatesConnections(t *testing.T) {
 	}
 
 	o.Connections = []string{"nope"}
-	cs, err = Candidates(context.Background(), d.pool, o)
+	cs, err = Candidates(context.Background(), d.store, o)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -370,7 +373,7 @@ func TestCandidatesConnections(t *testing.T) {
 	}
 
 	o.Connections = nil
-	cs, err = Candidates(context.Background(), d.pool, o)
+	cs, err = Candidates(context.Background(), d.store, o)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -385,7 +388,7 @@ func TestDropStatus(t *testing.T) {
 		d.insert(i, "c1", "status", old.Add(time.Duration(i)*time.Minute))
 	}
 	o := opts()
-	cs, err := Candidates(context.Background(), d.pool, o)
+	cs, err := Candidates(context.Background(), d.store, o)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -395,16 +398,16 @@ func TestDropStatus(t *testing.T) {
 		t.Fatalf("candidates %+v", cs)
 	}
 
-	if _, _, err := MoveBlock(context.Background(), d.pool, st, o); err == nil {
+	if _, _, err := MoveBlock(context.Background(), d.store, st, o); err == nil {
 		t.Fatal("MoveBlock on a status channel succeeded")
 	}
-	if _, _, err := DropStatus(context.Background(), d.pool, Channel{Connection: "c1", Channel: "#chan"}, o); err == nil {
+	if _, _, err := DropStatus(context.Background(), d.store, Channel{Connection: "c1", Channel: "#chan"}, o); err == nil {
 		t.Fatal("DropStatus on #chan succeeded")
 	}
 
 	var got []Block
 	for i := 0; i < 10; i++ {
-		b, ok, err := DropStatus(context.Background(), d.pool, st, o)
+		b, ok, err := DropStatus(context.Background(), d.store, st, o)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -453,7 +456,7 @@ func TestCandidates(t *testing.T) {
 		d.insert(id, "c1", "status", old.Add(time.Duration(id)*time.Minute))
 		id++
 	}
-	cs, err := Candidates(context.Background(), d.pool, o)
+	cs, err := Candidates(context.Background(), d.store, o)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -468,7 +471,7 @@ func TestMoveConcurrentInsert(t *testing.T) {
 		d.insert(i, "c1", "#chan", old.Add(time.Duration(i)*time.Minute))
 	}
 	o := opts()
-	cs, err := Candidates(context.Background(), d.pool, o)
+	cs, err := Candidates(context.Background(), d.store, o)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -478,7 +481,7 @@ func TestMoveConcurrentInsert(t *testing.T) {
 	// The logger writes a new message after the candidates were chosen.
 	d.insert(6, "c1", "#chan", now)
 
-	b, ok, err := MoveBlock(context.Background(), d.pool, cs[0], o)
+	b, ok, err := MoveBlock(context.Background(), d.store, cs[0], o)
 	if err != nil || !ok {
 		t.Fatalf("MoveBlock: %v %v", ok, err)
 	}
@@ -523,19 +526,19 @@ func TestStarNamesAreStatus(t *testing.T) {
 		}
 	}
 	o := opts()
-	cs, err := Candidates(context.Background(), d.pool, o)
+	cs, err := Candidates(context.Background(), d.store, o)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(cs) != 2 || !cs[0].Status || !cs[1].Status {
 		t.Fatalf("candidates %+v, want both as status windows", cs)
 	}
-	if _, _, err := MoveBlock(context.Background(), d.pool, cs[0], o); err == nil {
+	if _, _, err := MoveBlock(context.Background(), d.store, cs[0], o); err == nil {
 		t.Fatalf("MoveBlock on %s succeeded", cs[0].Channel)
 	}
 	for _, c := range cs {
 		for {
-			_, ok, err := DropStatus(context.Background(), d.pool, c, o)
+			_, ok, err := DropStatus(context.Background(), d.store, c, o)
 			if err != nil {
 				t.Fatal(err)
 			}

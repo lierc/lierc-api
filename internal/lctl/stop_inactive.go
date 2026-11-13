@@ -49,7 +49,7 @@ func stopInactive(ctx context.Context, env *Env, args []string) error {
 
 	cutoff := env.now().Add(-d).UTC()
 	// the same users as inactive-users; last_login is UTC without a zone
-	rows, err := env.DB.Pool.Query(ctx, `SELECT c.id, coalesce(c.liercd, ''), c.config, u.id, u.username
+	rows, err := env.pool().Query(ctx, `SELECT c.id, coalesce(c.liercd, ''), c.config, u.id, u.username
 	  FROM connection c JOIN "user" u ON u.id = c."user"
 	  WHERE u.last_login IS NULL OR u.last_login < ($1::timestamptz AT TIME ZONE 'UTC')
 	  ORDER BY u.last_login NULLS FIRST, u.id, c.id`, cutoff)

@@ -3,6 +3,7 @@ package db
 import (
 	"context"
 	"encoding/json"
+	"time"
 )
 
 // Store is every query the API and the stream server make, so they can run
@@ -74,6 +75,18 @@ type Store interface {
 	Missed(ctx context.Context, user string, es []MissedEntry) (map[string]map[string]MissedCounts, error)
 	SaveWebPush(ctx context.Context, user, endpoint, key, auth string) error
 	DeleteWebPush(ctx context.Context, user, endpoint string) error
+
+	// archive and lctl's maintenance commands
+	ArchiveCandidates(ctx context.Context, keep int, cutoff time.Time, block int, conns []string) ([]ChannelCount, error)
+	ArchiveBlock(ctx context.Context, conn, channel string, keep int, cutoff time.Time, block int) (ArchivedBlock, bool, error)
+	DropStatusBlock(ctx context.Context, conn, channel string, keep int, cutoff time.Time, block int) (ArchivedBlock, bool, error)
+	GoneConnections(ctx context.Context) ([]string, error)
+	GoneUsers(ctx context.Context) ([]string, error)
+	CountOrphanArchive(ctx context.Context) (int, error)
+	DeleteGoneConnectionLogs(ctx context.Context, id string, batch int) (int64, error)
+	DeleteGoneUserLogs(ctx context.Context, id string, batch int) (int64, error)
+	DeleteOrphanArchive(ctx context.Context, batch int) (int64, error)
+	ReviveCandidates(ctx context.Context, since time.Duration, instance string) ([]ReviveConnection, error)
 }
 
 var _ Store = (*DB)(nil)

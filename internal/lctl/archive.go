@@ -73,7 +73,7 @@ func archiveCmd(ctx context.Context, env *Env, args []string) error {
 		return &UsageError{Msg: "--connection needs connection ids"}
 	}
 	for _, id := range ids {
-		_, ok, err := env.DB.LookupConfig(ctx, id)
+		_, ok, err := env.Store.LookupConfig(ctx, id)
 		if err != nil {
 			return fmt.Errorf("looking up %s: %v", id, err)
 		}
@@ -82,9 +82,8 @@ func archiveCmd(ctx context.Context, env *Env, args []string) error {
 		}
 	}
 
-	pool := env.DB.Pool.Pool
 	opts := archive.Options{Keep: *keep, Block: *block, MinAge: age, Now: env.now(), Connections: ids}
-	cands, err := archive.Candidates(ctx, pool, opts)
+	cands, err := archive.Candidates(ctx, env.Store, opts)
 	if err != nil {
 		return err
 	}
@@ -134,9 +133,9 @@ loop:
 			var more bool
 			var err error
 			if c.Status {
-				b, more, err = archive.DropStatus(ctx, pool, c, o)
+				b, more, err = archive.DropStatus(ctx, env.Store, c, o)
 			} else {
-				b, more, err = archive.MoveBlock(ctx, pool, c, o)
+				b, more, err = archive.MoveBlock(ctx, env.Store, c, o)
 			}
 			if err != nil {
 				fmt.Fprintf(out, "stopped at %s %s: %v\n", c.Connection, c.Channel, err)

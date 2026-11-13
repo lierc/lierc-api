@@ -72,7 +72,7 @@ func deleteUsers(ctx context.Context, env *Env, args []string) error {
 		return &UsageError{Msg: "give user ids as arguments or on stdin"}
 	}
 	out := env.Stdout
-	pool := env.DB.Pool
+	pool := env.pool()
 
 	skipped := 0
 	var found []foundUser
@@ -196,7 +196,7 @@ func deleteUsers(ctx context.Context, env *Env, args []string) error {
 }
 
 func deleteUser(ctx context.Context, env *Env, u foundUser) error {
-	tx, err := env.DB.Pool.Begin(ctx)
+	tx, err := env.pool().Begin(ctx)
 	if err != nil {
 		return err
 	}

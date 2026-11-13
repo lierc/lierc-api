@@ -96,7 +96,7 @@ func TestChannelLogsAndBefore(t *testing.T) {
 	}
 	o := archive.Options{Keep: 2, Block: 2, MinAge: time.Hour, Now: time.Now()}
 	for n := 0; ; n++ {
-		_, ok, err := archive.MoveBlock(ctx, d.Pool.Pool, archive.Channel{Connection: "c1", Channel: "#a"}, o)
+		_, ok, err := archive.MoveBlock(ctx, d, archive.Channel{Connection: "c1", Channel: "#a"}, o)
 		if err != nil {
 			t.Fatal(err)
 		}

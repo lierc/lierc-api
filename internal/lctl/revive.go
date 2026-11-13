@@ -60,31 +60,8 @@ func revive(ctx context.Context, env *Env, args []string) error {
 		}
 	}
 
-	// main is a NULL or empty column; "" for --instance means every one
-	stored := *instance
-	if stored == "main" {
-		stored = ""
-	}
-	rows, err := env.DB.Pool.Query(ctx, `SELECT c.id, c.config::text FROM connection c
-	  JOIN "user" u ON u.id = c."user"
-	  WHERE u.last_login > now() - make_interval(secs => $1)
-	    AND ($2 = '' OR coalesce(c.liercd, '') = $3)
-	  ORDER BY c.id`, d.Seconds(), *instance, stored)
+	conns, err := env.Store.ReviveCandidates(ctx, d, *instance)
 	if err != nil {
-		return err
-	}
-	type conn struct{ id, config string }
-	var conns []conn
-	for rows.Next() {
-		var c conn
-		if err := rows.Scan(&c.id, &c.config); err != nil {
-			rows.Close()
-			return err
-		}
-		conns = append(conns, c)
-	}
-	rows.Close()
-	if err := rows.Err(); err != nil {
 		return err
 	}
 
@@ -93,7 +70,7 @@ func revive(ctx context.Context, env *Env, args []string) error {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		status, err := env.Liercd.Do(ctx, http.MethodGet, c.id+"/status", nil)
+		status, err := env.Liercd.Do(ctx, http.MethodGet, c.ID+"/status", nil)
 		if err == nil && status.Status == http.StatusOK {
 			continue
 		}
@@ -105,16 +82,16 @@ func revive(ctx context.Context, env *Env, args []string) error {
 				return err
 			}
 		}
-		res, err := env.Liercd.Do(ctx, http.MethodPost, c.id+"/create", []byte(c.config))
+		res, err := env.Liercd.Do(ctx, http.MethodPost, c.ID+"/create", []byte(c.Config))
 		switch {
 		case err != nil:
-			fmt.Fprintf(env.Stdout, "%s: %v\n", c.id, err)
+			fmt.Fprintf(env.Stdout, "%s: %v\n", c.ID, err)
 			failed++
 		case res.Status != http.StatusOK:
-			fmt.Fprintf(env.Stdout, "%s: %s\n", c.id, statusLine(res.Status))
+			fmt.Fprintf(env.Stdout, "%s: %s\n", c.ID, statusLine(res.Status))
 			failed++
 		default:
-			fmt.Fprintf(env.Stdout, "started %s\n", c.id)
+			fmt.Fprintf(env.Stdout, "started %s\n", c.ID)
 			started++
 		}
 	}

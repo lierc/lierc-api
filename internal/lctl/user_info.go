@@ -37,7 +37,7 @@ func userInfo(ctx context.Context, env *Env, args []string) error {
 		var lastLogin *time.Time  // NULL on some old accounts
 		var registered *time.Time // NULL for accounts from before the column
 		var legacy, hash *string
-		err := env.DB.Pool.QueryRow(ctx, `SELECT id, username, email, verified, last_login, registered, password, password_hash
+		err := env.pool().QueryRow(ctx, `SELECT id, username, email, verified, last_login, registered, password, password_hash
 		  FROM "user" WHERE id = $1 OR lower(username) = lower($1) OR lower(email) = lower($1)
 		  ORDER BY id = $1 DESC LIMIT 1`, who).
 			Scan(&id, &username, &email, &verified, &lastLogin, &registered, &legacy, &hash)
@@ -64,7 +64,7 @@ func userInfo(ctx context.Context, env *Env, args []string) error {
 		fmt.Fprintf(out, "  registered:  %s\n", when(env.now(), registered, "unknown"))
 		fmt.Fprintf(out, "  password:    %s\n", password)
 
-		conns, err := env.DB.Connections(ctx, id)
+		conns, err := env.Store.Connections(ctx, id)
 		if err != nil {
 			return err
 		}

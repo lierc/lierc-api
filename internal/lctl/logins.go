@@ -31,7 +31,7 @@ this only removes the rows.`
 // case-insensitively). Without one it prints "no such user" and returns ok
 // false.
 func findUser(ctx context.Context, env *Env, who string) (id string, ok bool, err error) {
-	err = env.DB.Pool.QueryRow(ctx, `SELECT id FROM "user"
+	err = env.pool().QueryRow(ctx, `SELECT id FROM "user"
 	  WHERE id = $1 OR lower(username) = lower($1) OR lower(email) = lower($1)
 	  ORDER BY id = $1 DESC LIMIT 1`, who).Scan(&id)
 	if isNoRows(err) {
@@ -64,7 +64,7 @@ func logins(ctx context.Context, env *Env, args []string) error {
 	if !ok {
 		return fmt.Errorf("%s: no such user", who)
 	}
-	list, err := login.List(ctx, env.DB, id)
+	list, err := login.List(ctx, env.Store, id)
 	if err != nil {
 		return err
 	}
@@ -120,14 +120,14 @@ func endLogin(ctx context.Context, env *Env, args []string) error {
 		return fmt.Errorf("%s: no such user", who)
 	}
 	if *all {
-		n, err := login.DeleteAll(ctx, env.DB, id)
+		n, err := login.DeleteAll(ctx, env.Store, id)
 		if err != nil {
 			return err
 		}
 		fmt.Fprintf(env.Stdout, "ended %s\n", plural(n, "login", "logins"))
 		return nil
 	}
-	deleted, err := login.Delete(ctx, env.DB, id, loginID)
+	deleted, err := login.Delete(ctx, env.Store, id, loginID)
 	if err != nil {
 		return err
 	}
@@ -147,7 +147,7 @@ func pruneLogins(ctx context.Context, env *Env, args []string) error {
 	if fs.NArg() != 0 {
 		return &UsageError{Msg: "prune-logins takes no arguments"}
 	}
-	n, err := login.Prune(ctx, env.DB)
+	n, err := login.Prune(ctx, env.Store)
 	if err != nil {
 		return err
 	}
