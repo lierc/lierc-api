@@ -3,6 +3,7 @@ package admin
 import (
 	"context"
 	"errors"
+	"log"
 	"net/http"
 	"strconv"
 
@@ -16,6 +17,11 @@ type result struct {
 	Counts map[string]int64 `json:"counts,omitempty"`
 	Ended  *int64           `json:"ended,omitempty"`
 	Pruned *int64           `json:"pruned,omitempty"`
+	// Swept is the late log rows the sweep removed (0 without log_after);
+	// it is not in Counts.
+	Swept *int64 `json:"swept,omitempty"`
+	// SweepError is set when the delete committed but the sweep failed.
+	SweepError string `json:"sweep_error,omitempty"`
 }
 
 func ptr(n int64) *int64 { return &n }
@@ -49,8 +55,8 @@ type deleteFunc func(ctx context.Context, id string) ([]db.ConnectionChange, map
 // remove runs a delete and, once it has committed, announces each deleted
 // connection, then sweeps late log rows if log_after was given. The work is
 // not tied to the request: a client that hangs up mid-way must not leave
-// the stream server unaware of a committed delete. A sweep failure answers
-// 500 after the announcements.
+// the stream server unaware of a committed delete. A sweep failure after the
+// commit still answers 200, with sweep_error: the delete is done.
 func (a *api) remove(w http.ResponseWriter, r *http.Request, del deleteFunc, what string) {
 	after, given, ok := logAfter(w, r)
 	if !ok {
@@ -72,6 +78,7 @@ func (a *api) remove(w http.ResponseWriter, r *http.Request, del deleteFunc, wha
 			a.announce(ctx, c)
 		}
 	}
+	res := result{Status: "ok", Counts: counts, Swept: ptr(0)}
 	if given {
 		user := ""
 		conns := make([]string, 0, len(changes))
@@ -83,12 +90,13 @@ func (a *api) remove(w http.ResponseWriter, r *http.Request, del deleteFunc, wha
 		}
 		n, err := a.store.SweepLateLogs(ctx, user, conns, after)
 		if err != nil {
-			internal(w, "sweep late logs of "+what, err)
-			return
+			log.Printf("admin: sweep late logs of %s: %v", what, err)
+			res.SweepError = "internal error"
+		} else {
+			res.Swept = &n
 		}
-		counts["log"] += n
 	}
-	write(w, http.StatusOK, result{Status: "ok", Counts: counts})
+	write(w, http.StatusOK, res)
 }
 
 func (a *api) deleteUser(w http.ResponseWriter, r *http.Request) {

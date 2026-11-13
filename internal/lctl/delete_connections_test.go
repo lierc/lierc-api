@@ -2,9 +2,9 @@ package lctl
 
 import (
 	"context"
-
 	"errors"
 	"github.com/lierc/lierc-api/internal/db"
+	"net/http"
 	"strings"
 	"testing"
 )
@@ -133,5 +133,74 @@ func TestDeleteConnectionsNotifies(t *testing.T) {
 	}
 	if got := h.announced; len(got) != 1 || got[0] != (db.ConnectionChange{User: u, Connection: "c1", Action: "delete"}) {
 		t.Errorf("announced %+v", got)
+	}
+}
+
+func TestDeleteConnectionsAdminDown(t *testing.T) {
+	h := newHarness(t)
+	h.conn("c1", h.user("ann"), cfg)
+	interceptAdmin(h, func(w http.ResponseWriter, r *http.Request) bool {
+		if r.URL.Path == "/admin/log/last" {
+			hangUp(w)
+			return true
+		}
+		return false
+	})
+	err := h.run("delete-connections", "--delete", "c1")
+	if !errors.Is(err, ErrUnreachable) || !strings.HasSuffix(err.Error(), "); nothing was changed") {
+		t.Fatalf("got %v", err)
+	}
+	h.has("c1 (user ")
+	if calls := h.liercd.Calls(); len(calls) != 0 {
+		t.Errorf("liercd was called: %v", calls)
+	}
+	if n := h.count(`SELECT count(*) FROM connection`); n != 1 {
+		t.Error("connection deleted")
+	}
+}
+
+// The late-row line comes from the API's swept count; log= is the delete's own.
+func TestDeleteConnectionsReportsSwept(t *testing.T) {
+	h := newHarness(t)
+	h.conn("c1", h.user("ann"), cfg)
+	h.liercd.Respond("POST", "/*/destroy", 200, "ok")
+	interceptAdmin(h, func(w http.ResponseWriter, r *http.Request) bool {
+		if r.Method != http.MethodDelete {
+			return false
+		}
+		w.Write([]byte(`{"status":"ok","counts":{"log":1,"seen":1,"private":1,"connection":1},"swept":2}`))
+		return true
+	})
+	if err := h.run("delete-connections", "--delete", "--settle", "0", "c1"); err != nil {
+		t.Fatal(err)
+	}
+	h.has("c1: deleted (log=1 seen=1 private=1 connection=1)\n", "removed 2 late log row(s)\n")
+}
+
+// A sweep that failed after the delete committed is a warning, not a skip.
+func TestDeleteSweepErrorWarns(t *testing.T) {
+	h := newHarness(t)
+	u := h.user("ann")
+	h.conn("c1", u, cfg)
+	h.liercd.Respond("POST", "/*/destroy", 200, "ok")
+	interceptAdmin(h, func(w http.ResponseWriter, r *http.Request) bool {
+		if r.Method != http.MethodDelete {
+			return false
+		}
+		w.Write([]byte(`{"status":"ok","counts":{"log":1,"connection":1},"swept":0,"sweep_error":"internal error"}`))
+		return true
+	})
+	for _, c := range [][]string{{"delete-connections", "--delete", "--settle", "0", "c1"}, {"delete-users", "--delete", "--settle", "0", u}} {
+		if err := h.run(c[0], c[1:]...); err != nil {
+			t.Fatalf("%s: %v", c[0], err)
+		}
+		id := "c1"
+		if c[0] == "delete-users" {
+			id = u
+		}
+		if want := id + ": deleted, but late log rows weren't swept (internal error)\n"; !strings.Contains(h.stderr.String(), want) {
+			t.Errorf("%s: stderr %q, want %q", c[0], h.stderr.String(), want)
+		}
+		h.has(": deleted")
 	}
 }

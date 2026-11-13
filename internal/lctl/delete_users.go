@@ -129,12 +129,7 @@ func deleteUsers(ctx context.Context, env *Env, args []string) error {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		// what the log holds now, so the sweep's rows can be told apart
-		var logBefore int64
-		if c, err := env.Admin.UserCounts(ctx, u.id); err == nil {
-			logBefore = c["log"]
-		}
-		counts, err := env.Admin.DeleteUser(ctx, u.id, logAfter)
+		res, err := env.Admin.DeleteUser(ctx, u.id, logAfter)
 		if errors.Is(err, ErrMaybeDone) {
 			return err
 		}
@@ -143,7 +138,8 @@ func deleteUsers(ctx context.Context, env *Env, args []string) error {
 			skipped++
 			continue
 		}
-		late[u.id] = lateRows(logBefore, counts["log"])
+		late[u.id] = res.Swept
+		warnSweep(env, u.id, res)
 		fmt.Fprintf(out, "%s: deleted\n", u.id)
 		deleted = append(deleted, u)
 	}

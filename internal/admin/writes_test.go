@@ -469,7 +469,14 @@ func TestSweepFailureStillAnnounces(t *testing.T) {
 	h := admin.New(sweepFails{d}, rec.announce)
 	w := httptest.NewRecorder()
 	h.ServeHTTP(w, httptest.NewRequest("DELETE", "/admin/connections/c1?log_after=3", nil))
-	if w.Code != 500 || strings.TrimSpace(w.Body.String()) != `{"error":"internal error"}` {
+	var res struct {
+		Status     string
+		Counts     map[string]int64
+		Swept      int64
+		SweepError string `json:"sweep_error"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &res); err != nil || w.Code != 200 || res.Status != "ok" ||
+		res.SweepError != "internal error" || res.Counts["connection"] != 1 {
 		t.Errorf("%d %s", w.Code, w.Body)
 	}
 	if got := rec.all(); len(got) != 1 || got[0].User != a || got[0].Connection != "c1" {
@@ -507,5 +514,36 @@ func TestLogAfterZeroSweeps(t *testing.T) {
 	}
 	if len(s.calls) != 1 || s.calls[0] != 0 {
 		t.Errorf("sweeps = %v, want one with after 0", s.calls)
+	}
+}
+
+// sweepsTwo is a Store whose late-log sweep removes 2 rows.
+type sweepsTwo struct{ db.Store }
+
+func (sweepsTwo) SweepLateLogs(context.Context, string, []string, int64) (int64, error) {
+	return 2, nil
+}
+
+// swept reports the sweep's rows apart from the delete's own counts; it is 0
+// without log_after.
+func TestDeleteReportsSwept(t *testing.T) {
+	d := testenv.Postgres(t)
+	e := &env{t, d, nil}
+	e.seedUser("alice", "c1", "c2")
+	testenv.AddLog(t, d, 10, "c1", "x")
+	h := admin.New(sweepsTwo{d}, nil)
+	for path, want := range map[string]int64{"/admin/connections/c1?log_after=30": 2, "/admin/connections/c2": 0} {
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, httptest.NewRequest("DELETE", path, nil))
+		var res struct {
+			Counts map[string]int64
+			Swept  *int64
+		}
+		if err := json.Unmarshal(w.Body.Bytes(), &res); err != nil || w.Code != 200 || res.Swept == nil || *res.Swept != want {
+			t.Fatalf("%s: %d %s", path, w.Code, w.Body)
+		}
+		if strings.Contains(path, "log_after") && res.Counts["log"] != 1 {
+			t.Errorf("counts = %v, want the transaction's own log count", res.Counts)
+		}
 	}
 }

@@ -178,30 +178,41 @@ type writeResult struct {
 	Counts map[string]int64 `json:"counts"`
 	Ended  int64            `json:"ended"`
 	Pruned int64            `json:"pruned"`
+	Swept  int64            `json:"swept"`
+	// SweepError is set when the delete committed but its late-log sweep failed.
+	SweepError string `json:"sweep_error"`
+}
+
+// Deleted is what a delete did. Counts are the delete's own rows per table;
+// Swept is the late log rows removed after it. SweepError, if set, says the
+// delete is done but the sweep failed.
+type Deleted struct {
+	Counts     map[string]int64
+	Swept      int64
+	SweepError string
 }
 
 // remove sends a delete; logAfter is the log's last id from before the
 // command began destroying connections.
-func (a *Admin) remove(ctx context.Context, path string, logAfter int64) (map[string]int64, error) {
+func (a *Admin) remove(ctx context.Context, path string, logAfter int64) (Deleted, error) {
 	var out writeResult
 	err := a.do(ctx, http.MethodDelete, path, url.Values{"log_after": {strconv.FormatInt(logAfter, 10)}}, &out)
 	if errors.Is(err, ErrUnreachable) {
 		// the caller has already reached the server (LastLogID), so this
 		// request may have arrived before the connection broke
-		return nil, ErrMaybeDone
+		return Deleted{}, ErrMaybeDone
 	}
-	return out.Counts, err
+	return Deleted{out.Counts, out.Swept, out.SweepError}, err
 }
 
 // DeleteUser deletes a user and their data, then sweeps log rows with an id
-// above logAfter. It returns the rows deleted per table, the sweep's
-// included in "log". ErrNotFound if there is no such user.
-func (a *Admin) DeleteUser(ctx context.Context, id string, logAfter int64) (map[string]int64, error) {
+// above logAfter. It returns what was deleted. ErrNotFound if there is no such user.
+func (a *Admin) DeleteUser(ctx context.Context, id string, logAfter int64) (Deleted, error) {
 	return a.remove(ctx, "/admin/users/"+url.PathEscape(id), logAfter)
 }
 
 // DeleteConnection deletes a connection and its data like DeleteUser.
-func (a *Admin) DeleteConnection(ctx context.Context, id string, logAfter int64) (map[string]int64, error) {
+func (a *Admin) DeleteConnection(ctx context.Context, id string, logAfter int64) (Deleted, error) {
 	return a.remove(ctx, "/admin/connections/"+url.PathEscape(id), logAfter)
 }
 

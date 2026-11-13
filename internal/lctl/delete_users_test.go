@@ -281,18 +281,52 @@ func TestDeleteUsersNotifiesEachConnection(t *testing.T) {
 	}
 }
 
-// With the admin server down, delete-users --delete stops before liercd is
-// touched: nothing was destroyed, nothing deleted.
+// interceptAdmin puts a server in front of the harness's admin server. Each
+// request goes to intercept first; if that returns false it is passed through.
+func interceptAdmin(h *harness, intercept func(w http.ResponseWriter, r *http.Request) bool) {
+	real := h.env.Admin
+	proxy := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if intercept(w, r) {
+			return
+		}
+		var body io.Reader
+		req, _ := http.NewRequest(r.Method, real.BaseURL+r.URL.RequestURI(), body)
+		res, err := real.HTTP.Do(req)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadGateway)
+			return
+		}
+		defer res.Body.Close()
+		w.WriteHeader(res.StatusCode)
+		io.Copy(w, res.Body)
+	}))
+	h.t.Cleanup(proxy.Close)
+	h.env.Admin = &Admin{BaseURL: proxy.URL, HTTP: http.DefaultClient}
+}
+
+func hangUp(w http.ResponseWriter) {
+	if conn, _, err := w.(http.Hijacker).Hijack(); err == nil {
+		conn.Close()
+	}
+}
+
+// With the admin server answering the lookups but not /admin/log/last, a
+// --delete stops before liercd is touched: nothing destroyed, nothing deleted.
 func TestDeleteUsersAdminDown(t *testing.T) {
 	h := newHarness(t)
 	u := seedUser(h, "ann")
-	srv := httptest.NewServer(http.NotFoundHandler())
-	srv.Close()
-	h.env.Admin = &Admin{BaseURL: srv.URL, HTTP: http.DefaultClient}
+	interceptAdmin(h, func(w http.ResponseWriter, r *http.Request) bool {
+		if r.URL.Path == "/admin/log/last" {
+			hangUp(w)
+			return true
+		}
+		return false
+	})
 	err := h.run("delete-users", "--delete", u)
 	if !errors.Is(err, ErrUnreachable) || !strings.HasSuffix(err.Error(), "); nothing was changed") {
 		t.Fatalf("got %v", err)
 	}
+	h.has(u + " (ann, ann@example.com): ") // the lookups were answered
 	if calls := h.liercd.Calls(); len(calls) != 0 {
 		t.Errorf("liercd was called: %v", calls)
 	}
@@ -307,29 +341,17 @@ func TestDeleteMayHaveFinished(t *testing.T) {
 	h := newHarness(t)
 	u := h.user("ann")
 	h.conn("c1", u, cfg)
-	// answers /admin/log/last, hangs up on DELETE, and passes reads to the real server
-	real := h.env.Admin
-	proxy := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	interceptAdmin(h, func(w http.ResponseWriter, r *http.Request) bool {
 		switch {
 		case r.Method == http.MethodDelete:
-			if conn, _, err := w.(http.Hijacker).Hijack(); err == nil {
-				conn.Close()
-			}
+			hangUp(w)
 		case r.URL.Path == "/admin/log/last":
 			w.Write([]byte(`{"id":7}`))
 		default:
-			res, err := real.HTTP.Get(real.BaseURL + r.URL.RequestURI())
-			if err != nil {
-				http.Error(w, err.Error(), http.StatusBadGateway)
-				return
-			}
-			defer res.Body.Close()
-			w.WriteHeader(res.StatusCode)
-			io.Copy(w, res.Body)
+			return false
 		}
-	}))
-	defer proxy.Close()
-	h.env.Admin = &Admin{BaseURL: proxy.URL, HTTP: http.DefaultClient}
+		return true
+	})
 	h.liercd.Respond("POST", "/*/destroy", 200, "ok")
 
 	const want = "the request ended before the API answered; the delete may have finished"
