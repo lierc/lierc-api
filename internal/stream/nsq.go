@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log"
+	"sync"
 	"time"
 
 	"github.com/lierc/lierc-api/internal/ids"
@@ -13,10 +14,12 @@ import (
 // Consume subscribes to topic "logged", whose messages it delivers, and
 // topic "status", liercd's connection state, which it sends as
 // connection:connect and connection:disconnect. Each is on a channel of its
-// own, so every stream process sees every message, until ctx is done. If
-// nsqd is down, at start or later, it retries every NSQReconnect; messages
-// published meanwhile are lost. It returns early only if a consumer cannot
-// be created.
+// own, so every stream process sees every message, until ctx is done; if
+// nsqd is down, at start or later, it retries every NSQReconnect, and
+// messages published meanwhile are lost. It also consumes topic "config",
+// liercd's own config changes, on the durable configChannel, so those
+// queue while the API is away and are saved one at a time, in order. It
+// returns early only if a consumer cannot be created.
 func (s *Server) Consume(ctx context.Context, nsqAddr string) error {
 	status, err := s.consumer("status", func(b []byte) { s.statusChanged(b) })
 	if err != nil {
@@ -26,27 +29,44 @@ func (s *Server) Consume(ctx context.Context, nsqAddr string) error {
 	if err != nil {
 		return err
 	}
-	done := make(chan struct{})
-	go func() { s.connect(ctx, status, nsqAddr); close(done) }()
-	s.connect(ctx, logged, nsqAddr)
-	<-done
+	config, err := s.consumerOn("config", configChannel, s.configChanged)
+	if err != nil {
+		return err
+	}
+	var wg sync.WaitGroup
+	for _, c := range []*nsq.Consumer{status, logged, config} {
+		wg.Add(1)
+		go func() { defer wg.Done(); s.connect(ctx, c, nsqAddr) }()
+	}
+	wg.Wait()
 	return nil
 }
 
+// consumer is a consumer of topic on an ephemeral channel of its own,
+// whose messages are never retried.
 func (s *Server) consumer(topic string, handle func([]byte)) (*nsq.Consumer, error) {
-	channel := "lierc-api-go-" + ids.New() + "#ephemeral"
+	return s.consumerOn(topic, "lierc-api-go-"+ids.New()+"#ephemeral", func(b []byte) error {
+		handle(b)
+		return nil
+	})
+}
+
+// consumerOn is a consumer of topic on channel, one message at a time; a
+// message handle fails is delivered again, NSQReconnect times the
+// attempts later.
+func (s *Server) consumerOn(topic, channel string, handle func([]byte) error) (*nsq.Consumer, error) {
 	cfg := nsq.NewConfig()
 	// Without nsqlookupd, go-nsq waits LookupdPollInterval (default 60s)
 	// before each attempt to reconnect to a lost nsqd.
 	cfg.LookupdPollInterval = s.NSQReconnect
+	cfg.DefaultRequeueDelay = s.NSQReconnect
 	c, err := nsq.NewConsumer(topic, channel, cfg)
 	if err != nil {
 		return nil, err
 	}
 	c.SetLogger(log.New(log.Writer(), "nsq: ", log.LstdFlags), nsq.LogLevelWarning)
 	c.AddHandler(nsq.HandlerFunc(func(m *nsq.Message) error {
-		handle(m.Body)
-		return nil
+		return handle(m.Body)
 	}))
 	return c, nil
 }
