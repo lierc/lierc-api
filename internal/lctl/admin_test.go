@@ -111,7 +111,15 @@ func TestAdminTimeoutSkipsDeletes(t *testing.T) {
 	if _, err := a.DeleteConnection(ctx, "c", 0); err != nil {
 		t.Errorf("DeleteConnection: %v", err)
 	}
-	if _, err := a.LastLogID(ctx); !errors.Is(err, context.DeadlineExceeded) {
-		t.Errorf("LastLogID: want a timeout, got %v", err)
+	// a read that runs out of time is the server not answering: nothing
+	// was changed
+	_, err := a.LastLogID(ctx)
+	if !errors.Is(err, ErrUnreachable) || !strings.Contains(err.Error(), "nothing was changed") {
+		t.Errorf("LastLogID: %v, want the unreachable error", err)
+	}
+	// a write that runs out of time may have been applied
+	_, err = a.PruneLogins(ctx)
+	if err == nil || errors.Is(err, ErrUnreachable) || !strings.Contains(err.Error(), "may have been made") {
+		t.Errorf("PruneLogins: %v, want a may-have-been-made error", err)
 	}
 }

@@ -52,6 +52,7 @@ func (a *Admin) do(ctx context.Context, method, path string, query url.Values, o
 
 // send is do with its own bound; 0 means none.
 func (a *Admin) send(ctx context.Context, timeout time.Duration, method, path string, query url.Values, out any) error {
+	parent := ctx
 	if timeout > 0 {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, timeout)
@@ -67,8 +68,16 @@ func (a *Admin) send(ctx context.Context, timeout time.Duration, method, path st
 	}
 	res, err := a.HTTP.Do(req)
 	if err != nil {
+		if parent.Err() != nil {
+			return parent.Err() // the command was cancelled
+		}
 		if ctx.Err() != nil {
-			return ctx.Err()
+			// our own deadline: a read changed nothing, but a write may
+			// have been applied before the answer was lost
+			if method == http.MethodGet {
+				return &unreachable{fmt.Errorf("no answer within %v", timeout)}
+			}
+			return fmt.Errorf("no answer from the API's admin server within %v; the change may have been made", timeout)
 		}
 		var ue *url.Error
 		if errors.As(err, &ue) {

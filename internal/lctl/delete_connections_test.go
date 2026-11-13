@@ -204,3 +204,18 @@ func TestDeleteSweepErrorWarns(t *testing.T) {
 		h.has(": deleted")
 	}
 }
+
+// A connection deleted by someone else between the lookup and the delete
+// is reported as already gone, not as a failure.
+func TestDeleteConnectionsAlreadyGone(t *testing.T) {
+	h := newHarness(t)
+	h.conn("c1", h.user("ann"), cfg)
+	h.beforeSleep = func() { h.exec(`DELETE FROM connection WHERE id = 'c1'`) }
+	if err := h.run("delete-connections", "--delete", "c1"); err != nil {
+		t.Fatalf("got %v, want no error", err)
+	}
+	h.has("c1: already gone\n", "deleted 1 connection(s), skipped 0\n")
+	if strings.Contains(h.out(), "failed") {
+		t.Errorf("output says failed:\n%s", h.out())
+	}
+}

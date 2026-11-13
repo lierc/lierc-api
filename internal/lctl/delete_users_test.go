@@ -362,3 +362,21 @@ func TestDeleteMayHaveFinished(t *testing.T) {
 		}
 	}
 }
+
+// A user deleted by someone else between the lookup and the delete is
+// reported as already gone, not as a failure.
+func TestDeleteUsersAlreadyGone(t *testing.T) {
+	h := newHarness(t)
+	u := seedUser(h, "ann")
+	h.beforeSleep = func() {
+		h.exec(`DELETE FROM connection WHERE "user" = $1`, u)
+		h.exec(`DELETE FROM "user" WHERE id = $1`, u)
+	}
+	if err := h.run("delete-users", "--delete", u); err != nil {
+		t.Fatalf("got %v, want no error", err)
+	}
+	h.has(u+": already gone\n", "deleted 1 user(s), skipped 0\n")
+	if strings.Contains(h.out(), "failed") {
+		t.Errorf("output says failed:\n%s", h.out())
+	}
+}

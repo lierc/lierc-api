@@ -133,6 +133,12 @@ func deleteUsers(ctx context.Context, env *Env, args []string) error {
 		if errors.Is(err, ErrMaybeDone) {
 			return err
 		}
+		if errors.Is(err, ErrNotFound) {
+			// deleted by someone else since the lookup: what we wanted
+			fmt.Fprintf(out, "%s: already gone\n", u.id)
+			deleted = append(deleted, u)
+			continue
+		}
 		if err != nil {
 			fmt.Fprintf(out, "%s: failed, nothing deleted: %v\n", u.id, err)
 			skipped++
