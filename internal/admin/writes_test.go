@@ -197,7 +197,9 @@ func TestDeleteConnection(t *testing.T) {
 		Status string
 		Counts map[string]int64
 	}
-	json.Unmarshal([]byte(body), &res)
+	if err := json.Unmarshal([]byte(body), &res); err != nil {
+		t.Fatal(err)
+	}
 	if res.Status != "ok" || res.Counts["seen"] != 1 || res.Counts["private"] != 1 || res.Counts["log_archive"] != 1 || res.Counts["connection"] != 1 || res.Counts["log"] < 1 {
 		t.Errorf("body = %s", body)
 	}
@@ -230,10 +232,10 @@ func TestDeleteConnection(t *testing.T) {
 // failing is a Store whose deletes fail.
 type failing struct{ db.Store }
 
-func (failing) DeleteUserData(context.Context, string, int64) ([]db.ConnectionChange, map[string]int64, error) {
+func (failing) DeleteUserData(context.Context, string) ([]db.ConnectionChange, map[string]int64, error) {
 	return nil, nil, errors.New("boom secret detail")
 }
-func (failing) DeleteConnectionData(context.Context, string, int64) ([]db.ConnectionChange, map[string]int64, error) {
+func (failing) DeleteConnectionData(context.Context, string) ([]db.ConnectionChange, map[string]int64, error) {
 	return nil, nil, errors.New("boom secret detail")
 }
 
@@ -273,14 +275,14 @@ type cancelling struct {
 	cancel context.CancelFunc
 }
 
-func (c cancelling) DeleteConnectionData(ctx context.Context, id string, after int64) ([]db.ConnectionChange, map[string]int64, error) {
+func (c cancelling) DeleteConnectionData(ctx context.Context, id string) ([]db.ConnectionChange, map[string]int64, error) {
 	c.cancel()
-	return c.Store.DeleteConnectionData(ctx, id, after)
+	return c.Store.DeleteConnectionData(ctx, id)
 }
 
-func (c cancelling) DeleteUserData(ctx context.Context, id string, after int64) ([]db.ConnectionChange, map[string]int64, error) {
+func (c cancelling) DeleteUserData(ctx context.Context, id string) ([]db.ConnectionChange, map[string]int64, error) {
 	c.cancel()
-	return c.Store.DeleteUserData(ctx, id, after)
+	return c.Store.DeleteUserData(ctx, id)
 }
 
 func TestDeleteSurvivesCancel(t *testing.T) {
@@ -449,5 +451,61 @@ func TestStreamGetsDelete(t *testing.T) {
 		case <-deadline:
 			t.Fatal("no connection:delete")
 		}
+	}
+}
+
+// sweepFails is a Store whose late-log sweep fails.
+type sweepFails struct{ db.Store }
+
+func (sweepFails) SweepLateLogs(context.Context, string, []string, int64) (int64, error) {
+	return 0, errors.New("boom")
+}
+
+func TestSweepFailureStillAnnounces(t *testing.T) {
+	d := testenv.Postgres(t)
+	e := &env{t, d, nil}
+	a := e.seedUser("alice", "c1")
+	rec := &recorder{}
+	h := admin.New(sweepFails{d}, rec.announce)
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, httptest.NewRequest("DELETE", "/admin/connections/c1?log_after=3", nil))
+	if w.Code != 500 || strings.TrimSpace(w.Body.String()) != `{"error":"internal error"}` {
+		t.Errorf("%d %s", w.Code, w.Body)
+	}
+	if got := rec.all(); len(got) != 1 || got[0].User != a || got[0].Connection != "c1" {
+		t.Errorf("announced %v", got)
+	}
+	if n := e.count(`SELECT count(*) FROM connection WHERE id = 'c1'`); n != 0 {
+		t.Errorf("connection remains")
+	}
+}
+
+// sweeps records the sweeps asked for.
+type sweeps struct {
+	db.Store
+	calls []int64
+}
+
+func (s *sweeps) SweepLateLogs(ctx context.Context, user string, conns []string, after int64) (int64, error) {
+	s.calls = append(s.calls, after)
+	return s.Store.SweepLateLogs(ctx, user, conns, after)
+}
+
+// log_after=0 is given (an empty log has last id 0); only its absence skips the sweep.
+func TestLogAfterZeroSweeps(t *testing.T) {
+	d := testenv.Postgres(t)
+	e := &env{t, d, nil}
+	e.seedUser("alice", "c1", "c2")
+	s := &sweeps{Store: d}
+	h := admin.New(s, nil)
+	for _, path := range []string{"/admin/connections/c1", "/admin/connections/c2?log_after=0"} {
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, httptest.NewRequest("DELETE", path, nil))
+		if w.Code != 200 {
+			t.Fatalf("%s: %d %s", path, w.Code, w.Body)
+		}
+	}
+	if len(s.calls) != 1 || s.calls[0] != 0 {
+		t.Errorf("sweeps = %v, want one with after 0", s.calls)
 	}
 }

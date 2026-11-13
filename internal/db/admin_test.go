@@ -286,7 +286,7 @@ func TestDeleteUserData(t *testing.T) {
 	ctx := context.Background()
 	user, _ := seedCounts(t, d)
 	want, _ := d.UserCounts(ctx, user)
-	changes, counts, err := d.DeleteUserData(ctx, user, 0)
+	changes, counts, err := d.DeleteUserData(ctx, user)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -307,7 +307,7 @@ func TestDeleteUserData(t *testing.T) {
 			t.Errorf("%s = %d after delete", k, v)
 		}
 	}
-	if _, _, err := d.DeleteUserData(ctx, user, 0); !errors.Is(err, db.ErrNotFound) {
+	if _, _, err := d.DeleteUserData(ctx, user); !errors.Is(err, db.ErrNotFound) {
 		t.Errorf("again: %v, want ErrNotFound", err)
 	}
 }
@@ -316,7 +316,7 @@ func TestDeleteConnectionData(t *testing.T) {
 	d := testenv.Postgres(t)
 	ctx := context.Background()
 	user, conn := seedCounts(t, d)
-	changes, counts, err := d.DeleteConnectionData(ctx, conn, 0)
+	changes, counts, err := d.DeleteConnectionData(ctx, conn)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -327,7 +327,7 @@ func TestDeleteConnectionData(t *testing.T) {
 	if !reflect.DeepEqual(changes, []db.ConnectionChange{{User: user, Connection: conn, Action: "delete"}}) {
 		t.Errorf("changes = %v", changes)
 	}
-	if _, _, err := d.DeleteConnectionData(ctx, conn, 0); !errors.Is(err, db.ErrNotFound) {
+	if _, _, err := d.DeleteConnectionData(ctx, conn); !errors.Is(err, db.ErrNotFound) {
 		t.Errorf("again: %v, want ErrNotFound", err)
 	}
 }
@@ -338,7 +338,7 @@ func TestDeleteDoesNotNotify(t *testing.T) {
 	d := testenv.Postgres(t)
 	listen := testenv.ListenConnections(t, d)
 	_, conn := seedCounts(t, d)
-	if _, _, err := d.DeleteConnectionData(context.Background(), conn, 0); err != nil {
+	if _, _, err := d.DeleteConnectionData(context.Background(), conn); err != nil {
 		t.Fatal(err)
 	}
 	if got := listen(300 * time.Millisecond); len(got) != 0 {
@@ -358,5 +358,59 @@ func TestPruneStaleSeen(t *testing.T) {
 	}
 	if n, _ := d.StaleSeenCount(ctx); n != 0 {
 		t.Errorf("stale left: %d", n)
+	}
+}
+
+func TestSweepLateLogs(t *testing.T) {
+	d := testenv.Postgres(t)
+	ctx := context.Background()
+	u := testenv.AddUser(t, d, "u")
+	o := testenv.AddUser(t, d, "o")
+	testenv.AddLog(t, d, 5, "c1", u)    // not late
+	testenv.AddLog(t, d, 11, "c1", u)   // late
+	testenv.AddLog(t, d, 12, "c2", u)   // late, the user's other connection
+	testenv.AddLog(t, d, 13, "gone", u) // late, of a connection deleted before
+	testenv.AddLog(t, d, 14, "oc", o)   // late, someone else's
+	exec(t, d, `INSERT INTO log_archive (connection, "user", channel, first_id, last_id, min_time, max_time, count, messages)
+	  VALUES ('c1', '`+u+`', '#a', 1, 1, now(), now(), 1, '[]'), ('oc', '`+o+`', '#a', 1, 1, now(), now(), 1, '[]')`)
+	remaining := func() []int64 {
+		rows, err := d.Pool.Query(ctx, `SELECT id FROM log ORDER BY id`)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer rows.Close()
+		var ids []int64
+		for rows.Next() {
+			var id int64
+			rows.Scan(&id)
+			ids = append(ids, id)
+		}
+		return ids
+	}
+
+	// a connection sweep: only c1's late rows
+	n, err := d.SweepLateLogs(ctx, "", []string{"c1"}, 10)
+	if err != nil || n != 1 {
+		t.Fatalf("connection sweep = %d, %v", n, err)
+	}
+	if got := remaining(); !reflect.DeepEqual(got, []int64{5, 12, 13, 14}) {
+		t.Errorf("after connection sweep: %v", got)
+	}
+	// a user sweep: late rows of the user, including of a deleted connection
+	n, err = d.SweepLateLogs(ctx, u, []string{"c1", "c2"}, 10)
+	if err != nil || n != 2 {
+		t.Fatalf("user sweep = %d, %v", n, err)
+	}
+	if got := remaining(); !reflect.DeepEqual(got, []int64{5, 14}) {
+		t.Errorf("after user sweep: %v", got)
+	}
+	var archived int
+	d.Pool.QueryRow(ctx, `SELECT count(*) FROM log_archive`).Scan(&archived)
+	if archived != 1 {
+		t.Errorf("log_archive rows = %d, want only the other user's", archived)
+	}
+	// after 0 sweeps everything of the connection
+	if n, err := d.SweepLateLogs(ctx, "", []string{"oc"}, 0); err != nil || n != 1 {
+		t.Errorf("after 0 = %d, %v", n, err)
 	}
 }

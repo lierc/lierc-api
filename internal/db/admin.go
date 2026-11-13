@@ -1,12 +1,12 @@
 package db
 
 import (
-	"errors"
-
 	"context"
 	"encoding/json"
-	"github.com/jackc/pgx/v5"
+	"errors"
 	"time"
+
+	"github.com/jackc/pgx/v5"
 )
 
 // The reads behind the admin API (and so lctl). Each is the query one of
@@ -203,12 +203,11 @@ func deleteFrom(ctx context.Context, tx pgx.Tx, counts map[string]int64, key, ta
 // DeleteUserData deletes user id and everything of theirs in one
 // transaction: log and log_archive (also the rows of connections deleted
 // before the user, which carry the user's id), seen, private, pref,
-// web_push, connection, login and the user. It then sweeps log rows with
-// id > logAfter (if logAfter > 0) that the logger wrote late, and returns a
-// delete change for each connection, to announce once this has returned,
-// with the number of rows deleted per table. ErrNotFound if there is no
+// web_push, connection, login and the user. It returns a delete change for
+// each connection, to announce once this has returned, with the number of
+// rows deleted per table. SweepLateLogs catches log rows written after. ErrNotFound if there is no
 // such user. It sends no pg_notify.
-func (d *DB) DeleteUserData(ctx context.Context, id string, logAfter int64) ([]ConnectionChange, map[string]int64, error) {
+func (d *DB) DeleteUserData(ctx context.Context, id string) ([]ConnectionChange, map[string]int64, error) {
 	tx, err := d.Pool.Begin(ctx)
 	if err != nil {
 		return nil, nil, err
@@ -269,21 +268,14 @@ func (d *DB) DeleteUserData(ctx context.Context, id string, logAfter int64) ([]C
 	if err := tx.Commit(ctx); err != nil {
 		return nil, nil, err
 	}
-
-	if logAfter > 0 {
-		if err := d.sweepLate(ctx, counts, logAfter, id, conns); err != nil {
-			return nil, nil, err
-		}
-	}
 	return changes, counts, nil
 }
 
 // DeleteConnectionData deletes connection id and its log, log_archive, seen
-// and private rows in one transaction, then sweeps late log rows as
-// DeleteUserData does. It returns the connection's delete change and the
+// and private rows in one transaction. It returns the connection's delete change and the
 // rows deleted per table. ErrNotFound if there is no such connection. It
 // sends no pg_notify.
-func (d *DB) DeleteConnectionData(ctx context.Context, id string, logAfter int64) ([]ConnectionChange, map[string]int64, error) {
+func (d *DB) DeleteConnectionData(ctx context.Context, id string) ([]ConnectionChange, map[string]int64, error) {
 	tx, err := d.Pool.Begin(ctx)
 	if err != nil {
 		return nil, nil, err
@@ -313,29 +305,22 @@ func (d *DB) DeleteConnectionData(ctx context.Context, id string, logAfter int64
 	if err := tx.Commit(ctx); err != nil {
 		return nil, nil, err
 	}
-	if logAfter > 0 {
-		if err := d.sweepLate(ctx, counts, logAfter, "", []string{id}); err != nil {
-			return nil, nil, err
-		}
-	}
 	return []ConnectionChange{{User: owner, Connection: id, Action: "delete"}}, counts, nil
 }
 
-// sweepLate deletes the log rows of user (none when empty) or of conns newer than logAfter: ones the logger wrote after the
-// delete. It looks only at those, by id, so it reads seconds of log. It
-// also clears log_archive of the same rows' owners.
-func (d *DB) sweepLate(ctx context.Context, counts map[string]int64, logAfter int64, user string, conns []string) error {
+// SweepLateLogs deletes the log rows with id > after that the logger wrote
+// once a delete had begun: those of user (none when empty) or of
+// connections. It looks only at those, by id, so it reads seconds of log.
+// It also clears the log_archive rows of the same owners, which the
+// archiver may have moved since. It returns the log rows deleted.
+func (d *DB) SweepLateLogs(ctx context.Context, user string, connections []string, after int64) (int64, error) {
 	const cond = `($1::text <> '' AND "user" = $1) OR connection = ANY($2)`
-	tag, err := d.Pool.Exec(ctx, `DELETE FROM log WHERE id > $3 AND (`+cond+`)`, user, conns, logAfter)
+	tag, err := d.Pool.Exec(ctx, `DELETE FROM log WHERE id > $3 AND (`+cond+`)`, user, connections, after)
 	if err != nil {
-		return err
+		return 0, err
 	}
-	counts["log"] += tag.RowsAffected()
-	// the archiver may have moved some of them since
-	tag, err = d.Pool.Exec(ctx, `DELETE FROM log_archive WHERE `+cond, user, conns)
-	if err != nil {
-		return err
+	if _, err := d.Pool.Exec(ctx, `DELETE FROM log_archive WHERE `+cond, user, connections); err != nil {
+		return 0, err
 	}
-	counts["log_archive"] += tag.RowsAffected()
-	return nil
+	return tag.RowsAffected(), nil
 }
