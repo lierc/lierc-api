@@ -1,12 +1,7 @@
-// Package passwords hashes and checks passwords, and converts the legacy
-// hashes of the Perl API (Util::hash_password) into standard bcrypt strings.
+// Package passwords hashes and checks passwords (bcrypt, cost 12).
 package passwords
 
 import (
-	"encoding/base64"
-	"encoding/hex"
-	"errors"
-	"fmt"
 	"strings"
 
 	"golang.org/x/crypto/bcrypt"
@@ -22,8 +17,6 @@ const (
 	// when a login matches no user, so that case takes as long as the others.
 	Dummy = "$2b$12$iTKU3aaMiT3Vi52s2w3Xn.2gy1gF6/6pKUgHg/.dMCAsrp43MwrkG"
 )
-
-var bcryptB64 = base64.NewEncoding("./ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789").WithPadding(base64.NoPadding)
 
 func cut(pw string) []byte {
 	if len(pw) > maxBytes {
@@ -50,22 +43,4 @@ func Check(pw, hash string) bool {
 func NeedsRehash(hash string) bool {
 	c, err := bcrypt.Cost([]byte(hash))
 	return err != nil || c != cost
-}
-
-// FromLegacy turns the hex digest Util::hash_password made with secret into
-// the equivalent $2b$15$ bcrypt string. The salt there was the secret padded
-// on the left with spaces to 16 bytes, and the digest is bcrypt's 23 raw bytes.
-func FromLegacy(secret, legacyHex string) (string, error) {
-	salt := fmt.Sprintf("%16s", secret)
-	if len(salt) > 16 {
-		return "", errors.New("secret is longer than 16 bytes")
-	}
-	if len(legacyHex) != 46 {
-		return "", errors.New("legacy hash isn't 46 hex characters")
-	}
-	raw, err := hex.DecodeString(legacyHex)
-	if err != nil {
-		return "", errors.New("legacy hash isn't hex")
-	}
-	return "$2b$15$" + bcryptB64.EncodeToString([]byte(salt)) + bcryptB64.EncodeToString(raw), nil
 }

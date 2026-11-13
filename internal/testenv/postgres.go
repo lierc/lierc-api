@@ -159,7 +159,7 @@ func AddUser(t testing.TB, d *db.DB, name string) string {
 	t.Helper()
 	var id string
 	err := d.Pool.QueryRow(context.Background(),
-		`INSERT INTO "user" (id, username, email, password, verified) VALUES (substr(md5(random()::text), 1, 22), $1, $2, 'x', true) RETURNING id`,
+		`INSERT INTO "user" (id, username, email, verified) VALUES (substr(md5(random()::text), 1, 22), $1, $2, true) RETURNING id`,
 		name, name+"@example.com").Scan(&id)
 	if err != nil {
 		t.Fatal(err)

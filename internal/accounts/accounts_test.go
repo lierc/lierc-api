@@ -137,6 +137,17 @@ func (h *harness) verified(id string) *bool {
 
 func ptr(b bool) *bool { return &b }
 
+// otherCostHash is a bcrypt hash of pw at cost 13, which Login rehashes to
+// cost 12 (accounts converted from the Perl API's hashes are at 15).
+func otherCostHash(t *testing.T, pw string) string {
+	t.Helper()
+	b, err := bcrypt.GenerateFromPassword([]byte(pw), 13)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(b)
+}
+
 func wantError(t *testing.T, err error, code int, msg string) {
 	t.Helper()
 	e, ok := IsError(err)
@@ -185,9 +196,9 @@ func TestLogin(t *testing.T) {
 		t.Errorf("checks with no user = %v, want the dummy hash once", c)
 	}
 
-	// a legacy-only row (password_hash NULL) never matches
-	testenv.AddUser(t, h.d, "legacy")
-	_, err = h.s.Login(ctx, "legacy", "x")
+	// an account with no password (password_hash NULL) never matches
+	testenv.AddUser(t, h.d, "nopass")
+	_, err = h.s.Login(ctx, "nopass", "x")
 	wantError(t, err, 401, "Invalid email or password")
 }
 
@@ -204,23 +215,18 @@ func TestShow(t *testing.T) {
 
 func TestLoginRehash(t *testing.T) {
 	h := setup(t)
-	// testdata/fixtures/legacy_hashes.json's first entry
-	conv, err := passwords.FromLegacy("0123456789abcdef", "25748e912f5c4c18b6aec0b348aa867778c7d71f976a91")
-	if err != nil {
-		t.Fatal(err)
-	}
+	// a hash at another cost, as the Perl conversion left them ($2b$15$)
+	conv := otherCostHash(t, "correct horse")
 	id := h.addUserHash("conv", "conv@example.com", conv, ptr(true))
-	h.exec(`UPDATE "user" SET password='oldlegacy' WHERE id=$1`, id)
 
 	u, err := h.s.Login(ctx, "conv", "correct horse")
 	if err != nil || u.ID != id {
 		t.Fatalf("Login with the converted hash = %+v, %v", u, err)
 	}
 	var hash string
-	var legacy *string
-	h.d.Pool.QueryRow(ctx, `SELECT password_hash, password FROM "user" WHERE id=$1`, id).Scan(&hash, &legacy)
-	if c, err := bcrypt.Cost([]byte(hash)); err != nil || c != 12 || legacy != nil {
-		t.Errorf("after login: hash %q (cost %d, %v), password %v", hash, c, err, legacy)
+	h.d.Pool.QueryRow(ctx, `SELECT password_hash FROM "user" WHERE id=$1`, id).Scan(&hash)
+	if c, err := bcrypt.Cost([]byte(hash)); err != nil || c != 12 {
+		t.Errorf("after login: hash %q (cost %d, %v)", hash, c, err)
 	}
 
 	checks := countChecks(t)
@@ -236,7 +242,7 @@ func TestLoginRehash(t *testing.T) {
 
 func TestLoginRehashLostRace(t *testing.T) {
 	h := setup(t)
-	conv, _ := passwords.FromLegacy("0123456789abcdef", "25748e912f5c4c18b6aec0b348aa867778c7d71f976a91")
+	conv := otherCostHash(t, "correct horse")
 	id := h.addUserHash("conv", "conv@example.com", conv, ptr(true))
 	// someone else changes the hash between the check and the save
 	old := checkPassword
@@ -504,14 +510,14 @@ func TestReset(t *testing.T) {
 		t.Errorf("body = %q\nwant %q", m[0].Body, want)
 	}
 
-	// a legacy-only user's fingerprint is its password column
-	leg := testenv.AddUser(t, h.d, "legacy")
-	if err := h.s.Reset(ctx, "legacy@example.com"); err != nil {
+	// an account with no password gets a link fingerprinted with ""
+	np := testenv.AddUser(t, h.d, "nopass")
+	if err := h.s.Reset(ctx, "nopass@example.com"); err != nil {
 		t.Fatal(err)
 	}
-	tok := MakeToken(secret, "reset", leg, "x", now.Unix()+ResetLifetime)
+	tok := MakeToken(secret, "reset", np, "", now.Unix()+ResetLifetime)
 	if m := h.mail.all(); len(m) != 2 || !strings.Contains(m[1].Body, "/reset/#"+tok+"\n") {
-		t.Errorf("legacy reset mail = %+v", m)
+		t.Errorf("no-password reset mail = %+v", m)
 	}
 }
 
@@ -551,18 +557,19 @@ func TestResetConfirm(t *testing.T) {
 	}
 	wantError(t, nil2(h.s.ResetConfirm(ctx, token, "again")), 400, "This reset link has expired or was already used. Request a new one.")
 
-	// a legacy-only user resets through the password column
-	leg := testenv.AddUser(t, h.d, "legacy")
-	if _, err := h.s.ResetConfirm(ctx, MakeToken(secret, "reset", leg, "x", time.Now().Unix()+60), "fresh"); err != nil {
-		t.Errorf("legacy reset: %v", err)
+	// an account with no password resets with a link fingerprinted "",
+	// and the link stops working once it has a password
+	np := testenv.AddUser(t, h.d, "nopass")
+	npTok := MakeToken(secret, "reset", np, "", time.Now().Unix()+60)
+	if _, err := h.s.ResetConfirm(ctx, npTok, "fresh"); err != nil {
+		t.Errorf("no-password reset: %v", err)
 	}
-	var legacy *string
-	h.d.Pool.QueryRow(ctx, `SELECT password FROM "user" WHERE id=$1`, leg).Scan(&legacy)
-	if _, err := h.s.Login(ctx, "legacy", "fresh"); err != nil || legacy != nil {
-		t.Errorf("legacy after reset: %v, password %v", err, legacy)
+	if _, err := h.s.Login(ctx, "nopass", "fresh"); err != nil {
+		t.Errorf("no-password user after reset: %v", err)
 	}
-	if n := len(h.connections(leg)); n != 0 {
-		t.Errorf("already-verified legacy user got %d connections", n)
+	wantError(t, nil2(h.s.ResetConfirm(ctx, npTok, "again")), 400, "This reset link has expired or was already used. Request a new one.")
+	if n := len(h.connections(np)); n != 0 {
+		t.Errorf("already-verified user got %d connections", n)
 	}
 }
 

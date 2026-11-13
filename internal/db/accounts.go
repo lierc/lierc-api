@@ -18,11 +18,10 @@ type Account struct {
 	Verified            *bool
 }
 
-// AccountAuth is an Account with its stored passwords: Password is the
-// legacy one, PasswordHash the current one.
+// AccountAuth is an Account with its stored bcrypt password hash, nil for
+// an account with no password (one that has to reset it).
 type AccountAuth struct {
 	Account
-	Password     *string
 	PasswordHash *string
 }
 
@@ -41,7 +40,7 @@ func (d *DB) AccountByID(ctx context.Context, id string) (Account, bool, error) 
 // case.
 func (d *DB) AccountsByLogin(ctx context.Context, name string) ([]AccountAuth, error) {
 	rows, err := d.Pool.Query(ctx,
-		`SELECT id, username, email, verified, password, password_hash FROM "user" WHERE lower(email) = lower($1) OR lower(username) = lower($1)`,
+		`SELECT id, username, email, verified, password_hash FROM "user" WHERE lower(email) = lower($1) OR lower(username) = lower($1)`,
 		name)
 	if err != nil {
 		return nil, err
@@ -50,7 +49,7 @@ func (d *DB) AccountsByLogin(ctx context.Context, name string) ([]AccountAuth, e
 	var out []AccountAuth
 	for rows.Next() {
 		var r AccountAuth
-		if err := rows.Scan(&r.ID, &r.Username, &r.Email, &r.Verified, &r.Password, &r.PasswordHash); err != nil {
+		if err := rows.Scan(&r.ID, &r.Username, &r.Email, &r.Verified, &r.PasswordHash); err != nil {
 			return nil, err
 		}
 		out = append(out, r)
@@ -62,8 +61,8 @@ func (d *DB) AccountsByLogin(ctx context.Context, name string) ([]AccountAuth, e
 func (d *DB) AccountAuthByEmail(ctx context.Context, email string) (AccountAuth, bool, error) {
 	var a AccountAuth
 	err := d.Pool.QueryRow(ctx,
-		`SELECT id, username, email, password, password_hash FROM "user" WHERE lower(email) = lower($1)`, email).
-		Scan(&a.ID, &a.Username, &a.Email, &a.Password, &a.PasswordHash)
+		`SELECT id, username, email, password_hash FROM "user" WHERE lower(email) = lower($1)`, email).
+		Scan(&a.ID, &a.Username, &a.Email, &a.PasswordHash)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return AccountAuth{}, false, nil
 	}
@@ -73,8 +72,8 @@ func (d *DB) AccountAuthByEmail(ctx context.Context, email string) (AccountAuth,
 // AccountAuthByID finds the user with id. Verified is not read.
 func (d *DB) AccountAuthByID(ctx context.Context, id string) (AccountAuth, bool, error) {
 	var a AccountAuth
-	err := d.Pool.QueryRow(ctx, `SELECT id, username, email, password, password_hash FROM "user" WHERE id=$1`, id).
-		Scan(&a.ID, &a.Username, &a.Email, &a.Password, &a.PasswordHash)
+	err := d.Pool.QueryRow(ctx, `SELECT id, username, email, password_hash FROM "user" WHERE id=$1`, id).
+		Scan(&a.ID, &a.Username, &a.Email, &a.PasswordHash)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return AccountAuth{}, false, nil
 	}
@@ -122,11 +121,10 @@ type Execer interface {
 	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
 }
 
-func replacePasswordHash(ctx context.Context, q Execer, id, hash string, oldHash, oldPassword *string) (int64, error) {
+func replacePasswordHash(ctx context.Context, q Execer, id, hash string, oldHash *string) (int64, error) {
 	tag, err := q.Exec(ctx,
-		`UPDATE "user" SET password_hash=$2, password=NULL
-		 WHERE id=$1 AND password_hash IS NOT DISTINCT FROM $3 AND password IS NOT DISTINCT FROM $4`,
-		id, hash, oldHash, oldPassword)
+		`UPDATE "user" SET password_hash=$2 WHERE id=$1 AND password_hash IS NOT DISTINCT FROM $3`,
+		id, hash, oldHash)
 	if err != nil {
 		return 0, err
 	}
@@ -144,11 +142,10 @@ func markVerified(ctx context.Context, q Execer, id string) (bool, error) {
 	return tag.RowsAffected() == 1, nil
 }
 
-// ReplacePasswordHash saves hash, and no legacy password, only if the stored
-// ones are still oldHash and oldPassword. It reports whether it changed the
-// user.
-func (d *DB) ReplacePasswordHash(ctx context.Context, id, hash string, oldHash, oldPassword *string) (bool, error) {
-	n, err := replacePasswordHash(ctx, d.Pool, id, hash, oldHash, oldPassword)
+// ReplacePasswordHash saves hash only if the stored one is still oldHash
+// (nil: none). It reports whether it changed the user.
+func (d *DB) ReplacePasswordHash(ctx context.Context, id, hash string, oldHash *string) (bool, error) {
+	n, err := replacePasswordHash(ctx, d.Pool, id, hash, oldHash)
 	return n > 0, err
 }
 
@@ -163,13 +160,13 @@ func (d *DB) MarkVerified(ctx context.Context, id string) (bool, error) {
 // user, MarkVerified and the end of every login of the user, whoever held
 // the old password, all in one transaction. firstVerify is MarkVerified's
 // answer.
-func (d *DB) ReplacePasswordAndVerify(ctx context.Context, id, hash string, oldHash, oldPassword *string) (changed, firstVerify bool, err error) {
+func (d *DB) ReplacePasswordAndVerify(ctx context.Context, id, hash string, oldHash *string) (changed, firstVerify bool, err error) {
 	tx, err := d.Pool.Begin(ctx)
 	if err != nil {
 		return false, false, err
 	}
 	defer tx.Rollback(context.WithoutCancel(ctx))
-	n, err := replacePasswordHash(ctx, tx, id, hash, oldHash, oldPassword)
+	n, err := replacePasswordHash(ctx, tx, id, hash, oldHash)
 	if err != nil {
 		return false, false, err
 	}

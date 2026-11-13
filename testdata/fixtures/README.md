@@ -11,9 +11,8 @@ Digest::Bcrypt 1.212, JSON::XS 4.04, Data::UUID 1.227 and Math::BaseConvert
 for `auth.json`. The cookie `expires`, the cookie id/time prefix and the uuid
 samples were random per run.
 
-The files: `cookies.json` and `ids.json` (below), `legacy_hashes.json` (the
-legacy password hashes `lctl convert-legacy-passwords` rewrites), and
-`auth.json` (signed tokens, `is_email` and `irc_nick` answers).
+The files: `cookies.json` and `ids.json` (below), and `auth.json` (signed
+tokens, `is_email` and `irc_nick` answers).
 
 ## cookies.json
 

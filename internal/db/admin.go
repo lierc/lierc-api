@@ -19,7 +19,7 @@ type UserRow struct {
 	LastLogin           *time.Time // NULL on some old accounts; UTC
 	Registered          *time.Time // NULL for accounts from before the column; UTC
 	Connections         int
-	Password            string // how it's stored: "bcrypt", "legacy" or "none"
+	Password            string // "bcrypt", or "none" for an account that has to reset it
 }
 
 // UserFilter narrows ListUsers. A nil field doesn't filter; a non-nil empty
@@ -31,8 +31,7 @@ type UserFilter struct {
 
 const userColumns = `u.id, u.username, u.email, u.verified, u.last_login, u.registered,
 	(SELECT count(*) FROM connection c WHERE c."user" = u.id),
-	CASE WHEN coalesce(u.password_hash, '') <> '' THEN 'bcrypt'
-	     WHEN coalesce(u.password, '') <> '' THEN 'legacy' ELSE 'none' END`
+	CASE WHEN coalesce(u.password_hash, '') <> '' THEN 'bcrypt' ELSE 'none' END`
 
 // userOrder is inactive-users' order: never logged in first, then the
 // oldest login.

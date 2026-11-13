@@ -34,7 +34,7 @@ func TestAccountLookups(t *testing.T) {
 		}
 	}
 	e, ok, err := d.AccountAuthByEmail(ctx, "A@x.test")
-	if err != nil || !ok || e.ID != "u1" || e.Password != nil {
+	if err != nil || !ok || e.ID != "u1" || e.PasswordHash == nil || *e.PasswordHash != "h1" {
 		t.Errorf("by email = %+v %v %v", e, ok, err)
 	}
 	if _, ok, _ := d.AccountAuthByEmail(ctx, "no@x.test"); ok {
@@ -93,14 +93,24 @@ func TestClaimVerifyResend(t *testing.T) {
 func TestReplacePasswordHashAndMarkVerified(t *testing.T) {
 	d := testenv.Postgres(t)
 	ctx := context.Background()
-	exec(t, d, `INSERT INTO "user" (id, username, email, password, password_hash, verified) VALUES ('u1','alice','a@x.test','legacy','h1',NULL)`)
-	if ok, err := d.ReplacePasswordHash(ctx, "u1", "h2", sp("stale"), sp("legacy")); ok || err != nil {
+	exec(t, d, `INSERT INTO "user" (id, username, email, password_hash, verified) VALUES ('u1','alice','a@x.test','h1',NULL), ('u3','carol','c@x.test',NULL,true)`)
+	if ok, err := d.ReplacePasswordHash(ctx, "u1", "h2", sp("stale")); ok || err != nil {
 		t.Errorf("stale replace: %v %v", ok, err)
 	}
-	if ok, err := d.ReplacePasswordHash(ctx, "u1", "h2", sp("h1"), sp("legacy")); !ok || err != nil {
+	if ok, err := d.ReplacePasswordHash(ctx, "u1", "h2", nil); ok || err != nil {
+		t.Errorf("replace expecting no hash, but there is one: %v %v", ok, err)
+	}
+	if ok, err := d.ReplacePasswordHash(ctx, "u1", "h2", sp("h1")); !ok || err != nil {
 		t.Errorf("replace: %v %v", ok, err)
 	}
-	if got := one[string](t, d, `SELECT password_hash || ' ' || (password IS NULL)::text FROM "user"`); got != "h2 true" {
+	// an account with no password: only a replace expecting none applies
+	if ok, err := d.ReplacePasswordHash(ctx, "u3", "h9", sp("h1")); ok || err != nil {
+		t.Errorf("no-password replace expecting a hash: %v %v", ok, err)
+	}
+	if ok, err := d.ReplacePasswordHash(ctx, "u3", "h9", nil); !ok || err != nil {
+		t.Errorf("no-password replace: %v %v", ok, err)
+	}
+	if got := one[string](t, d, `SELECT password_hash FROM "user" WHERE id='u1'`); got != "h2" {
 		t.Errorf("stored %s", got)
 	}
 	// NULL verified becomes true but is not a first verification
@@ -130,7 +140,7 @@ func TestReplacePasswordAndVerify(t *testing.T) {
 	}
 
 	// a stale old hash changes nothing and ends no logins
-	changed, first, err := d.ReplacePasswordAndVerify(ctx, "u1", "h2", sp("stale"), nil)
+	changed, first, err := d.ReplacePasswordAndVerify(ctx, "u1", "h2", sp("stale"))
 	if changed || first || err != nil {
 		t.Fatalf("stale = %v %v %v", changed, first, err)
 	}
@@ -138,7 +148,7 @@ func TestReplacePasswordAndVerify(t *testing.T) {
 		t.Errorf("after stale: %s", got)
 	}
 
-	changed, first, err = d.ReplacePasswordAndVerify(ctx, "u1", "h2", sp("h1"), nil)
+	changed, first, err = d.ReplacePasswordAndVerify(ctx, "u1", "h2", sp("h1"))
 	if !changed || !first || err != nil {
 		t.Fatalf("replace = %v %v %v", changed, first, err)
 	}
@@ -150,8 +160,22 @@ func TestReplacePasswordAndVerify(t *testing.T) {
 	}
 
 	// already verified: changed, but not a first verification
-	changed, first, err = d.ReplacePasswordAndVerify(ctx, "u2", "h3", sp("h"), nil)
+	changed, first, err = d.ReplacePasswordAndVerify(ctx, "u2", "h3", sp("h"))
 	if !changed || first || err != nil {
 		t.Errorf("verified user = %v %v %v", changed, first, err)
+	}
+}
+
+// The Perl API's legacy "password" column is gone: every account's password
+// is a bcrypt password_hash (or none, until it's reset).
+func TestNoLegacyPasswordColumn(t *testing.T) {
+	d := testenv.Postgres(t)
+	var n int
+	if err := d.Pool.QueryRow(context.Background(),
+		`SELECT count(*) FROM information_schema.columns WHERE table_name = 'user' AND column_name = 'password'`).Scan(&n); err != nil {
+		t.Fatal(err)
+	}
+	if n != 0 {
+		t.Errorf("the user table still has a password column")
 	}
 }

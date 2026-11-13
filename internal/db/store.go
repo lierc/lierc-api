@@ -35,9 +35,9 @@ type Store interface {
 	InsertUser(ctx context.Context, id, username, email, hash string) error
 	UserHasConnection(ctx context.Context, user string) (bool, error)
 	ClaimVerifyResend(ctx context.Context, id string, minSeconds float64) (bool, error)
-	ReplacePasswordHash(ctx context.Context, id, hash string, oldHash, oldPassword *string) (bool, error)
+	ReplacePasswordHash(ctx context.Context, id, hash string, oldHash *string) (bool, error)
 	MarkVerified(ctx context.Context, id string) (bool, error)
-	ReplacePasswordAndVerify(ctx context.Context, id, hash string, oldHash, oldPassword *string) (changed, firstVerify bool, err error)
+	ReplacePasswordAndVerify(ctx context.Context, id, hash string, oldHash *string) (changed, firstVerify bool, err error)
 
 	// connections
 	Connections(ctx context.Context, user string) ([]Connection, error)

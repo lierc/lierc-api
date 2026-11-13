@@ -190,7 +190,7 @@ func (s *Service) Login(ctx context.Context, email, pass string) (User, error) {
 
 	checked := false
 	for _, r := range found {
-		// a legacy-only row never matches: those users reset
+		// an account with no password never matches: it has to reset
 		if r.PasswordHash == nil {
 			continue
 		}
@@ -212,14 +212,14 @@ func (s *Service) Login(ctx context.Context, email, pass string) (User, error) {
 	return User{}, userError(401, msgLogin)
 }
 
-// rehash saves a cost-12 hash of pass for r, unless the stored hashes
-// changed since they were read; losing that race isn't an error.
+// rehash saves a cost-12 hash of pass for r, unless the stored hash
+// changed since it was read; losing that race isn't an error.
 func (s *Service) rehash(ctx context.Context, r db.AccountAuth, pass string) error {
 	hash, err := passwords.Hash(pass)
 	if err != nil {
 		return err
 	}
-	_, err = s.Store.ReplacePasswordHash(ctx, r.ID, hash, r.PasswordHash, r.Password)
+	_, err = s.Store.ReplacePasswordHash(ctx, r.ID, hash, r.PasswordHash)
 	return err
 }
 
@@ -383,7 +383,7 @@ func (s *Service) Reset(ctx context.Context, email string) error {
 		return nil
 	}
 	id, name, addr := acct.ID, acct.Username, acct.Email
-	fingerprint := resetFingerprint(acct.PasswordHash, acct.Password)
+	fingerprint := resetFingerprint(acct.PasswordHash)
 	s.after(func() {
 		token := MakeToken(s.Secret, "reset", id, fingerprint, s.now().Unix()+ResetLifetime)
 		body := render(resetTemplate, name, s.SiteURL+"/reset/#"+token)
@@ -397,14 +397,11 @@ func (s *Service) Reset(ctx context.Context, email string) error {
 	return nil
 }
 
-// resetFingerprint is password_hash // password: the token stops working
-// once the password changes.
-func resetFingerprint(hash, password *string) string {
-	switch {
-	case hash != nil:
+// resetFingerprint is the stored password hash ("" for none): the token
+// stops working once the password changes.
+func resetFingerprint(hash *string) string {
+	if hash != nil {
 		return *hash
-	case password != nil:
-		return *password
 	}
 	return ""
 }
@@ -426,8 +423,8 @@ func (s *Service) ResetConfirm(ctx context.Context, token, pass string) (User, e
 	if !ok {
 		return User{}, userError(400, msgResetExpired)
 	}
-	uid, name, hash, password := acct.ID, acct.Username, acct.PasswordHash, acct.Password
-	if !TokenValid(s.Secret, "reset", token, resetFingerprint(hash, password), s.now().Unix()) {
+	uid, name, hash := acct.ID, acct.Username, acct.PasswordHash
+	if !TokenValid(s.Secret, "reset", token, resetFingerprint(hash), s.now().Unix()) {
 		return User{}, userError(400, msgResetExpired)
 	}
 
@@ -439,7 +436,7 @@ func (s *Service) ResetConfirm(ctx context.Context, token, pass string) (User, e
 	if err != nil {
 		return User{}, err
 	}
-	changed, first, err := s.Store.ReplacePasswordAndVerify(ctx, uid, newHash, hash, password)
+	changed, first, err := s.Store.ReplacePasswordAndVerify(ctx, uid, newHash, hash)
 	if err != nil {
 		return User{}, err
 	}

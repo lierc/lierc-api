@@ -40,7 +40,7 @@ func TestListUsers(t *testing.T) {
 	never, old, recent, tie := seedUsers(t, d)
 	testenv.AddConnection(t, d, "c1", old, `{}`)
 	testenv.AddConnection(t, d, "c2", old, `{}`)
-	exec(t, d, `UPDATE "user" SET password_hash = 'h', password = NULL WHERE id = '`+old+`'`)
+	exec(t, d, `UPDATE "user" SET password_hash = 'h' WHERE id = '`+old+`'`)
 	exec(t, d, `UPDATE "user" SET registered = '2019-05-06 07:08:09', verified = NULL WHERE id = '`+old+`'`)
 
 	all, err := d.ListUsers(ctx, db.UserFilter{})
@@ -65,7 +65,7 @@ func TestListUsers(t *testing.T) {
 		o.Registered == nil || !o.Registered.Equal(time.Date(2019, 5, 6, 7, 8, 9, 0, time.UTC)) {
 		t.Errorf("row = %+v", o)
 	}
-	if all[0].LastLogin != nil || all[0].Password != "legacy" {
+	if all[0].LastLogin != nil || all[0].Password != "none" {
 		t.Errorf("never = %+v", all[0])
 	}
 
@@ -88,7 +88,7 @@ func TestListUsers(t *testing.T) {
 func TestListUsersPasswordNone(t *testing.T) {
 	d := testenv.Postgres(t)
 	a := testenv.AddUser(t, d, "a")
-	exec(t, d, `UPDATE "user" SET password = NULL, password_hash = ''`)
+	exec(t, d, `UPDATE "user" SET password_hash = ''`)
 	got, err := d.ListUsers(context.Background(), db.UserFilter{IDs: []string{a}})
 	if err != nil || len(got) != 1 || got[0].Password != "none" {
 		t.Errorf("got %+v, %v", got, err)

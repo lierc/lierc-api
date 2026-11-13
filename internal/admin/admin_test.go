@@ -115,13 +115,11 @@ func TestLookupUsersBoth(t *testing.T) {
 
 func TestUserDetail(t *testing.T) {
 	e := newEnv(t)
-	a := testenv.AddUser(t, e.d, "alice") // legacy password 'x'
+	a := testenv.AddUser(t, e.d, "alice") // no password
 	b := testenv.AddUser(t, e.d, "bob")
-	c := testenv.AddUser(t, e.d, "carol")
-	e.exec(`UPDATE "user" SET password_hash = 'h', password = NULL WHERE id = '` + b + `'`)
-	e.exec(`UPDATE "user" SET password_hash = NULL, password = NULL WHERE id = '` + c + `'`)
+	e.exec(`UPDATE "user" SET password_hash = 'h' WHERE id = '` + b + `'`)
 	testenv.AddConnection(t, e.d, "c1", a, `{"Host":"h.example","Port":6667}`)
-	for id, want := range map[string]string{a: "legacy", b: "bcrypt", c: "none"} {
+	for id, want := range map[string]string{a: "none", b: "bcrypt"} {
 		var d admin.UserDetail
 		e.getJSON("/admin/users/"+id, &d)
 		if d.ID != id || d.Password != want {
@@ -134,7 +132,7 @@ func TestUserDetail(t *testing.T) {
 		d.ConnectionList[0].Port != 6667 || d.Connections != 1 {
 		t.Errorf("detail = %+v", d)
 	}
-	_, body := e.get("/admin/users/" + c)
+	_, body := e.get("/admin/users/" + b)
 	if !strings.Contains(body, `"connection_list":[]`) || strings.Contains(body, "hash") {
 		t.Errorf("body = %s", body)
 	}

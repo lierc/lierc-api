@@ -11,7 +11,7 @@ func TestUserInfo(t *testing.T) {
 	now := time.Date(2026, 11, 2, 12, 0, 0, 0, time.UTC)
 	h.env.Now = func() time.Time { return now }
 	u := h.user("Ann")
-	h.exec(`UPDATE "user" SET last_login = $2, verified = true, password = NULL, password_hash = '$2a$12$x', registered = $3 WHERE id = $1`,
+	h.exec(`UPDATE "user" SET last_login = $2, verified = true, password_hash = '$2a$12$x', registered = $3 WHERE id = $1`,
 		u, now.Add(-3*24*time.Hour-2*time.Hour), now.Add(-40*24*time.Hour))
 	h.conn("c1", u, `{"Host":"irc.libera.chat","Port":6697,"Nick":"ann","Ssl":true,"SASL":true,"User":"ann","Pass":"hunter2","Alias":"Libera","Channels":["#a","#b"]}`)
 	h.conn("c2", u, `{"Host":"irc.relaychat.party","Port":6667,"Nick":"ann_"}`)
@@ -58,14 +58,14 @@ func TestUserInfoAges(t *testing.T) {
 	}
 }
 
-func TestUserInfoUnknownAndLegacy(t *testing.T) {
+func TestUserInfoUnknownAndNoPassword(t *testing.T) {
 	h := newHarness(t)
-	u := h.user("bob") // testenv users have a legacy plain password
+	u := h.user("bob") // testenv users have no password
 	h.exec(`UPDATE "user" SET verified = false WHERE id = $1`, u)
 	if err := h.run("user-info", "bob", "nobody"); err == nil {
 		t.Fatal("no error for an unknown user")
 	}
-	h.has("bob ("+u+")\n", "  email:       bob@example.com (unverified)\n", "  password:    legacy (not yet moved to bcrypt)\n",
+	h.has("bob ("+u+")\n", "  email:       bob@example.com (unverified)\n", "  password:    none\n",
 		"  connections: 0\n", "nobody: no such user\n")
 	if !strings.Contains(h.out(), "  last login:  ") {
 		t.Error("no last login line")

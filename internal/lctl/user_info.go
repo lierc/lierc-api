@@ -45,11 +45,8 @@ func userInfo(ctx context.Context, env *Env, args []string) error {
 		}
 
 		password := "none"
-		switch u.Password {
-		case "bcrypt":
+		if u.Password == "bcrypt" {
 			password = "bcrypt"
-		case "legacy":
-			password = "legacy (not yet moved to bcrypt)"
 		}
 		fmt.Fprintf(out, "%s (%s)\n", u.Username, u.ID)
 		fmt.Fprintf(out, "  email:       %s (%s)\n", u.Email, verifiedState(u.Verified))
