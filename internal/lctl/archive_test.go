@@ -10,8 +10,8 @@ import (
 // messages in #a (ids come in insertion order), and returns the user.
 func seedArchive(h *harness) string {
 	u := h.user("ann")
-	testenv_conn(h, "c1", u, cfg)
-	testenv_conn(h, "c2", u, cfg)
+	insertConn(h, "c1", u, cfg)
+	insertConn(h, "c2", u, cfg)
 	addOld(h, u, "c1", "#a", 10)
 	addOld(h, u, "c2", "#a", 10)
 	return u
@@ -67,7 +67,7 @@ func TestArchiveMove(t *testing.T) {
 func TestArchiveStatus(t *testing.T) {
 	h := newHarness(t)
 	u := h.user("ann")
-	testenv_conn(h, "c1", u, cfg)
+	insertConn(h, "c1", u, cfg)
 	addOld(h, u, "c1", "status", 10)
 	if err := h.run("archive", "--move", "--keep", "3", "--block", "3"); err != nil {
 		t.Fatal(err)
@@ -218,7 +218,7 @@ func TestArchiveUsage(t *testing.T) {
 func TestArchiveDefaultMinAge(t *testing.T) {
 	h := newHarness(t)
 	u := h.user("ann")
-	testenv_conn(h, "c1", u, cfg)
+	insertConn(h, "c1", u, cfg)
 	for _, ch := range []struct {
 		name string
 		age  string
@@ -243,7 +243,7 @@ func TestArchiveDefaultMinAge(t *testing.T) {
 func TestArchiveDefaultKeep(t *testing.T) {
 	h := newHarness(t)
 	u := h.user("ann")
-	testenv_conn(h, "c1", u, cfg)
+	insertConn(h, "c1", u, cfg)
 	addOld(h, u, "c1", "#a", 1600)
 	if err := h.run("archive", "--move", "--connection", "c1", "--pause", "0"); err != nil {
 		t.Fatal(err)
@@ -260,7 +260,7 @@ func TestArchiveDefaultKeep(t *testing.T) {
 func TestArchiveStarStatus(t *testing.T) {
 	h := newHarness(t)
 	u := h.user("ann")
-	testenv_conn(h, "c1", u, cfg)
+	insertConn(h, "c1", u, cfg)
 	addOld(h, u, "c1", "*status", 10)
 	if err := h.run("archive", "--keep", "3", "--block", "3", "--connection", "c1"); err != nil {
 		t.Fatal(err)

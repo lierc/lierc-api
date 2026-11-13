@@ -15,12 +15,12 @@ import (
 // listSetup adds a1 (main, connected), a2 (main, empty column, not
 // running), b1 (next, running but not connected) and c1 (next, its owner
 // gone).
-func listSetup(m *moveHarness) {
+func listSetup(m *instancesHarness) {
 	u := m.user("alice")
 	m.conn("a1", u, `{"Host":"irc.libera.chat","Port":6697}`)
 	m.conn("a2", u, `{"Host":"irc.oftc.net","Port":6667}`)
 	m.conn("b1", u, `"not an object"`)
-	testenv_conn(m.harness, "c1", "nobody", `{"Host":"irc.relaychat.party","Port":6697}`)
+	insertConn(m.harness, "c1", "nobody", `{"Host":"irc.relaychat.party","Port":6697}`)
 	m.exec(`UPDATE connection SET liercd='' WHERE id='a2'`)
 	m.exec(`UPDATE connection SET liercd='next' WHERE id IN ('b1', 'c1')`)
 	m.main.MarkRunning("a1")
@@ -30,7 +30,7 @@ func listSetup(m *moveHarness) {
 }
 
 func TestConnectionList(t *testing.T) {
-	m := newMoveHarness(t)
+	m := newInstancesHarness(t)
 	listSetup(m)
 	if err := m.run("connection-list"); err != nil {
 		t.Fatal(err)
@@ -48,7 +48,7 @@ func TestConnectionList(t *testing.T) {
 }
 
 func TestConnectionListInstance(t *testing.T) {
-	m := newMoveHarness(t)
+	m := newInstancesHarness(t)
 	listSetup(m)
 	if err := m.run("connection-list", "--instance", "main"); err != nil {
 		t.Fatal(err)
@@ -63,7 +63,7 @@ func TestConnectionListInstance(t *testing.T) {
 }
 
 func TestConnectionListUsage(t *testing.T) {
-	m := newMoveHarness(t)
+	m := newInstancesHarness(t)
 	var ue *UsageError
 	if err := m.run("connection-list", "--instance", "other"); !asUsage(err, &ue) {
 		t.Errorf("bad instance: %v", err)
@@ -89,7 +89,7 @@ func (s *countingStore) ConnectionCounts(ctx context.Context, id string) (map[st
 // having no database) looks up each connection's instance without counting
 // its rows.
 func TestRoutingSkipsCounts(t *testing.T) {
-	m := newMoveHarness(t)
+	m := newInstancesHarness(t)
 	listSetup(m)
 	cs := &countingStore{Store: m.db}
 	srv := httptest.NewServer(admin.New(cs, m.announce))

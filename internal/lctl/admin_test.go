@@ -57,7 +57,6 @@ func TestReadCommandsAdminDown(t *testing.T) {
 	srv := httptest.NewServer(http.NotFoundHandler())
 	srv.Close()
 	h.env.Admin = &Admin{BaseURL: srv.URL, HTTP: http.DefaultClient}
-	h.vars["API_STATS"] = ""
 	h.env.StatsURL = "http://127.0.0.1:1/stats" // never reached for the lookups below
 	for _, c := range [][]string{
 		{"user-info", "ann"},

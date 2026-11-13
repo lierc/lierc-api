@@ -134,11 +134,9 @@ func TestDateSearchErrors(t *testing.T) {
 }
 
 // swapDate replaces the date search's query for one test.
-func swapDate(t *testing.T, f func(d *db.DB, ctx context.Context, conn, channel, from, to string, text, sender *string, each func(db.Message) error) error) {
+func swapDate(t *testing.T, f func(s db.Store, ctx context.Context, conn, channel, from, to string, text, sender *string, each func(db.Message) error) error) {
 	old := channelDate
-	channelDate = func(s db.Store, ctx context.Context, conn, channel, from, to string, text, sender *string, each func(db.Message) error) error {
-		return f(s.(*db.DB), ctx, conn, channel, from, to, text, sender, each)
-	}
+	channelDate = f
 	t.Cleanup(func() { channelDate = old })
 }
 
@@ -148,11 +146,11 @@ func swapDate(t *testing.T, f func(d *db.DB, ctx context.Context, conn, channel,
 // pg_sleep after the first row.
 func TestDateSearchStreams(t *testing.T) {
 	e, a := searchSetup(t)
-	swapDate(t, func(d *db.DB, ctx context.Context, _, _, _, _ string, _, _ *string, each func(db.Message) error) error {
+	swapDate(t, func(_ db.Store, ctx context.Context, _, _, _, _ string, _, _ *string, each func(db.Message) error) error {
 		if err := each(db.Message{MessageId: 1, Message: json.RawMessage(`{}`), ConnectionId: "c1"}); err != nil {
 			return err
 		}
-		_, err := d.Pool.Exec(ctx, `SELECT pg_sleep(5) /* date-search-test */`)
+		_, err := e.db.Pool.Exec(ctx, `SELECT pg_sleep(5) /* date-search-test */`)
 		return err
 	})
 	start := time.Now()
@@ -184,7 +182,7 @@ func TestDateSearchStreams(t *testing.T) {
 
 func TestDateSearchFailsMidStream(t *testing.T) {
 	e, a := searchSetup(t)
-	swapDate(t, func(d *db.DB, ctx context.Context, _, _, _, _ string, _, _ *string, each func(db.Message) error) error {
+	swapDate(t, func(_ db.Store, ctx context.Context, _, _, _, _ string, _, _ *string, each func(db.Message) error) error {
 		if err := each(db.Message{MessageId: 1, Message: json.RawMessage(`{}`), ConnectionId: "c1"}); err != nil {
 			return err
 		}
@@ -211,7 +209,7 @@ func TestDateSearchStalledClient(t *testing.T) {
 	t.Cleanup(func() { searchWriteTimeout = old })
 	big := json.RawMessage(`{"Params":["#a","` + strings.Repeat("x", 64<<10) + `"]}`)
 	done := make(chan error, 1)
-	swapDate(t, func(d *db.DB, ctx context.Context, _, _, _, _ string, _, _ *string, each func(db.Message) error) error {
+	swapDate(t, func(_ db.Store, ctx context.Context, _, _, _, _ string, _, _ *string, each func(db.Message) error) error {
 		for i := int64(1); ; i++ {
 			if err := each(db.Message{MessageId: i, Message: big, ConnectionId: "c1"}); err != nil {
 				done <- err

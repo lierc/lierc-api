@@ -4,7 +4,7 @@ import "testing"
 
 func seedSeen(h *harness) {
 	u := h.user("ann")
-	testenv_conn(h, "live", u, cfg)
+	insertConn(h, "live", u, cfg)
 	h.exec(`INSERT INTO seen ("user", connection, channel, message_id) VALUES ($1, 'live', '#now', 1)`, u)
 	h.exec(`INSERT INTO seen ("user", connection, channel, message_id, updated) VALUES ($1, 'live', '#old', 1, now() - interval '2 months')`, u)
 	h.exec(`INSERT INTO seen ("user", connection, channel, message_id) VALUES ($1, 'gone', '#a', 1)`, u)

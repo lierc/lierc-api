@@ -86,8 +86,6 @@ func TestListUsers(t *testing.T) {
 	if len(users) != 1 || users[0].ID != b {
 		t.Errorf("ids = %+v", users)
 	}
-	var empty []admin.User
-	e.getJSON("/admin/users?ids=nosuch", &empty)
 	if _, body := e.get("/admin/users?ids=nosuch"); body != "[]" {
 		t.Errorf("unknown ids body = %q", body)
 	}

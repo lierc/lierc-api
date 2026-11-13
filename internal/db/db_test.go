@@ -234,7 +234,7 @@ func TestNotifyHighlights(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer conn.Release()
-	if _, err := conn.Exec(lctx, "listen highlights"); err != nil {
+	if _, err := conn.Exec(lctx, "LISTEN highlights"); err != nil {
 		t.Fatal(err)
 	}
 	if err := d.NotifyHighlights(ctx); err != nil {

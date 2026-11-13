@@ -9,7 +9,7 @@ import (
 
 func seedLogs(h *harness) {
 	u := h.user("ann")
-	testenv_conn(h, "live", u, cfg)
+	insertConn(h, "live", u, cfg)
 	for i := 0; i < 2; i++ {
 		h.exec(`INSERT INTO log (connection, "user", channel, time, message) VALUES ('live', $1, '#a', now(), '{}')`, u)
 	}
@@ -81,8 +81,8 @@ func TestDeleteOrphanLogsBadBatch(t *testing.T) {
 func TestDeleteOrphanLogsDeletedUsers(t *testing.T) {
 	h := newHarness(t)
 	u := h.user("ann")
-	testenv_conn(h, "live", u, cfg)
-	testenv_conn(h, "ownerless", "nouser", cfg)
+	insertConn(h, "live", u, cfg)
+	insertConn(h, "ownerless", "nouser", cfg)
 	for _, r := range []struct{ conn, user string }{
 		{"live", u}, {"live", u},
 		{"ownerless", "nouser"}, {"ownerless", "nouser"}, {"ownerless", "nouser"},
@@ -113,7 +113,7 @@ func TestDeleteOrphanLogsDeletedUsers(t *testing.T) {
 func TestDeleteOrphanLogsConnectionAndUserGone(t *testing.T) {
 	h := newHarness(t)
 	u := h.user("ann")
-	testenv_conn(h, "live", u, cfg)
+	insertConn(h, "live", u, cfg)
 	for _, r := range []struct{ conn, user string }{
 		{"live", u},
 		{"gone", "ghost"}, {"gone", "ghost"},

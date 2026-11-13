@@ -16,7 +16,7 @@ const cfg = `{"Host":"ergo","Port":6667,"Nick":"x"}`
 
 func TestReconnect(t *testing.T) {
 	h := newHarness(t)
-	testenv_conn(h, "c1", h.user("ann"), cfg)
+	insertConn(h, "c1", h.user("ann"), cfg)
 	h.liercd.Respond("POST", "/c1/destroy", 200, "ok")
 	if err := h.run("reconnect", "c1"); err != nil {
 		t.Fatal(err)
@@ -33,8 +33,8 @@ func TestReconnect(t *testing.T) {
 func TestReconnectSeveral(t *testing.T) {
 	h := newHarness(t)
 	u := h.user("ann")
-	testenv_conn(h, "c1", u, cfg)
-	testenv_conn(h, "c2", u, `{"Host":"ergo","Port":6667,"Nick":"y"}`)
+	insertConn(h, "c1", u, cfg)
+	insertConn(h, "c2", u, `{"Host":"ergo","Port":6667,"Nick":"y"}`)
 	if err := h.run("reconnect", "c1", "c2"); err != nil {
 		t.Fatal(err)
 	}
@@ -51,8 +51,8 @@ func TestReconnectSeveral(t *testing.T) {
 func TestReconnectIDsFromStdin(t *testing.T) {
 	h := newHarness(t)
 	u := h.user("ann")
-	testenv_conn(h, "c1", u, cfg)
-	testenv_conn(h, "c2", u, cfg)
+	insertConn(h, "c1", u, cfg)
+	insertConn(h, "c2", u, cfg)
 	h.env.StdinIsTerminal = false
 	h.env.Stdin = strings.NewReader("c1\n\nc2\n")
 	if err := h.run("reconnect"); err != nil {
@@ -65,7 +65,7 @@ func TestReconnectIDsFromStdin(t *testing.T) {
 
 func TestReconnectNotRunning(t *testing.T) {
 	h := newHarness(t)
-	testenv_conn(h, "c1", h.user("ann"), cfg)
+	insertConn(h, "c1", h.user("ann"), cfg)
 	if err := h.run("reconnect", "c1"); err != nil { // destroy is 404
 		t.Fatal(err)
 	}
@@ -75,9 +75,9 @@ func TestReconnectNotRunning(t *testing.T) {
 func TestReconnectCarriesOn(t *testing.T) {
 	h := newHarness(t)
 	u := h.user("ann")
-	testenv_conn(h, "c1", u, cfg)
-	testenv_conn(h, "c2", u, cfg)
-	testenv_conn(h, "c3", u, cfg)
+	insertConn(h, "c1", u, cfg)
+	insertConn(h, "c2", u, cfg)
+	insertConn(h, "c3", u, cfg)
 	h.liercd.Respond("POST", "/c1/destroy", 500, "nok")
 	h.liercd.Respond("POST", "/c2/create", 400, "nok")
 	err := h.run("reconnect", "c1", "nope", "c2", "c3")
@@ -110,9 +110,9 @@ func seedRevive(h *harness) {
 	recent, old := h.user("recent"), h.user("old")
 	h.exec(`UPDATE "user" SET last_login = now() - interval '1 hour' WHERE id = $1`, recent)
 	h.exec(`UPDATE "user" SET last_login = now() - interval '3 days' WHERE id = $1`, old)
-	testenv_conn(h, "running", recent, cfg)
-	testenv_conn(h, "stopped", recent, cfg)
-	testenv_conn(h, "stale", old, cfg)
+	insertConn(h, "running", recent, cfg)
+	insertConn(h, "stopped", recent, cfg)
+	insertConn(h, "stale", old, cfg)
 	if _, err := h.env.Liercd.Do(h.t.Context(), "POST", "running/create", []byte(cfg)); err != nil {
 		h.t.Fatal(err)
 	}
@@ -164,7 +164,7 @@ func TestRevivePaced(t *testing.T) {
 	seedRevive(h)
 	u := h.user("more")
 	for _, id := range []string{"m1", "m2", "m3", "m4"} {
-		testenv_conn(h, id, u, cfg)
+		insertConn(h, id, u, cfg)
 	}
 	if err := h.run("revive", "--batch", "2", "--pause", "10s"); err != nil {
 		t.Fatal(err)
@@ -179,7 +179,7 @@ func TestRevivePaced(t *testing.T) {
 // --instance starts only that liercd's connections; main is a NULL or
 // empty column.
 func TestReviveInstance(t *testing.T) {
-	m := newMoveHarness(t)
+	m := newInstancesHarness(t)
 	u := m.user("alice")
 	for _, id := range []string{"a", "b", "n"} {
 		m.conn(id, u, cfg)

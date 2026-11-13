@@ -4,6 +4,7 @@ import (
 	"context"
 	"reflect"
 	"sort"
+	"strconv"
 	"testing"
 	"time"
 
@@ -30,7 +31,7 @@ func TestArchiveBlocks(t *testing.T) {
 	want := []string{"#a:2", "status:1"}
 	var have []string
 	for _, c := range got {
-		have = append(have, c.Channel+":"+string(rune('0'+c.Movable)))
+		have = append(have, c.Channel+":"+strconv.Itoa(c.Movable))
 	}
 	if !reflect.DeepEqual(have, want) {
 		t.Errorf("ArchiveCandidates = %v, want %v", have, want)

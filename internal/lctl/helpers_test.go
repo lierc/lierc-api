@@ -138,9 +138,9 @@ func (h *harness) calls(method, suffix string) []string {
 
 func asUsage(err error, target **UsageError) bool { return errors.As(err, target) }
 
-// moveHarness routes env.Liercd to two fake liercds that log into one
-// ordered list.
-type moveHarness struct {
+// instancesHarness routes env.Liercd to two fake liercds, the main and next
+// instances, that log their calls into one ordered list.
+type instancesHarness struct {
 	*harness
 	main, next       *testenv.LiercdServer
 	mainURL, nextURL string
@@ -150,8 +150,8 @@ type moveHarness struct {
 	after func(name, method, path string)
 }
 
-func newMoveHarness(t *testing.T) *moveHarness {
-	m := &moveHarness{harness: newHarness(t), main: testenv.NewLiercd(), next: testenv.NewLiercd()}
+func newInstancesHarness(t *testing.T) *instancesHarness {
+	m := &instancesHarness{harness: newHarness(t), main: testenv.NewLiercd(), next: testenv.NewLiercd()}
 	serve := func(name string, f *testenv.LiercdServer) string {
 		s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			m.mu.Lock()
@@ -171,7 +171,7 @@ func newMoveHarness(t *testing.T) *moveHarness {
 	return m
 }
 
-func (m *moveHarness) column(id string) string {
+func (m *instancesHarness) column(id string) string {
 	m.t.Helper()
 	inst, err := m.db.LookupLiercd(context.Background(), id)
 	if err != nil {
@@ -180,19 +180,21 @@ func (m *moveHarness) column(id string) string {
 	return inst
 }
 
-func (m *moveHarness) calls() string {
+func (m *instancesHarness) calls() string {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return strings.Join(m.order, "|")
 }
 
-func (m *moveHarness) calledNothing() {
+func (m *instancesHarness) calledNothing() {
 	m.t.Helper()
 	if len(m.order) != 0 {
 		m.t.Errorf("liercd was called: %v", m.order)
 	}
 }
 
-func testenv_conn(h *harness, id, user, config string) {
+// insertConn saves a connection row as given, without checking that user
+// exists (for connections whose owner is gone).
+func insertConn(h *harness, id, user, config string) {
 	h.exec(`INSERT INTO connection (id, "user", config) VALUES ($1, $2, $3)`, id, user, config)
 }

@@ -8,7 +8,7 @@ import (
 // stopSetup: alice last logged in 40 days ago, with a1 running on main, a2
 // dormant on main and a3 running on next; bob logged in yesterday, with b1
 // running on main; carol never logged in, with c1 running on main.
-func stopSetup(m *moveHarness) {
+func stopSetup(m *instancesHarness) {
 	alice, bob, carol := m.user("alice"), m.user("bob"), m.user("carol")
 	m.exec(`UPDATE "user" SET last_login = now() - interval '40 days' WHERE id = $1`, alice)
 	m.exec(`UPDATE "user" SET last_login = now() - interval '1 day' WHERE id = $1`, bob)
@@ -27,7 +27,7 @@ func stopSetup(m *moveHarness) {
 }
 
 func TestStopInactiveDryRun(t *testing.T) {
-	m := newMoveHarness(t)
+	m := newInstancesHarness(t)
 	stopSetup(m)
 	if err := m.run("stop-inactive", "--since", "30d"); err != nil {
 		t.Fatal(err)
@@ -54,7 +54,7 @@ func TestStopInactiveDryRun(t *testing.T) {
 }
 
 func TestStopInactiveStop(t *testing.T) {
-	m := newMoveHarness(t)
+	m := newInstancesHarness(t)
 	stopSetup(m)
 	if err := m.run("stop-inactive", "--stop", "--since", "30d"); err != nil {
 		t.Fatal(err)
@@ -84,7 +84,7 @@ func TestStopInactiveStop(t *testing.T) {
 }
 
 func TestStopInactiveFailureCarriesOn(t *testing.T) {
-	m := newMoveHarness(t)
+	m := newInstancesHarness(t)
 	stopSetup(m)
 	m.main.Respond("POST", "/a1/destroy", 500, "boom")
 	if err := m.run("stop-inactive", "--stop", "--since", "30d"); err == nil {
@@ -98,7 +98,7 @@ func TestStopInactiveFailureCarriesOn(t *testing.T) {
 }
 
 func TestStopInactiveUsage(t *testing.T) {
-	m := newMoveHarness(t)
+	m := newInstancesHarness(t)
 	stopSetup(m)
 	for _, tc := range []struct {
 		args []string
