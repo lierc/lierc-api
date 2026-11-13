@@ -71,7 +71,7 @@ func setup(t *testing.T) *harness {
 		Limit:            5,
 	}
 	h.s = &Service{
-		DB: h.d, Conns: conns, Mail: h.mail,
+		Store: h.d, Conns: conns, Mail: h.mail,
 		Secret: secret, SiteURL: siteURL,
 		DefaultNetwork: &config.DefaultNetwork{Host: "irc.example", Port: 6697, Ssl: true},
 		Now:            time.Now,

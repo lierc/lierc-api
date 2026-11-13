@@ -27,7 +27,7 @@ type loginJSON struct {
 }
 
 func (a *api) listLogins(w http.ResponseWriter, r *http.Request, user string) {
-	infos, err := login.List(r.Context(), a.pool, user)
+	infos, err := login.List(r.Context(), a.db, user)
 	if err != nil {
 		respond.Internal(w, "list logins", err)
 		return
@@ -55,7 +55,7 @@ func (a *api) deleteLogin(w http.ResponseWriter, r *http.Request, user string) {
 		respond.Error(w, http.StatusNotFound, "no such login")
 		return
 	}
-	deleted, err := login.Delete(r.Context(), a.pool.Pool, user, id)
+	deleted, err := login.Delete(r.Context(), a.db, user, id)
 	if err != nil {
 		respond.Internal(w, "end login", err)
 		return

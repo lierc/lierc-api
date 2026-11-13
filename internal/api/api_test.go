@@ -237,16 +237,16 @@ type fakeStore struct {
 func (f fakeStore) Prefs(context.Context, string) ([]db.Pref, error) { return f.prefs, nil }
 
 // The API's queries go through db.Store: with a fake in place of the
-// database, GET /preference answers from it. (Logins still use the real
-// database until they move behind the store.)
+// database, GET /preference answers from it. The rest of the store is the
+// real database, which the login check needs.
 func TestAPIRunsOnFakeStore(t *testing.T) {
 	cfg := config.Config{Secret: testSecret}
 	d := testenv.Postgres(t)
 	u := testenv.AddUser(t, d, "alice")
 	lc := &liercd.Client{HTTP: &http.Client{}}
 	s := stream.New(cfg, d, lc)
-	fake := fakeStore{prefs: []db.Pref{{Name: "theme", Value: "dark"}}}
-	srv := httptest.NewServer(newAPI(cfg, fake, d, s, lc))
+	fake := fakeStore{Store: d, prefs: []db.Pref{{Name: "theme", Value: "dark"}}}
+	srv := httptest.NewServer(New(cfg, fake, s, lc))
 	t.Cleanup(srv.Close)
 
 	req, _ := http.NewRequest("GET", srv.URL+"/preference", nil)

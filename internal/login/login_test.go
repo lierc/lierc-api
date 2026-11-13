@@ -131,13 +131,13 @@ func TestDelete(t *testing.T) {
 	ta, tb := testenv.Login(t, d, a), testenv.Login(t, d, b)
 	la, _, _ := login.Lookup(ctx, d, ta)
 	lb, _, _ := login.Lookup(ctx, d, tb)
-	if ok, err := login.Delete(ctx, d.Pool, a, lb.ID); err != nil || ok {
+	if ok, err := login.Delete(ctx, d, a, lb.ID); err != nil || ok {
 		t.Errorf("deleting another user's login = %v %v", ok, err)
 	}
 	if _, ok, _ := login.Lookup(ctx, d, tb); !ok {
 		t.Error("another user's login was deleted")
 	}
-	if ok, err := login.Delete(ctx, d.Pool, a, la.ID); err != nil || !ok {
+	if ok, err := login.Delete(ctx, d, a, la.ID); err != nil || !ok {
 		t.Errorf("deleting own login = %v %v", ok, err)
 	}
 	if _, ok, _ := login.Lookup(ctx, d, ta); ok {
@@ -165,7 +165,7 @@ func TestDeleteAll(t *testing.T) {
 	testenv.Login(t, d, u1)
 	testenv.Login(t, d, u1)
 	t2a, t2b := testenv.Login(t, d, u2), testenv.Login(t, d, u2)
-	n, err := login.DeleteAll(ctx, d.Pool, u1)
+	n, err := login.DeleteAll(ctx, d, u1)
 	if err != nil || n != 2 {
 		t.Fatalf("DeleteAll = %d %v", n, err)
 	}

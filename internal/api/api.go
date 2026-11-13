@@ -21,11 +21,8 @@ import (
 )
 
 type api struct {
-	cfg config.Config
-	db  db.Store
-	// pool is the database logins and accounts still use directly; they
-	// move behind the store later.
-	pool  *db.DB
+	cfg   config.Config
+	db    db.Store
 	users auth.Users
 	conns *connections.Service
 	acct  *accounts.Service
@@ -36,18 +33,11 @@ type api struct {
 
 // New routes the stream server's routes and the ported ones, and
 // answers anything else, any method, with a 404.
-func New(cfg config.Config, d *db.DB, streams *stream.Server, lc *liercd.Client) http.Handler {
-	return newAPI(cfg, d, d, streams, lc)
-}
-
-// newAPI is New with the store apart from the database logins and accounts
-// use, so tests can put a fake behind the store.
-func newAPI(cfg config.Config, s db.Store, d *db.DB, streams *stream.Server, lc *liercd.Client) http.Handler {
+func New(cfg config.Config, s db.Store, streams *stream.Server, lc *liercd.Client) http.Handler {
 	a := &api{
 		cfg:        cfg,
 		db:         s,
-		pool:       d,
-		users:      auth.Users{Secret: cfg.Secret, DB: d, Secure: cfg.Secure},
+		users:      auth.Users{Secret: cfg.Secret, DB: s, Secure: cfg.Secure},
 		loginLimit: ratelimit.New(10, 15*time.Minute),
 		resetLimit: ratelimit.New(3, time.Hour),
 	}

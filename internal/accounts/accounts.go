@@ -11,13 +11,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/lierc/lierc-api/internal/config"
 	"github.com/lierc/lierc-api/internal/connections"
 	"github.com/lierc/lierc-api/internal/db"
 	"github.com/lierc/lierc-api/internal/ids"
-	"github.com/lierc/lierc-api/internal/login"
 	"github.com/lierc/lierc-api/internal/passwords"
 )
 
@@ -46,15 +44,12 @@ type Mailer interface {
 
 // User is what GET /auth shows. Verified is nil for an account from before
 // signups had to confirm their email.
-type User struct {
-	ID, Username, Email string
-	Verified            *bool
-}
+type User = db.Account
 
-// Service does the work, through the database, connections (for the
+// Service does the work, through the store, connections (for the
 // default network) and Mail.
 type Service struct {
-	DB     *db.DB
+	Store  db.Store
 	Conns  *connections.Service
 	Mail   Mailer
 	Secret string
@@ -173,19 +168,14 @@ func render(template, name, link string) string {
 
 // Show is the logged-in user (DB.pm lookup_user); a missing one is a 401.
 func (s *Service) Show(ctx context.Context, id string) (User, error) {
-	var u User
-	err := s.DB.Pool.QueryRow(ctx, `SELECT id, username, email, verified FROM "user" WHERE id=$1`, id).
-		Scan(&u.ID, &u.Username, &u.Email, &u.Verified)
-	if errors.Is(err, pgx.ErrNoRows) {
+	u, ok, err := s.Store.AccountByID(ctx, id)
+	if err != nil {
+		return User{}, err
+	}
+	if !ok {
 		return User{}, userError(401, "unauthorized")
 	}
-	return u, err
-}
-
-type loginRow struct {
-	user     User
-	password *string // legacy
-	hash     *string
+	return u, nil
 }
 
 // Login finds the user whose email or username is email, ignoring case,
@@ -193,42 +183,27 @@ type loginRow struct {
 // and more if one user's email is another's username; each is tried in
 // turn. A hash that isn't cost 12 is replaced by one that is.
 func (s *Service) Login(ctx context.Context, email, pass string) (User, error) {
-	rows, err := s.DB.Pool.Query(ctx,
-		`SELECT id, username, email, verified, password, password_hash FROM "user" WHERE lower(email) = lower($1) OR lower(username) = lower($1)`,
-		email)
+	found, err := s.Store.AccountsByLogin(ctx, email)
 	if err != nil {
-		return User{}, err
-	}
-	var found []loginRow
-	for rows.Next() {
-		var r loginRow
-		if err := rows.Scan(&r.user.ID, &r.user.Username, &r.user.Email, &r.user.Verified, &r.password, &r.hash); err != nil {
-			rows.Close()
-			return User{}, err
-		}
-		found = append(found, r)
-	}
-	rows.Close()
-	if err := rows.Err(); err != nil {
 		return User{}, err
 	}
 
 	checked := false
 	for _, r := range found {
 		// a legacy-only row never matches: those users reset
-		if r.hash == nil {
+		if r.PasswordHash == nil {
 			continue
 		}
 		checked = true
-		if !checkPassword(pass, *r.hash) {
+		if !checkPassword(pass, *r.PasswordHash) {
 			continue
 		}
-		if passwords.NeedsRehash(*r.hash) {
+		if passwords.NeedsRehash(*r.PasswordHash) {
 			if err := s.rehash(ctx, r, pass); err != nil {
 				return User{}, err
 			}
 		}
-		return r.user, nil
+		return r.Account, nil
 	}
 	// so that no match takes as long as a wrong password
 	if !checked {
@@ -239,31 +214,13 @@ func (s *Service) Login(ctx context.Context, email, pass string) (User, error) {
 
 // rehash saves a cost-12 hash of pass for r, unless the stored hashes
 // changed since they were read; losing that race isn't an error.
-func (s *Service) rehash(ctx context.Context, r loginRow, pass string) error {
+func (s *Service) rehash(ctx context.Context, r db.AccountAuth, pass string) error {
 	hash, err := passwords.Hash(pass)
 	if err != nil {
 		return err
 	}
-	_, err = replacePasswordHash(ctx, s.DB.Pool, r.user.ID, hash, r.hash, r.password)
+	_, err = s.Store.ReplacePasswordHash(ctx, r.ID, hash, r.PasswordHash, r.Password)
 	return err
-}
-
-type execer interface {
-	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
-}
-
-// replacePasswordHash is DB.pm replace_password_hash: the new hash, and no
-// legacy password, only if the stored ones are still oldHash and
-// oldPassword. It returns how many rows changed.
-func replacePasswordHash(ctx context.Context, q execer, id, hash string, oldHash, oldPassword *string) (int64, error) {
-	tag, err := q.Exec(ctx,
-		`UPDATE "user" SET password_hash=$2, password=NULL
-		 WHERE id=$1 AND password_hash IS NOT DISTINCT FROM $3 AND password IS NOT DISTINCT FROM $4`,
-		id, hash, oldHash, oldPassword)
-	if err != nil {
-		return 0, err
-	}
-	return tag.RowsAffected(), nil
 }
 
 // Register adds a user (Auth.pm register and DB.pm add_user) and queues
@@ -290,9 +247,7 @@ func (s *Service) Register(ctx context.Context, name, email, pass string) (User,
 	}
 	id := ids.New()
 	// verify_sent: signup sends the first verify email
-	_, err = s.DB.Pool.Exec(ctx,
-		`INSERT INTO "user" (id, username, email, password_hash, verify_sent, registered) VALUES ($1, $2, $3, $4, now(), now())`,
-		id, name, email, hash)
+	err = s.Store.InsertUser(ctx, id, name, email, hash)
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
@@ -327,42 +282,26 @@ func (s *Service) Verify(ctx context.Context, token string) error {
 	if !ok {
 		return userError(400, msgVerifyBad)
 	}
-	var uid, name, email string
-	err := s.DB.Pool.QueryRow(ctx, `SELECT id, username, email FROM "user" WHERE id=$1`, id).Scan(&uid, &name, &email)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return userError(400, msgVerifyBad)
-	}
+	u, ok, err := s.Store.AccountByID(ctx, id)
 	if err != nil {
 		return err
 	}
-	if !TokenValid(s.Secret, "verify", token, email, s.now().Unix()) {
+	if !ok {
 		return userError(400, msgVerifyBad)
 	}
-	first, err := markVerified(ctx, s.DB.Pool, uid)
+	if !TokenValid(s.Secret, "verify", token, u.Email, s.now().Unix()) {
+		return userError(400, msgVerifyBad)
+	}
+	first, err := s.Store.MarkVerified(ctx, u.ID)
 	if err != nil {
 		return err
 	}
 	if first {
 		ctx, cancel := detached(ctx)
 		defer cancel()
-		return s.addFirstNetwork(ctx, uid, name)
+		return s.addFirstNetwork(ctx, u.ID, u.Username)
 	}
 	return nil
-}
-
-// markVerified sets a user verified, and reports whether this is a
-// signup's first verification (verified was false), which earns the
-// default network. NULL, an account from before signups had to verify,
-// becomes true too.
-func markVerified(ctx context.Context, q execer, id string) (bool, error) {
-	tag, err := q.Exec(ctx, `UPDATE "user" SET verified=true WHERE id=$1 AND verified=false`, id)
-	if err != nil {
-		return false, err
-	}
-	if _, err := q.Exec(ctx, `UPDATE "user" SET verified=true WHERE id=$1 AND verified IS NULL`, id); err != nil {
-		return false, err
-	}
-	return tag.RowsAffected() == 1, nil
 }
 
 // addFirstNetwork adds the default network unless the user has a
@@ -370,13 +309,12 @@ func markVerified(ctx context.Context, q execer, id string) (bool, error) {
 // required got the network then. A failure to add it is logged and doesn't
 // fail the verification.
 func (s *Service) addFirstNetwork(ctx context.Context, user, name string) error {
-	var has int
-	err := s.DB.Pool.QueryRow(ctx, `SELECT 1 FROM connection WHERE "user"=$1 LIMIT 1`, user).Scan(&has)
-	if err == nil {
-		return nil
-	}
-	if !errors.Is(err, pgx.ErrNoRows) {
+	has, err := s.Store.UserHasConnection(ctx, user)
+	if err != nil {
 		return err
+	}
+	if has {
+		return nil
 	}
 	if err := s.addDefaultNetwork(ctx, user, name); err != nil {
 		log.Printf("Unable to add default network for %s: %v", name, err)
@@ -420,15 +358,11 @@ func (s *Service) Resend(ctx context.Context, id string) error {
 	if err != nil {
 		return err
 	}
-	tag, err := s.DB.Pool.Exec(ctx,
-		`UPDATE "user" SET verify_sent = now()
-		 WHERE id = $1 AND verified = false
-		   AND (verify_sent IS NULL OR verify_sent < now() - make_interval(secs => $2))`,
-		u.ID, float64(resendEvery))
+	claimed, err := s.Store.ClaimVerifyResend(ctx, u.ID, float64(resendEvery))
 	if err != nil {
 		return err
 	}
-	if tag.RowsAffected() == 1 {
+	if claimed {
 		s.after(func() { s.sendVerifyEmail(u.ID, u.Username, u.Email) })
 	}
 	return nil
@@ -441,18 +375,15 @@ func (s *Service) Reset(ctx context.Context, email string) error {
 	if !IsEmail(email) {
 		return userError(400, msgEmail)
 	}
-	var id, name, addr string
-	var password, hash *string
-	err := s.DB.Pool.QueryRow(ctx,
-		`SELECT id, username, email, password, password_hash FROM "user" WHERE lower(email) = lower($1)`, email).
-		Scan(&id, &name, &addr, &password, &hash)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return nil
-	}
+	acct, ok, err := s.Store.AccountAuthByEmail(ctx, email)
 	if err != nil {
 		return err
 	}
-	fingerprint := resetFingerprint(hash, password)
+	if !ok {
+		return nil
+	}
+	id, name, addr := acct.ID, acct.Username, acct.Email
+	fingerprint := resetFingerprint(acct.PasswordHash, acct.Password)
 	s.after(func() {
 		token := MakeToken(s.Secret, "reset", id, fingerprint, s.now().Unix()+ResetLifetime)
 		body := render(resetTemplate, name, s.SiteURL+"/reset/#"+token)
@@ -488,16 +419,14 @@ func (s *Service) ResetConfirm(ctx context.Context, token, pass string) (User, e
 	if !ok {
 		return User{}, userError(400, msgResetExpired)
 	}
-	var uid, name string
-	var password, hash *string
-	err := s.DB.Pool.QueryRow(ctx, `SELECT id, username, password, password_hash FROM "user" WHERE id=$1`, id).
-		Scan(&uid, &name, &password, &hash)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return User{}, userError(400, msgResetExpired)
-	}
+	acct, ok, err := s.Store.AccountAuthByID(ctx, id)
 	if err != nil {
 		return User{}, err
 	}
+	if !ok {
+		return User{}, userError(400, msgResetExpired)
+	}
+	uid, name, hash, password := acct.ID, acct.Username, acct.PasswordHash, acct.Password
 	if !TokenValid(s.Secret, "reset", token, resetFingerprint(hash, password), s.now().Unix()) {
 		return User{}, userError(400, msgResetExpired)
 	}
@@ -510,7 +439,7 @@ func (s *Service) ResetConfirm(ctx context.Context, token, pass string) (User, e
 	if err != nil {
 		return User{}, err
 	}
-	changed, first, err := s.replaceAndVerify(ctx, uid, newHash, hash, password)
+	changed, first, err := s.Store.ReplacePasswordAndVerify(ctx, uid, newHash, hash, password)
 	if err != nil {
 		return User{}, err
 	}
@@ -526,29 +455,4 @@ func (s *Service) ResetConfirm(ctx context.Context, token, pass string) (User, e
 		}
 	}
 	return s.Show(ctx, uid)
-}
-
-func (s *Service) replaceAndVerify(ctx context.Context, id, hash string, oldHash, oldPassword *string) (changed, first bool, err error) {
-	tx, err := s.DB.Pool.Begin(ctx)
-	if err != nil {
-		return false, false, err
-	}
-	defer tx.Rollback(context.WithoutCancel(ctx))
-	n, err := replacePasswordHash(ctx, tx, id, hash, oldHash, oldPassword)
-	if err != nil {
-		return false, false, err
-	}
-	if n > 0 {
-		if first, err = markVerified(ctx, tx, id); err != nil {
-			return false, false, err
-		}
-		// a changed password ends every login, whoever held it
-		if _, err := login.DeleteAll(ctx, tx, id); err != nil {
-			return false, false, err
-		}
-	}
-	if err := tx.Commit(ctx); err != nil {
-		return false, false, err
-	}
-	return n > 0, first, nil
 }

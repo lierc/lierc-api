@@ -397,7 +397,7 @@ func TestLoginWhenEndingOldLoginFails(t *testing.T) {
 	e.setPassword(id, "hunter2")
 	old := e.logIn("alice", "hunter2", "")
 	orig := deleteToken
-	deleteToken = func(context.Context, *db.DB, string) error { return errors.New("db down") }
+	deleteToken = func(context.Context, db.Store, string) error { return errors.New("db down") }
 	t.Cleanup(func() { deleteToken = orig })
 	if tok := e.logIn("alice", "hunter2", old); tok == old {
 		t.Errorf("login reused the old token")

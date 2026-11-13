@@ -120,14 +120,14 @@ func endLogin(ctx context.Context, env *Env, args []string) error {
 		return fmt.Errorf("%s: no such user", who)
 	}
 	if *all {
-		n, err := login.DeleteAll(ctx, env.DB.Pool, id)
+		n, err := login.DeleteAll(ctx, env.DB, id)
 		if err != nil {
 			return err
 		}
 		fmt.Fprintf(env.Stdout, "ended %s\n", plural(n, "login", "logins"))
 		return nil
 	}
-	deleted, err := login.Delete(ctx, env.DB.Pool, id, loginID)
+	deleted, err := login.Delete(ctx, env.DB, id, loginID)
 	if err != nil {
 		return err
 	}

@@ -20,7 +20,7 @@ import (
 type Users struct {
 	// Secret reads the Perl-format cookies of logins from before the switch.
 	Secret string
-	DB     *db.DB
+	DB     db.Store
 	// Secure marks the login cookie Secure.
 	Secure bool
 

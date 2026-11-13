@@ -41,10 +41,7 @@ type Server struct {
 
 	cfg config.Config
 	db  db.Store
-	// pool is the database the login table lives in, until logins move
-	// behind the store.
-	pool *db.DB
-	lc   *liercd.Client
+	lc  *liercd.Client
 
 	mu      sync.Mutex
 	streams map[string]map[string]*stream // user -> stream id -> stream
@@ -56,7 +53,7 @@ type Server struct {
 	alive     func(ctx context.Context, id int64) (bool, error) // test hook: replaces login.Alive
 }
 
-func New(cfg config.Config, d *db.DB, lc *liercd.Client) *Server {
+func New(cfg config.Config, d db.Store, lc *liercd.Client) *Server {
 	return &Server{
 		PingInterval:      5 * time.Second,
 		WriteTimeout:      3 * time.Minute,
@@ -65,7 +62,6 @@ func New(cfg config.Config, d *db.DB, lc *liercd.Client) *Server {
 		LoginCheckTimeout: 10 * time.Second,
 		cfg:               cfg,
 		db:                d,
-		pool:              d,
 		lc:                lc,
 		streams:           map[string]map[string]*stream{},
 		latest:            map[string]int64{},

@@ -15,6 +15,29 @@ type Store interface {
 	SaveLastLogin(ctx context.Context, user string) error
 	LatestMessageID(ctx context.Context, user string) (int64, error)
 
+	// logins
+	InsertLogin(ctx context.Context, tokenHash []byte, user, userAgent, ip string) error
+	LoginByHash(ctx context.Context, tokenHash []byte) (Login, bool, error)
+	TouchLogin(ctx context.Context, id int64) error
+	DeleteLogin(ctx context.Context, user string, id int64) (bool, error)
+	DeleteLoginByHash(ctx context.Context, tokenHash []byte) error
+	DeleteLogins(ctx context.Context, user string) (int64, error)
+	LoginAlive(ctx context.Context, id int64) (bool, error)
+	Logins(ctx context.Context, user string) ([]LoginInfo, error)
+	PruneLogins(ctx context.Context) (int64, error)
+
+	// accounts
+	AccountByID(ctx context.Context, id string) (Account, bool, error)
+	AccountsByLogin(ctx context.Context, name string) ([]AccountAuth, error)
+	AccountAuthByEmail(ctx context.Context, email string) (AccountAuth, bool, error)
+	AccountAuthByID(ctx context.Context, id string) (AccountAuth, bool, error)
+	InsertUser(ctx context.Context, id, username, email, hash string) error
+	UserHasConnection(ctx context.Context, user string) (bool, error)
+	ClaimVerifyResend(ctx context.Context, id string, minSeconds float64) (bool, error)
+	ReplacePasswordHash(ctx context.Context, id, hash string, oldHash, oldPassword *string) (bool, error)
+	MarkVerified(ctx context.Context, id string) (bool, error)
+	ReplacePasswordAndVerify(ctx context.Context, id, hash string, oldHash, oldPassword *string) (changed, firstVerify bool, err error)
+
 	// connections
 	Connections(ctx context.Context, user string) ([]Connection, error)
 	LookupConfig(ctx context.Context, id string) ([]byte, bool, error)
