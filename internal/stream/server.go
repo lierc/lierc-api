@@ -40,8 +40,11 @@ type Server struct {
 	LoginCheckTimeout time.Duration
 
 	cfg config.Config
-	db  *db.DB
-	lc  *liercd.Client
+	db  db.Store
+	// pool is the database the login table lives in, until logins move
+	// behind the store.
+	pool *db.DB
+	lc   *liercd.Client
 
 	mu      sync.Mutex
 	streams map[string]map[string]*stream // user -> stream id -> stream
@@ -62,6 +65,7 @@ func New(cfg config.Config, d *db.DB, lc *liercd.Client) *Server {
 		LoginCheckTimeout: 10 * time.Second,
 		cfg:               cfg,
 		db:                d,
+		pool:              d,
 		lc:                lc,
 		streams:           map[string]map[string]*stream{},
 		latest:            map[string]int64{},

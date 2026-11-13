@@ -63,26 +63,7 @@ func (s *Server) ListenConnections(ctx context.Context) {
 }
 
 func (s *Server) listenOnce(ctx context.Context) error {
-	pc, err := s.db.Pool.Acquire(ctx)
-	if err != nil {
-		return err
-	}
-	// a LISTENing connection mustn't go back to the pool
-	conn := pc.Hijack()
-	defer conn.Close(context.Background())
-	if _, err := conn.Exec(ctx, "LISTEN "+db.ConnectionsChannel); err != nil {
-		return err
-	}
-	if s.listening != nil {
-		s.listening()
-	}
-	for {
-		n, err := conn.WaitForNotification(ctx)
-		if err != nil {
-			return err
-		}
-		s.connectionChanged(ctx, n.Payload)
-	}
+	return s.db.ListenConnections(ctx, s.listening, func(payload string) { s.connectionChanged(ctx, payload) })
 }
 
 // connectionChanged parses a connections-channel notification (lctl's, or

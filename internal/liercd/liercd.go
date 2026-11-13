@@ -158,7 +158,7 @@ func statusLine(r *Response) string {
 
 // FindOrRecreate returns the connection's status body, re-creating the
 // connection in liercd from the stored config when its status is not 200.
-func (c *Client) FindOrRecreate(ctx context.Context, d *db.DB, id string) ([]byte, error) {
+func (c *Client) FindOrRecreate(ctx context.Context, d db.Store, id string) ([]byte, error) {
 	config, ok, err := d.LookupConfig(ctx, id)
 	if err != nil {
 		return nil, err

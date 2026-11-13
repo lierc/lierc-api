@@ -172,7 +172,7 @@ func (s *Server) serveStream(w http.ResponseWriter, r *http.Request, user string
 		case <-check:
 			alive := s.alive
 			if alive == nil {
-				alive = func(ctx context.Context, id int64) (bool, error) { return login.Alive(ctx, s.db, id) }
+				alive = func(ctx context.Context, id int64) (bool, error) { return login.Alive(ctx, s.pool, id) }
 			}
 			cctx, cancel := ctx, context.CancelFunc(func() {})
 			if s.LoginCheckTimeout > 0 {

@@ -32,7 +32,7 @@ var newMailer = func(cfg config.Config) accounts.Mailer {
 
 func (a *api) accounts(mux *http.ServeMux) {
 	a.acct = &accounts.Service{
-		DB:             a.db,
+		DB:             a.pool,
 		Conns:          a.conns,
 		Mail:           newMailer(a.cfg),
 		Secret:         a.cfg.Secret,
@@ -94,12 +94,12 @@ func (a *api) loggedIn(w http.ResponseWriter, r *http.Request, u accounts.User) 
 	if c, err := r.Cookie(login.CookieName); err == nil && login.IsToken(c.Value) {
 		// the old login only matters to this browser, which is replacing
 		// it; if it can't be ended now it expires unused
-		if err := deleteToken(r.Context(), a.db, c.Value); err != nil {
+		if err := deleteToken(r.Context(), a.pool, c.Value); err != nil {
 			log.Printf("end old login: %v", err)
 		}
 	}
 	agent, ip := auth.Client(r)
-	token, err := login.Create(r.Context(), a.db, u.ID, agent, ip)
+	token, err := login.Create(r.Context(), a.pool, u.ID, agent, ip)
 	if err != nil {
 		respond.Internal(w, "create login", err)
 		return
@@ -165,7 +165,7 @@ func (a *api) register(w http.ResponseWriter, r *http.Request) {
 
 func (a *api) logout(w http.ResponseWriter, r *http.Request) {
 	if c, err := r.Cookie(login.CookieName); err == nil && login.IsToken(c.Value) {
-		if err := login.DeleteToken(r.Context(), a.db, c.Value); err != nil {
+		if err := login.DeleteToken(r.Context(), a.pool, c.Value); err != nil {
 			log.Printf("logout: %v", err)
 		}
 	}
@@ -240,8 +240,8 @@ func (a *api) unsubscribe(w http.ResponseWriter, r *http.Request) {
 		respond.Error(w, http.StatusBadRequest, "This unsubscribe link isn't valid.")
 		return
 	}
-	var exists bool
-	if err := a.db.Pool.QueryRow(r.Context(), `SELECT EXISTS (SELECT 1 FROM "user" WHERE id = $1)`, user).Scan(&exists); err != nil {
+	exists, err := a.db.UserExists(r.Context(), user)
+	if err != nil {
 		respond.Internal(w, "unsubscribe", err)
 		return
 	}

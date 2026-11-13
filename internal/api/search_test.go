@@ -136,7 +136,9 @@ func TestDateSearchErrors(t *testing.T) {
 // swapDate replaces the date search's query for one test.
 func swapDate(t *testing.T, f func(d *db.DB, ctx context.Context, conn, channel, from, to string, text, sender *string, each func(db.Message) error) error) {
 	old := channelDate
-	channelDate = f
+	channelDate = func(s db.Store, ctx context.Context, conn, channel, from, to string, text, sender *string, each func(db.Message) error) error {
+		return f(s.(*db.DB), ctx, conn, channel, from, to, text, sender, each)
+	}
 	t.Cleanup(func() { channelDate = old })
 }
 

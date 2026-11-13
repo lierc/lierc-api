@@ -41,7 +41,7 @@ var errInvalid = &UserError{"Invalid connection settings"}
 // Service does the work, through the database, liercd, and Announce,
 // which tells the owner's open streams (the stream server, in memory).
 type Service struct {
-	DB               *db.DB
+	DB               db.Store
 	Liercd           *liercd.Client
 	Announce         func(ctx context.Context, c db.ConnectionChange)
 	NotifyHighlights func(ctx context.Context) error
@@ -52,11 +52,8 @@ type Service struct {
 
 // NotifyHighlights tells the logger's notifier, a separate process, to
 // reload highlight words.
-func NotifyHighlights(d *db.DB) func(ctx context.Context) error {
-	return func(ctx context.Context) error {
-		_, err := d.Pool.Exec(ctx, `NOTIFY highlights`)
-		return err
-	}
+func NotifyHighlights(d db.Store) func(ctx context.Context) error {
+	return d.NotifyHighlights
 }
 
 // stepTimeout bounds a create, edit, save or delete.

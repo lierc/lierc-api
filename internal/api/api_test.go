@@ -227,3 +227,37 @@ func TestNotFoundSetsNoCookie(t *testing.T) {
 		t.Errorf("unknown path: %d %v", res.StatusCode, res.Header["Set-Cookie"])
 	}
 }
+
+// fakeStore implements only Prefs; calling anything else panics.
+type fakeStore struct {
+	db.Store
+	prefs []db.Pref
+}
+
+func (f fakeStore) Prefs(context.Context, string) ([]db.Pref, error) { return f.prefs, nil }
+
+// The API's queries go through db.Store: with a fake in place of the
+// database, GET /preference answers from it. (Logins still use the real
+// database until they move behind the store.)
+func TestAPIRunsOnFakeStore(t *testing.T) {
+	cfg := config.Config{Secret: testSecret}
+	d := testenv.Postgres(t)
+	u := testenv.AddUser(t, d, "alice")
+	lc := &liercd.Client{HTTP: &http.Client{}}
+	s := stream.New(cfg, d, lc)
+	fake := fakeStore{prefs: []db.Pref{{Name: "theme", Value: "dark"}}}
+	srv := httptest.NewServer(newAPI(cfg, fake, d, s, lc))
+	t.Cleanup(srv.Close)
+
+	req, _ := http.NewRequest("GET", srv.URL+"/preference", nil)
+	req.AddCookie(&http.Cookie{Name: "chats", Value: testenv.Login(t, d, u)})
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer res.Body.Close()
+	body, _ := io.ReadAll(res.Body)
+	if res.StatusCode != 200 || !strings.Contains(string(body), "dark") {
+		t.Errorf("GET /preference = %d %s", res.StatusCode, body)
+	}
+}

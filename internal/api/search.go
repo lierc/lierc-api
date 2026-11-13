@@ -24,7 +24,7 @@ func (a *api) search(mux *http.ServeMux) {
 var searchWriteTimeout = time.Minute
 
 // channelDate runs the date search's query; tests replace it.
-var channelDate = (*db.DB).ChannelDate
+var channelDate = db.Store.ChannelDate
 
 var dateShape = regexp.MustCompile(`^\d{4}-\d\d-\d\d$`)
 
