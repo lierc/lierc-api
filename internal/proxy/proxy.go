@@ -19,7 +19,8 @@ var logOutput io.Writer = os.Stderr
 var lastHop = regexp.MustCompile(`([^,\s]+)$`)
 
 // Wrap rewrites RemoteAddr to the last X-Forwarded-For hop when the peer is in
-// trusted (IPs or CIDRs), then logs the request in combined log format.
+// trusted (IPs or CIDRs), then logs the request in combined log format
+// (AccessLog).
 func Wrap(trusted []string, next http.Handler) http.Handler {
 	var ips []net.IP
 	var nets []*net.IPNet
@@ -47,6 +48,7 @@ func Wrap(trusted []string, next http.Handler) http.Handler {
 		return false
 	}
 
+	logged := AccessLog(next)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		host, port, err := net.SplitHostPort(r.RemoteAddr)
 		if err != nil {
@@ -59,11 +61,21 @@ func Wrap(trusted []string, next http.Handler) http.Handler {
 				r.RemoteAddr = net.JoinHostPort(host, port)
 			}
 		}
+		logged.ServeHTTP(w, r)
+	})
+}
 
+// AccessLog logs each request in combined log format, with the peer's own
+// address: for a listener with no proxy in front, as the admin listener.
+func AccessLog(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		host, _, err := net.SplitHostPort(r.RemoteAddr)
+		if err != nil {
+			host = r.RemoteAddr
+		}
 		start := time.Now()
 		lw := &logWriter{ResponseWriter: w, status: http.StatusOK}
 		next.ServeHTTP(lw, r)
-
 		uri := r.RequestURI
 		if uri == "" {
 			uri = r.URL.RequestURI()

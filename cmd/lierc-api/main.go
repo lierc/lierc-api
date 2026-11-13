@@ -78,7 +78,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, stderr 
 	adminMux := http.NewServeMux()
 	adminMux.Handle("GET /stats", s.Admin())
 	adminMux.Handle("/admin/", adminapi.New(d, s.ConnectionChanged))
-	admin := newServer(adminMux, serverTimeouts)
+	admin := newServer(proxy.AccessLog(adminMux), serverTimeouts)
 
 	ln, err := net.Listen("tcp", cfg.Listen)
 	if err != nil {

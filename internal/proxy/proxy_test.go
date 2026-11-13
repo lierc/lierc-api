@@ -100,3 +100,31 @@ func TestFlushErrorPropagates(t *testing.T) {
 		t.Fatalf("Flush() = %v", got)
 	}
 }
+
+// AccessLog writes the same line as Wrap, for a listener with no proxy in
+// front (the admin listener): the peer's own address, X-Forwarded-For
+// ignored.
+func TestAccessLog(t *testing.T) {
+	var buf bytes.Buffer
+	old := logOutput
+	logOutput = &buf
+	t.Cleanup(func() { logOutput = old })
+	var remote string
+	h := AccessLog(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		remote = r.RemoteAddr
+		w.WriteHeader(404)
+		io.WriteString(w, `{"error":"no such user"}`)
+	}))
+	req := httptest.NewRequest("DELETE", "/admin/users/u1?log_after=3", nil)
+	req.RemoteAddr = "127.0.0.1:4444"
+	req.Header.Set("X-Forwarded-For", "9.9.9.9")
+	req.Header.Set("User-Agent", "Go-http-client/1.1")
+	h.ServeHTTP(httptest.NewRecorder(), req)
+	if remote != "127.0.0.1:4444" {
+		t.Errorf("RemoteAddr = %q, want the peer's", remote)
+	}
+	re := regexp.MustCompile(`^127\.0\.0\.1 - - \[[^\]]+\] "DELETE /admin/users/u1\?log_after=3 HTTP/1\.1" 404 24 "-" "Go-http-client/1\.1"\n$`)
+	if !re.MatchString(buf.String()) {
+		t.Errorf("log line %q", buf.String())
+	}
+}
