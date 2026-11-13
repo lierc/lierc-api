@@ -87,6 +87,15 @@ type Store interface {
 	DeleteGoneUserLogs(ctx context.Context, id string, batch int) (int64, error)
 	DeleteOrphanArchive(ctx context.Context, batch int) (int64, error)
 	ReviveCandidates(ctx context.Context, since time.Duration, instance string) ([]ReviveConnection, error)
+
+	// the admin API's reads
+	ListUsers(ctx context.Context, f UserFilter) ([]UserRow, error)
+	LookupUsers(ctx context.Context, q string) ([]UserRow, error)
+	UserCounts(ctx context.Context, id string) (map[string]int64, error)
+	ListConnections(ctx context.Context, f ConnectionFilter) ([]ConnectionRow, error)
+	ConnectionCounts(ctx context.Context, id string) (map[string]int64, error)
+	LastLogID(ctx context.Context) (int64, error)
+	StaleSeenCount(ctx context.Context) (int64, error)
 }
 
 var _ Store = (*DB)(nil)
