@@ -16,9 +16,10 @@ type DeleteResult struct {
 	Status string `json:"status"`
 	// Counts is the delete's own rows per table.
 	Counts map[string]int64 `json:"counts"`
-	// Swept is the late log rows the sweep removed (0 without log_after);
-	// it is not in Counts.
-	Swept int64 `json:"swept"`
+	// Swept is the late log rows the sweep removed (0 without log_after),
+	// and SweptArchive the archive blocks; neither is in Counts.
+	Swept        int64 `json:"swept"`
+	SweptArchive int64 `json:"swept_archive"`
 	// SweepError is set when the delete committed but the sweep failed.
 	SweepError string `json:"sweep_error,omitempty"`
 }
@@ -97,12 +98,12 @@ func (a *api) remove(w http.ResponseWriter, r *http.Request, del deleteFunc, wha
 		if what == "user" {
 			user = id
 		}
-		n, err := a.store.SweepLateLogs(ctx, user, conns, after)
+		n, blocks, err := a.store.SweepLateLogs(ctx, user, conns, after)
 		if err != nil {
 			log.Printf("admin: sweep late logs of %s: %v", what, err)
 			res.SweepError = "internal error"
 		} else {
-			res.Swept = n
+			res.Swept, res.SweptArchive = n, blocks
 		}
 	}
 	write(w, http.StatusOK, res)

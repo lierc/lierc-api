@@ -57,7 +57,6 @@ type Env struct {
 	Stdin           io.Reader
 	Stdout, Stderr  io.Writer
 	StdinIsTerminal bool
-	group           string // "admin " for an admin command, for usage texts
 	// ReadPassword reads a password from the terminal without echo.
 	ReadPassword func() (string, error)
 	// Resolve resolves host names for the connection address check.
@@ -143,7 +142,6 @@ func mainGroups(ctx context.Context, args []string, sys System, cmds, adminCmds 
 		return 1
 	}
 	defer release()
-	env.group = label
 
 	err = cmd.Run(ctx, env, args[1:])
 	var usage *UsageError
@@ -258,7 +256,10 @@ func sleepCtx(ctx context.Context, d time.Duration) error {
 func NewFlags(env *Env, name, usage string) *flag.FlagSet {
 	fs := flag.NewFlagSet(name, flag.ContinueOnError)
 	fs.SetOutput(env.Stderr)
-	prefix := env.group
+	prefix := ""
+	if adminNames[name] {
+		prefix = "admin "
+	}
 	fs.Usage = func() {
 		fmt.Fprintf(env.Stderr, "usage: lctl %s%s\n", prefix, usage)
 		var any bool

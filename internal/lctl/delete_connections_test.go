@@ -168,13 +168,13 @@ func TestDeleteConnectionsReportsSwept(t *testing.T) {
 		if r.Method != http.MethodDelete {
 			return false
 		}
-		w.Write([]byte(`{"status":"ok","counts":{"log":1,"seen":1,"private":1,"connection":1},"swept":2}`))
+		w.Write([]byte(`{"status":"ok","counts":{"log":1,"seen":1,"private":1,"connection":1},"swept":2,"swept_archive":1}`))
 		return true
 	})
 	if err := h.run("delete-connections", "--delete", "--settle", "0", "c1"); err != nil {
 		t.Fatal(err)
 	}
-	h.has("c1: deleted (log=1 seen=1 private=1 connection=1)\n", "removed 2 late log row(s)\n")
+	h.has("c1: deleted (log=1 seen=1 private=1 connection=1)\n", "removed 2 late log row(s)\n", "removed 1 late archive block(s)\n")
 }
 
 // A sweep that failed after the delete committed is a warning, not a skip.
@@ -218,4 +218,16 @@ func TestDeleteConnectionsAlreadyGone(t *testing.T) {
 	if strings.Contains(h.out(), "failed") {
 		t.Errorf("output says failed:\n%s", h.out())
 	}
+}
+
+// A config that isn't a JSON object shows its host:port as "?" in the dry
+// run, as it did before the admin API (whose view returns it as null).
+func TestDeleteConnectionsDryRunNonObjectConfig(t *testing.T) {
+	h := newHarness(t)
+	u := h.user("ann")
+	h.conn("c1", u, `"not an object"`)
+	if err := h.run("delete-connections", "c1"); err != nil {
+		t.Fatal(err)
+	}
+	h.has("c1 (user " + u + ", ann, ?): ")
 }

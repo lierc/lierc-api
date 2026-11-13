@@ -124,7 +124,7 @@ func deleteUsers(ctx context.Context, env *Env, args []string) error {
 	}
 
 	var deleted []foundUser
-	late := map[string]int64{}
+	late, lateBlocks := map[string]int64{}, map[string]int64{}
 	for _, u := range ready {
 		if err := ctx.Err(); err != nil {
 			return err
@@ -145,6 +145,7 @@ func deleteUsers(ctx context.Context, env *Env, args []string) error {
 			continue
 		}
 		late[u.id] = res.Swept
+		lateBlocks[u.id] = res.SweptArchive
 		warnSweep(env, u.id, res)
 		fmt.Fprintf(out, "%s: deleted\n", u.id)
 		deleted = append(deleted, u)
@@ -153,6 +154,9 @@ func deleteUsers(ctx context.Context, env *Env, args []string) error {
 	for _, u := range deleted {
 		if n := late[u.id]; n > 0 {
 			fmt.Fprintf(out, "%s: removed %d late log row(s)\n", u.id, n)
+		}
+		if n := lateBlocks[u.id]; n > 0 {
+			fmt.Fprintf(out, "%s: removed %d late archive block(s)\n", u.id, n)
 		}
 	}
 

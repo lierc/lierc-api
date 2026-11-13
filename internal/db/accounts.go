@@ -58,6 +58,7 @@ func (d *DB) AccountsByLogin(ctx context.Context, name string) ([]AccountAuth, e
 }
 
 // AccountAuthByEmail finds the user whose email is email, ignoring case.
+// Verified is not read.
 func (d *DB) AccountAuthByEmail(ctx context.Context, email string) (AccountAuth, bool, error) {
 	var a AccountAuth
 	err := d.Pool.QueryRow(ctx,

@@ -20,16 +20,24 @@ type Connection struct {
 	Host     string          `json:"host"`
 	Port     int             `json:"port"`
 	Config   json.RawMessage `json:"config"`
+	// ConfigError says why Host and Port couldn't be read from the saved
+	// config (e.g. it isn't a JSON object); empty when they could.
+	ConfigError string `json:"config_error,omitempty"`
 }
 
 func connectionOf(r db.ConnectionRow) Connection {
 	c := Connection{ID: r.ID, User: r.User, Username: r.Username, Instance: r.Instance, Config: redact(r.Config)}
-	if v, _ := connconfig.Decode(r.Config); v != nil {
-		if params, ok := v.(map[string]any); ok {
-			c.Host, _ = connconfig.Display(params["Host"])
-			p, _ := connconfig.Display(params["Port"])
-			c.Port, _ = strconv.Atoi(p)
-		}
+	v, err := connconfig.Decode(r.Config)
+	params, ok := v.(map[string]any)
+	switch {
+	case err != nil:
+		c.ConfigError = "config isn't valid JSON"
+	case !ok:
+		c.ConfigError = "config isn't a JSON object"
+	default:
+		c.Host, _ = connconfig.Display(params["Host"])
+		p, _ := connconfig.Display(params["Port"])
+		c.Port, _ = strconv.Atoi(p)
 	}
 	return c
 }

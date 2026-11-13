@@ -375,17 +375,17 @@ func TestSweepLateLogs(t *testing.T) {
 	}
 
 	// a connection sweep: only c1's late rows
-	n, err := d.SweepLateLogs(ctx, "", []string{"c1"}, 10)
-	if err != nil || n != 1 {
-		t.Fatalf("connection sweep = %d, %v", n, err)
+	n, blocks, err := d.SweepLateLogs(ctx, "", []string{"c1"}, 10)
+	if err != nil || n != 1 || blocks != 1 {
+		t.Fatalf("connection sweep = %d rows, %d blocks, %v; want 1, 1", n, blocks, err)
 	}
 	if got := remaining(); !reflect.DeepEqual(got, []int64{5, 12, 13, 14}) {
 		t.Errorf("after connection sweep: %v", got)
 	}
 	// a user sweep: late rows of the user, including of a deleted connection
-	n, err = d.SweepLateLogs(ctx, u, []string{"c1", "c2"}, 10)
-	if err != nil || n != 2 {
-		t.Fatalf("user sweep = %d, %v", n, err)
+	n, blocks, err = d.SweepLateLogs(ctx, u, []string{"c1", "c2"}, 10)
+	if err != nil || n != 2 || blocks != 0 {
+		t.Fatalf("user sweep = %d rows, %d blocks, %v; want 2, 0", n, blocks, err)
 	}
 	if got := remaining(); !reflect.DeepEqual(got, []int64{5, 14}) {
 		t.Errorf("after user sweep: %v", got)
@@ -396,7 +396,7 @@ func TestSweepLateLogs(t *testing.T) {
 		t.Errorf("log_archive rows = %d, want only the other user's", archived)
 	}
 	// after 0 sweeps everything of the connection
-	if n, err := d.SweepLateLogs(ctx, "", []string{"oc"}, 0); err != nil || n != 1 {
-		t.Errorf("after 0 = %d, %v", n, err)
+	if n, blocks, err := d.SweepLateLogs(ctx, "", []string{"oc"}, 0); err != nil || n != 1 || blocks != 1 {
+		t.Errorf("after 0 = %d rows, %d blocks, %v; want 1, 1", n, blocks, err)
 	}
 }

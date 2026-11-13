@@ -26,3 +26,13 @@ var AdminCommands = []Command{
 	{Name: "users", Summary: "Open event streams for users (default all)", Run: users},
 	{Name: "prune-seen", Summary: "Count or delete seen rows for deleted connections or not updated in a month", Run: pruneSeen},
 }
+
+// adminNames is the names of AdminCommands, for usage texts ("lctl admin
+// NAME"). It's filled in init, as AdminCommands' functions use it.
+var adminNames = map[string]bool{}
+
+func init() {
+	for _, c := range AdminCommands {
+		adminNames[c.Name] = true
+	}
+}

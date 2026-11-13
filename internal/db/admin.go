@@ -310,16 +310,18 @@ func (d *DB) DeleteConnectionData(ctx context.Context, id string) ([]ConnectionC
 // SweepLateLogs deletes the log rows with id > after that the logger wrote
 // once a delete had begun: those of user (none when empty) or of
 // connections. It looks only at those, by id, so it reads seconds of log.
-// It also clears the log_archive rows of the same owners, which the
-// archiver may have moved since. It returns the log rows deleted.
-func (d *DB) SweepLateLogs(ctx context.Context, user string, connections []string, after int64) (int64, error) {
+// It also clears the log_archive blocks of the same owners, which the
+// archiver may have moved since. It returns the log rows and the archive
+// blocks it deleted.
+func (d *DB) SweepLateLogs(ctx context.Context, user string, connections []string, after int64) (rows, blocks int64, err error) {
 	const cond = `($1::text <> '' AND "user" = $1) OR connection = ANY($2)`
 	tag, err := d.Pool.Exec(ctx, `DELETE FROM log WHERE id > $3 AND (`+cond+`)`, user, connections, after)
 	if err != nil {
-		return 0, err
+		return 0, 0, err
 	}
-	if _, err := d.Pool.Exec(ctx, `DELETE FROM log_archive WHERE `+cond, user, connections); err != nil {
-		return 0, err
+	arch, err := d.Pool.Exec(ctx, `DELETE FROM log_archive WHERE `+cond, user, connections)
+	if err != nil {
+		return 0, 0, err
 	}
-	return tag.RowsAffected(), nil
+	return tag.RowsAffected(), arch.RowsAffected(), nil
 }

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"flag"
 	"net"
 	"net/http/httptest"
 	"strconv"
@@ -485,5 +486,22 @@ func TestArchiveOpensStoreWithoutAdmin(t *testing.T) {
 	}
 	if strings.Contains(o.stderr.String(), "reachable") {
 		t.Errorf("archive touched the admin server: %s", o.stderr.String())
+	}
+}
+
+// An admin command's usage names it as "lctl admin NAME" however it's run.
+func TestAdminUsagePrefix(t *testing.T) {
+	h := newHarness(t)
+	if err := h.run("user-info", "-h"); !errors.Is(err, flag.ErrHelp) {
+		t.Fatalf("got %v", err)
+	}
+	if !strings.HasPrefix(h.stderr.String(), "usage: lctl admin user-info") {
+		t.Errorf("usage = %q", h.stderr.String())
+	}
+	if err := h.run("archive", "-h"); !errors.Is(err, flag.ErrHelp) {
+		t.Fatalf("archive -h: %v", err)
+	}
+	if !strings.HasPrefix(h.stderr.String(), "usage: lctl archive") {
+		t.Errorf("archive usage = %q", h.stderr.String())
 	}
 }

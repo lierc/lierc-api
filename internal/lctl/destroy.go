@@ -40,7 +40,7 @@ func destroyAndDelete(ctx context.Context, env *Env, ids []string, settle time.D
 		return 0, skipped, err
 	}
 
-	var late int64
+	var late, lateBlocks int64
 	for _, id := range ready {
 		if err := ctx.Err(); err != nil {
 			return deleted, skipped, err
@@ -62,6 +62,7 @@ func destroyAndDelete(ctx context.Context, env *Env, ids []string, settle time.D
 		}
 		counts := res.Counts
 		late += res.Swept
+		lateBlocks += res.SweptArchive
 		warnSweep(env, id, res)
 		parts := make([]string, len(connectionTables))
 		for i, t := range connectionTables {
@@ -72,6 +73,9 @@ func destroyAndDelete(ctx context.Context, env *Env, ids []string, settle time.D
 	}
 	if late > 0 {
 		fmt.Fprintf(out, "removed %d late log row(s)\n", late)
+	}
+	if lateBlocks > 0 {
+		fmt.Fprintf(out, "removed %d late archive block(s)\n", lateBlocks)
 	}
 	return deleted, skipped, nil
 }

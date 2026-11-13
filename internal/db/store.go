@@ -99,7 +99,7 @@ type Store interface {
 	// the admin API's writes
 	DeleteUserData(ctx context.Context, id string) ([]ConnectionChange, map[string]int64, error)
 	DeleteConnectionData(ctx context.Context, id string) ([]ConnectionChange, map[string]int64, error)
-	SweepLateLogs(ctx context.Context, user string, connections []string, after int64) (int64, error)
+	SweepLateLogs(ctx context.Context, user string, connections []string, after int64) (rows, blocks int64, err error)
 	PruneStaleSeen(ctx context.Context) (int64, error)
 }
 

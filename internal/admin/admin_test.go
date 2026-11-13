@@ -358,3 +358,27 @@ func TestBadParams(t *testing.T) {
 		}
 	}
 }
+
+// A config whose host and port can't be read says so in config_error,
+// rather than passing off host "" and port 0 as real.
+func TestConnectionConfigError(t *testing.T) {
+	e := newEnv(t)
+	a := testenv.AddUser(t, e.d, "alice")
+	testenv.AddConnection(t, e.d, "bad", a, `"not an object"`)
+	testenv.AddConnection(t, e.d, "ok", a, `{"Host":"h","Port":1}`)
+	var c map[string]any
+	e.getJSON("/admin/connections/bad", &c)
+	if c["config_error"] != "config isn't a JSON object" || c["host"] != "" || c["port"] != float64(0) || c["config"] != nil {
+		t.Errorf("bad view = %v", c)
+	}
+	if code, body := e.get("/admin/connections/ok"); code != 200 || strings.Contains(body, "config_error") {
+		t.Errorf("ok view: %d %s", code, body)
+	}
+	var list []map[string]any
+	e.getJSON("/admin/connections", &list)
+	for _, c := range list {
+		if (c["id"] == "bad") != (c["config_error"] != nil) {
+			t.Errorf("list item %v", c)
+		}
+	}
+}

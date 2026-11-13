@@ -216,12 +216,13 @@ func (a *Admin) StaleSeen(ctx context.Context) (int64, error) {
 var ErrMaybeDone = errors.New("the request ended before the API answered; the delete may have finished")
 
 // Deleted is what a delete did. Counts are the delete's own rows per table;
-// Swept is the late log rows removed after it. SweepError, if set, says the
-// delete is done but the sweep failed.
+// Swept and SweptArchive are the late log rows and archive blocks removed
+// after it. SweepError, if set, says the delete is done but the sweep failed.
 type Deleted struct {
-	Counts     map[string]int64
-	Swept      int64
-	SweepError string
+	Counts       map[string]int64
+	Swept        int64
+	SweptArchive int64
+	SweepError   string
 }
 
 // remove sends a delete; logAfter is the log's last id from before the
@@ -234,7 +235,7 @@ func (a *Admin) remove(ctx context.Context, path string, logAfter int64) (Delete
 		// request may have arrived before the connection broke
 		return Deleted{}, ErrMaybeDone
 	}
-	return Deleted{out.Counts, out.Swept, out.SweepError}, err
+	return Deleted{out.Counts, out.Swept, out.SweptArchive, out.SweepError}, err
 }
 
 // DeleteUser deletes a user and their data, then sweeps log rows with an id

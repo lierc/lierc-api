@@ -469,8 +469,8 @@ func TestStreamGetsDelete(t *testing.T) {
 // sweepFails is a Store whose late-log sweep fails.
 type sweepFails struct{ db.Store }
 
-func (sweepFails) SweepLateLogs(context.Context, string, []string, int64) (int64, error) {
-	return 0, errors.New("boom")
+func (sweepFails) SweepLateLogs(context.Context, string, []string, int64) (int64, int64, error) {
+	return 0, 0, errors.New("boom")
 }
 
 func TestSweepFailureStillAnnounces(t *testing.T) {
@@ -505,7 +505,7 @@ type sweeps struct {
 	calls []int64
 }
 
-func (s *sweeps) SweepLateLogs(ctx context.Context, user string, conns []string, after int64) (int64, error) {
+func (s *sweeps) SweepLateLogs(ctx context.Context, user string, conns []string, after int64) (int64, int64, error) {
 	s.calls = append(s.calls, after)
 	return s.Store.SweepLateLogs(ctx, user, conns, after)
 }
@@ -532,8 +532,8 @@ func TestLogAfterZeroSweeps(t *testing.T) {
 // sweepsTwo is a Store whose late-log sweep removes 2 rows.
 type sweepsTwo struct{ db.Store }
 
-func (sweepsTwo) SweepLateLogs(context.Context, string, []string, int64) (int64, error) {
-	return 2, nil
+func (sweepsTwo) SweepLateLogs(context.Context, string, []string, int64) (int64, int64, error) {
+	return 2, 1, nil
 }
 
 // swept reports the sweep's rows apart from the delete's own counts; it is 0
@@ -548,10 +548,13 @@ func TestDeleteReportsSwept(t *testing.T) {
 		w := httptest.NewRecorder()
 		h.ServeHTTP(w, httptest.NewRequest("DELETE", path, nil))
 		var res struct {
-			Counts map[string]int64
-			Swept  *int64
+			Counts       map[string]int64
+			Swept        *int64
+			SweptArchive *int64 `json:"swept_archive"`
 		}
-		if err := json.Unmarshal(w.Body.Bytes(), &res); err != nil || w.Code != 200 || res.Swept == nil || *res.Swept != want {
+		wantBlocks := want / 2 // sweepsTwo sweeps 2 rows and 1 block; no sweep, none
+		if err := json.Unmarshal(w.Body.Bytes(), &res); err != nil || w.Code != 200 || res.Swept == nil || *res.Swept != want ||
+			res.SweptArchive == nil || *res.SweptArchive != wantBlocks {
 			t.Fatalf("%s: %d %s", path, w.Code, w.Body)
 		}
 		if strings.Contains(path, "log_after") && res.Counts["log"] != 1 {
