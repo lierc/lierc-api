@@ -26,6 +26,9 @@ type api struct {
 	users auth.Users
 	conns *connections.Service
 	acct  *accounts.Service
+	// streams is the event stream server: the Logins dialog asks it which
+	// logins are connected
+	streams *stream.Server
 
 	// per-account limits on failed logins and reset emails
 	loginLimit, resetLimit *ratelimit.Limiter
@@ -38,6 +41,7 @@ func New(cfg config.Config, s db.Store, streams *stream.Server, lc *liercd.Clien
 		cfg:        cfg,
 		db:         s,
 		users:      auth.Users{DB: s, Secure: cfg.Secure},
+		streams:    streams,
 		loginLimit: ratelimit.New(10, 15*time.Minute),
 		resetLimit: ratelimit.New(3, time.Hour),
 	}

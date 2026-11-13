@@ -186,3 +186,32 @@ func TestLoginsCrossSite(t *testing.T) {
 		t.Errorf("login after a refused cross-site delete: %d, want 200", code)
 	}
 }
+
+// A login with an event stream open is connected; one without isn't.
+func TestListLoginsConnected(t *testing.T) {
+	e := setup(t)
+	alice := testenv.AddUser(t, e.db, "alice")
+	a, b := testenv.Login(t, e.db, alice), testenv.Login(t, e.db, alice)
+	res := e.doReq("GET", "/events", "", "", "Cookie", "chats="+a)
+	defer res.Body.Close()
+	if res.StatusCode != 200 {
+		t.Fatalf("stream: %d", res.StatusCode)
+	}
+	code, body := e.tokenReq("GET", "/logins", b)
+	if code != 200 {
+		t.Fatalf("GET /logins: %d %s", code, body)
+	}
+	var list []struct {
+		ID        int64
+		Connected *bool
+	}
+	if err := json.Unmarshal([]byte(body), &list); err != nil || len(list) != 2 {
+		t.Fatalf("logins %s, %v", body, err)
+	}
+	for _, l := range list {
+		want := l.ID == e.loginID(a)
+		if l.Connected == nil || *l.Connected != want {
+			t.Errorf("login %d: connected %v, want %v", l.ID, l.Connected, want)
+		}
+	}
+}

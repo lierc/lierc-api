@@ -24,6 +24,8 @@ type loginJSON struct {
 	UserAgent string `json:"user_agent"`
 	IP        string `json:"ip"`
 	Current   bool   `json:"current"`
+	// Connected is whether the login has an event stream open now.
+	Connected bool `json:"connected"`
 }
 
 func (a *api) listLogins(w http.ResponseWriter, r *http.Request, user string) {
@@ -33,6 +35,7 @@ func (a *api) listLogins(w http.ResponseWriter, r *http.Request, user string) {
 		return
 	}
 	current, _ := auth.LoginID(r.Context())
+	connected := a.streams.ConnectedLogins(user)
 	list := make([]loginJSON, 0, len(infos))
 	for _, l := range infos {
 		list = append(list, loginJSON{
@@ -42,6 +45,7 @@ func (a *api) listLogins(w http.ResponseWriter, r *http.Request, user string) {
 			UserAgent: l.UserAgent,
 			IP:        l.IP,
 			Current:   l.ID == current,
+			Connected: connected[l.ID],
 		})
 	}
 	respond.JSON(w, http.StatusOK, list)

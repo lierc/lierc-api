@@ -34,6 +34,7 @@ var padding = ":" + strings.Repeat(" ", 2<<10) + "\n" // Writer.pm send_padding(
 // written on arrival while the replay waits on liercd.
 type stream struct {
 	id, user, remote string
+	login            int64 // the login that opened it; 0 for none
 	agent            *string
 	created          int64
 
@@ -96,6 +97,7 @@ func (s *Server) serveStream(w http.ResponseWriter, r *http.Request, user string
 	if v, ok := r.Header["User-Agent"]; ok {
 		st.agent = &v[0]
 	}
+	st.login, _ = auth.LoginID(r.Context())
 
 	rc := http.NewResponseController(w)
 	w.Header().Set("Content-Type", "text/event-stream;charset=utf-8")

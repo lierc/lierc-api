@@ -177,6 +177,20 @@ func (s *Server) register(st *stream) {
 	s.streams[st.user][st.id] = st
 }
 
+// ConnectedLogins is the logins of user that have a stream open now (the
+// Logins dialog's "connected now"). Several streams on one login are one.
+func (s *Server) ConnectedLogins(user string) map[int64]bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	ids := map[int64]bool{}
+	for _, st := range s.streams[user] {
+		if st.login != 0 {
+			ids[st.login] = true
+		}
+	}
+	return ids
+}
+
 func (s *Server) deregister(st *stream) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
