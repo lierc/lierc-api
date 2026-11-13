@@ -8,6 +8,9 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/lierc/lierc-api/internal/liercd"
+	"github.com/lierc/lierc-api/internal/testenv"
 )
 
 func TestAdminClientErrors(t *testing.T) {
@@ -120,5 +123,45 @@ func TestAdminTimeoutSkipsDeletes(t *testing.T) {
 	_, err = a.PruneLogins(ctx)
 	if err == nil || errors.Is(err, ErrUnreachable) || !strings.Contains(err.Error(), "may have been made") {
 		t.Errorf("PruneLogins: %v, want a may-have-been-made error", err)
+	}
+}
+
+// instanceOf routes liercd calls by the admin API's view of a connection:
+// next, main ("" too) and gone are answers; any other failure is an error,
+// and a routed liercd call then fails without reaching liercd.
+func TestInstanceOf(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/admin/connections/n":
+			w.Write([]byte(`{"id":"n","instance":"next"}`))
+		case "/admin/connections/m":
+			w.Write([]byte(`{"id":"m","instance":"main"}`))
+		case "/admin/connections/gone":
+			w.WriteHeader(404)
+			w.Write([]byte(`{"error":"no such connection"}`))
+		default:
+			w.WriteHeader(500)
+			w.Write([]byte(`{"error":"internal error"}`))
+		}
+	}))
+	defer srv.Close()
+	a := &Admin{BaseURL: srv.URL, HTTP: http.DefaultClient}
+	ctx := context.Background()
+	for id, want := range map[string]string{"n": "next", "m": "", "gone": ""} {
+		if got, err := a.instanceOf(ctx, id); got != want || err != nil {
+			t.Errorf("instanceOf(%s) = %q, %v, want %q", id, got, err, want)
+		}
+	}
+	if got, err := a.instanceOf(ctx, "broken"); err == nil || got != "" {
+		t.Errorf("instanceOf(broken) = %q, %v, want an error", got, err)
+	}
+
+	fake := testenv.FakeLiercd(t)
+	c := liercd.NewRoutedForTest(fake.URL, fake.URL, a.instanceOf)
+	if _, err := c.Do(ctx, http.MethodGet, "broken/status", nil); err == nil || !strings.Contains(err.Error(), "internal error") {
+		t.Errorf("routed call on a failed lookup: %v, want the lookup's error", err)
+	}
+	if calls := fake.Calls(); len(calls) != 0 {
+		t.Errorf("liercd called %v after a failed lookup", calls)
 	}
 }

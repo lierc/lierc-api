@@ -76,3 +76,47 @@ func TestLoginDeleteListPrune(t *testing.T) {
 		t.Errorf("deleted %d %v", n, err)
 	}
 }
+
+// Logins lists a user's live logins, most recently used first (ties by
+// newest id), leaving out those unused for 7 days; DeleteLoginByHash ends
+// only the login with that hash.
+func TestLoginsOrderExpiryAndDeleteByHash(t *testing.T) {
+	d := testenv.Postgres(t)
+	ctx := context.Background()
+	a := testenv.AddUser(t, d, "alice")
+	for i := 1; i <= 4; i++ {
+		if err := d.InsertLogin(ctx, []byte{byte(i)}, a, "agent", ""); err != nil {
+			t.Fatal(err)
+		}
+	}
+	exec(t, d, `UPDATE login SET last_used = now() - interval '1 hour' WHERE token_hash = '\x01'`)
+	exec(t, d, `UPDATE login SET last_used = now() - interval '10 minutes' WHERE token_hash IN ('\x02', '\x03')`)
+	exec(t, d, `UPDATE login SET last_used = now() - interval '8 days' WHERE token_hash = '\x04'`)
+	idOf := func(h byte) int64 {
+		return one[int64](t, d, `SELECT id FROM login WHERE token_hash = $1`, []byte{h})
+	}
+	infos, err := d.Logins(ctx, a)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []int64
+	for _, l := range infos {
+		got = append(got, l.ID)
+	}
+	want := []int64{idOf(3), idOf(2), idOf(1)} // 2 and 3 tie: newest id first; 4 expired
+	if len(got) != 3 || got[0] != want[0] || got[1] != want[1] || got[2] != want[2] {
+		t.Errorf("Logins = %v, want %v", got, want)
+	}
+
+	if err := d.DeleteLoginByHash(ctx, []byte{2}); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok, err := d.LoginByHash(ctx, []byte{2}); ok || err != nil {
+		t.Errorf("deleted login still found: %v %v", ok, err)
+	}
+	for _, h := range []byte{1, 3} {
+		if _, ok, err := d.LoginByHash(ctx, []byte{h}); !ok || err != nil {
+			t.Errorf("login %d gone after deleting another: %v %v", h, ok, err)
+		}
+	}
+}

@@ -207,6 +207,29 @@ func TestEnvFromSystem(t *testing.T) {
 	if env2.Resolve == nil || env2.Sleep == nil || env2.ReadPassword == nil {
 		t.Error("Resolve, Sleep and ReadPassword must be set")
 	}
+	if env2.Admin.BaseURL != "http://127.0.0.1:5009" {
+		t.Errorf("default admin %q", env2.Admin.BaseURL)
+	}
+
+	// API_STATS defaults to API_ADMIN's /stats; API_STATS still wins
+	vars["API_ADMIN"] = "http://adm:9/"
+	env3, close3, err := OpenEnv(context.Background(), sys, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer close3()
+	if env3.Admin.BaseURL != "http://adm:9" || env3.StatsURL != "http://adm:9/stats" {
+		t.Errorf("API_ADMIN: admin %q stats %q", env3.Admin.BaseURL, env3.StatsURL)
+	}
+	vars["API_STATS"] = "http://s/stats"
+	env4, close4, err := OpenEnv(context.Background(), sys, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer close4()
+	if env4.StatsURL != "http://s/stats" {
+		t.Errorf("API_STATS with API_ADMIN: stats %q", env4.StatsURL)
+	}
 }
 
 func TestSleepCancelled(t *testing.T) {
@@ -438,5 +461,29 @@ func TestReviveRoutesWithoutAdmin(t *testing.T) {
 	}
 	if want := "GET /stopped/status,POST /stopped/create"; strings.Join(got, ",") != want {
 		t.Errorf("liercd calls %v, want %s", got, want)
+	}
+}
+
+// archive opens the database itself and works with the admin server down.
+func TestArchiveOpensStoreWithoutAdmin(t *testing.T) {
+	h := newHarness(t)
+	closed := httptest.NewServer(nil)
+	closed.Close()
+	cc := h.db.Pool.Config().ConnConfig
+	vars := map[string]string{
+		"POSTGRES_HOST":     net.JoinHostPort(cc.Host, strconv.Itoa(int(cc.Port))),
+		"POSTGRES_USER":     cc.User,
+		"POSTGRES_PASSWORD": cc.Password,
+		"POSTGRES_DB":       cc.Database,
+		"API_ADMIN":         closed.URL,
+	}
+	var o out
+	sys := o.sys("", true)
+	sys.Getenv = func(k string) string { return vars[k] }
+	if code := Main(context.Background(), []string{"archive"}, sys); code != 0 {
+		t.Fatalf("archive: exit %d: %s", code, o.stderr.String())
+	}
+	if strings.Contains(o.stderr.String(), "reachable") {
+		t.Errorf("archive touched the admin server: %s", o.stderr.String())
 	}
 }

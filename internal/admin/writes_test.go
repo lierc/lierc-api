@@ -2,11 +2,14 @@ package admin_test
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	"log"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -85,8 +88,13 @@ func TestDeleteUser(t *testing.T) {
 	b := e.seedUser("bob", "b1")
 	testenv.AddLog(t, e.d, 1, "c1", a)
 	testenv.AddLog(t, e.d, 2, "gone", a) // a connection deleted before the user
+	// the earlier-deleted connection's archive and seen rows carry alice's id
+	e.exec(`INSERT INTO log_archive (connection, "user", channel, first_id, last_id, min_time, max_time, count, messages)
+		VALUES ('gone', '` + a + `', '#a', 3, 4, now(), now(), 2, '[]')`)
+	e.exec(`INSERT INTO seen ("user", connection, channel, message_id) VALUES ('` + a + `', 'gone', '#a', 1)`)
 	testenv.AddLog(t, e.d, 3, "b1", b)
 	testenv.Login(t, e.d, a)
+	testenv.Login(t, e.d, b)
 	// rows that arrived after log_after, for the user's connections
 	testenv.AddLog(t, e.d, 50, "c2", a)
 	testenv.AddLog(t, e.d, 51, "c1", "")
@@ -102,7 +110,7 @@ func TestDeleteUser(t *testing.T) {
 	if err := json.Unmarshal([]byte(body), &res); err != nil || res.Status != "ok" {
 		t.Fatalf("body = %s", body)
 	}
-	if res.Counts["connection"] != 2 || res.Counts["log_archive"] != 2 || res.Counts["seen"] != 2 || res.Counts["private"] != 2 ||
+	if res.Counts["connection"] != 2 || res.Counts["log_archive"] != 3 || res.Counts["seen"] != 3 || res.Counts["private"] != 2 ||
 		res.Counts["pref"] != 1 || res.Counts["web_push"] != 1 || res.Counts["login"] != 1 || res.Counts["log"] < 2 {
 		t.Errorf("counts = %v", res.Counts)
 	}
@@ -116,6 +124,8 @@ func TestDeleteUser(t *testing.T) {
 		`SELECT count(*) FROM pref WHERE "user" = '` + a + `'`,
 		`SELECT count(*) FROM web_push WHERE "user" = '` + a + `'`,
 		`SELECT count(*) FROM login WHERE "user" = '` + a + `'`,
+		`SELECT count(*) FROM log_archive WHERE connection = 'gone'`,
+		`SELECT count(*) FROM seen WHERE connection = 'gone'`,
 	} {
 		if n := e.count(q); n != 0 {
 			t.Errorf("%s = %d, want 0", q, n)
@@ -130,6 +140,8 @@ func TestDeleteUser(t *testing.T) {
 		`SELECT count(*) FROM seen WHERE connection = 'b1'`:        1,
 		`SELECT count(*) FROM private WHERE connection = 'b1'`:     1,
 		`SELECT count(*) FROM pref WHERE "user" = '` + b + `'`:     1,
+		`SELECT count(*) FROM web_push WHERE "user" = '` + b + `'`: 1,
+		`SELECT count(*) FROM login WHERE "user" = '` + b + `'`:    1,
 	} {
 		if n := e.count(q); n != want {
 			t.Errorf("%s = %d, want %d", q, n, want)
@@ -544,6 +556,30 @@ func TestDeleteReportsSwept(t *testing.T) {
 		}
 		if strings.Contains(path, "log_after") && res.Counts["log"] != 1 {
 			t.Errorf("counts = %v, want the transaction's own log count", res.Counts)
+		}
+	}
+}
+
+func (failing) ListUsers(context.Context, db.UserFilter) ([]db.UserRow, error) {
+	return nil, errors.New("boom secret detail")
+}
+
+// A store failure answers 500 {"error":"internal error"} and logs the cause,
+// which never reaches the response.
+func TestInternalErrorLogsCause(t *testing.T) {
+	var logged bytes.Buffer
+	log.SetOutput(&logged)
+	t.Cleanup(func() { log.SetOutput(os.Stderr) })
+	h := admin.New(failing{}, nil)
+	for _, rq := range [][2]string{{"GET", "/admin/users"}, {"DELETE", "/admin/users/u1"}} {
+		logged.Reset()
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, httptest.NewRequest(rq[0], rq[1], nil))
+		if w.Code != 500 || strings.TrimSpace(w.Body.String()) != `{"error":"internal error"}` {
+			t.Errorf("%s %s: %d %s", rq[0], rq[1], w.Code, w.Body)
+		}
+		if !strings.Contains(logged.String(), "boom secret detail") {
+			t.Errorf("%s %s: cause not logged: %q", rq[0], rq[1], logged.String())
 		}
 	}
 }

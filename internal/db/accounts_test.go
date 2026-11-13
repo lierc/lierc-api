@@ -179,3 +179,23 @@ func TestNoLegacyPasswordColumn(t *testing.T) {
 		t.Errorf("the user table still has a password column")
 	}
 }
+
+// One account's email can be another's username (accounts from before
+// usernames were restricted): a login by that name finds both.
+func TestAccountsByLoginEmailIsAnothersUsername(t *testing.T) {
+	d := testenv.Postgres(t)
+	exec(t, d, `ALTER TABLE "user" DROP CONSTRAINT user_username_valid`)
+	exec(t, d, `INSERT INTO "user" (id, username, email, password_hash, verified) VALUES
+		('u1','alice','shared@x.test','h1',true), ('u2','Shared@X.test','bob@x.test','h2',true), ('u3','carol','c@x.test','h3',true)`)
+	rs, err := d.AccountsByLogin(context.Background(), "SHARED@x.test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]string{}
+	for _, r := range rs {
+		got[r.ID] = *r.PasswordHash
+	}
+	if len(got) != 2 || got["u1"] != "h1" || got["u2"] != "h2" {
+		t.Errorf("AccountsByLogin = %v, want u1 and u2", got)
+	}
+}

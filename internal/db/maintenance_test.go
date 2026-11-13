@@ -144,3 +144,62 @@ func TestReviveCandidates(t *testing.T) {
 		t.Errorf("config = %+v", cs)
 	}
 }
+
+// An archive block whose connection still exists but whose user is gone is
+// an orphan too; a block of a live connection and user is not.
+func TestOrphanArchiveGoneUser(t *testing.T) {
+	d := testenv.Postgres(t)
+	ctx := context.Background()
+	a := testenv.AddUser(t, d, "alice")
+	testenv.AddConnection(t, d, "c1", a, "{}")
+	exec(t, d, `INSERT INTO log_archive (connection, "user", channel, first_id, last_id, min_time, max_time, count, messages)
+		VALUES ('c1', 'ghost', '#a', 10, 11, now(), now(), 2, '[]'), ('c1', $1, '#a', 12, 13, now(), now(), 2, '[]')`, a)
+	if n, err := d.CountOrphanArchive(ctx); err != nil || n != 1 {
+		t.Errorf("CountOrphanArchive = %d, %v, want 1", n, err)
+	}
+	if n, err := d.DeleteOrphanArchive(ctx, 5); err != nil || n != 1 {
+		t.Errorf("DeleteOrphanArchive = %d, %v, want 1", n, err)
+	}
+	if u := one[string](t, d, `SELECT "user" FROM log_archive`); u != a {
+		t.Errorf("left the block of %s, want alice's", u)
+	}
+}
+
+// ArchiveCandidates' boundaries (keep 2, block 3): the newest keep messages
+// stay, nothing newer than the cutoff moves even past keep, and the count
+// stops at a block.
+func TestArchiveCandidatesBoundaries(t *testing.T) {
+	d := testenv.Postgres(t)
+	ctx := context.Background()
+	a := testenv.AddUser(t, d, "alice")
+	testenv.AddConnection(t, d, "c1", a, "{}")
+	old, fresh := "2020-01-01", "2099-01-01"
+	for i := int64(21); i <= 23; i++ { // one past keep
+		msgRow(t, d, i, "c1", a, "#keep", "x", false, false, old)
+	}
+	for i := int64(31); i <= 32; i++ { // exactly keep
+		msgRow(t, d, i, "c1", a, "#exact", "x", false, false, old)
+	}
+	for i := int64(41); i <= 45; i++ { // two old, then three newer than the cutoff
+		when := old
+		if i > 42 {
+			when = fresh
+		}
+		msgRow(t, d, i, "c1", a, "#fresh", "x", false, false, when)
+	}
+	for i := int64(51); i <= 60; i++ { // eight movable, capped at a block
+		msgRow(t, d, i, "c1", a, "#cap", "x", false, false, old)
+	}
+	got, err := d.ArchiveCandidates(ctx, 2, time.Now().Add(-time.Hour), 3, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var have []string
+	for _, c := range got {
+		have = append(have, c.Channel+":"+strconv.Itoa(c.Movable))
+	}
+	want := []string{"#cap:3", "#fresh:2", "#keep:1"}
+	if !reflect.DeepEqual(have, want) {
+		t.Errorf("ArchiveCandidates = %v, want %v", have, want)
+	}
+}
