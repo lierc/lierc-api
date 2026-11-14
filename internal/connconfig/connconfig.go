@@ -1,13 +1,11 @@
 // Package connconfig is the rules the API applies to an IRC connection's
 // settings, and the check that refuses hosts pointing at loopback or private
-// addresses. It began as a copy of the Perl API's lib/API/ConnectionConfig.pm
-// (now only in git history) and keeps its rules, quirks included: `\s` is
-// Unicode whitespace and `$` also matches before a final newline. It doesn't
-// follow Perl's type conversions: text fields must be JSON strings, Port a
-// JSON number, Ssl/SASL JSON booleans, Channels/Highlight lists of strings
-// (null counts as missing). testdata/connection-config-cases.json, generated
-// from the Perl code and now edited by hand, is the record of those rules:
-// a rule changed here must change there too.
+// addresses. Text fields must be JSON strings, Port a JSON number, Ssl/SASL
+// JSON booleans, Channels/Highlight lists of strings (null counts as
+// missing); text is trimmed of Unicode whitespace, and every pattern must
+// match the whole value. testdata/connection-config-cases.json, first
+// generated from the Perl API's rules and edited by hand since, is the
+// record of these rules: a rule changed here must change there too.
 package connconfig
 
 import (
@@ -31,11 +29,9 @@ import (
 	"github.com/lierc/lierc-api/internal/config"
 )
 
-// perlSpace is Perl's Unicode \s (the White_Space property) as a character
-// class body; Go's \s is ASCII only.
-const perlSpace = `\t\n\v\f\r \x{85}\x{a0}\x{1680}\x{2000}-\x{200a}\x{2028}\x{2029}\x{202f}\x{205f}\x{3000}`
-
-// Perl's `$` (end, or before a final newline) is written `\n?$` below.
+// unicodeSpace is the Unicode White_Space property as a character class
+// body (Go's \s is ASCII only); channel names can't contain any of it.
+const unicodeSpace = `\t\n\v\f\r \x{85}\x{a0}\x{1680}\x{2000}-\x{200a}\x{2028}\x{2029}\x{202f}\x{205f}\x{3000}`
 
 // A nick follows Ergo's rule under casemapping "permissive" (see
 // lib/API/ConnectionConfig.pm): letters, numbers, punctuation and symbols
@@ -57,12 +53,12 @@ var (
 	// The username is the USER ident and, with SASL, the SASL login. An @ is
 	// allowed: Ergo reads "alice@phone" as account alice on device phone.
 	userRe    = regexp.MustCompile(`^[^ \x00\r\n:][^ \x00\r\n]{0,31}$`)
-	channelRe = regexp.MustCompile(`^[#&+!][^` + perlSpace + `,\x00-\x1f\x7f]{1,199}\n?$`)
-	aliasRe   = regexp.MustCompile(`^[A-Za-z0-9 .-]{1,32}\n?$`)
-	portRe    = regexp.MustCompile(`^[ \t\n\r\f\v]*([0-9]{1,5})[ \t\n\r\f\v]*\n?$`)
-	ipv4Re    = regexp.MustCompile(`^([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3})\n?$`)
-	labelRe   = regexp.MustCompile(`^[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\n?$`)
-	digitsRe  = regexp.MustCompile(`^\pN+\n?$`) // Perl \d without /a: any Unicode digit
+	channelRe = regexp.MustCompile(`^[#&+!][^` + unicodeSpace + `,\x00-\x1f\x7f]{1,199}$`)
+	aliasRe   = regexp.MustCompile(`^[A-Za-z0-9 .-]{1,32}$`)
+	portRe    = regexp.MustCompile(`^[ \t\n\r\f\v]*([0-9]{1,5})[ \t\n\r\f\v]*$`)
+	ipv4Re    = regexp.MustCompile(`^([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3})$`)
+	labelRe   = regexp.MustCompile(`^[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?$`)
+	digitsRe  = regexp.MustCompile(`^[0-9]+$`)
 	controlRe = regexp.MustCompile(`[\x00-\x1f\x7f]`)
 )
 

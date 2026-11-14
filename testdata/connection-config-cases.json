@@ -463,30 +463,14 @@
          "name" : "Host  "
       },
       {
+         "error" : "Host must be an IPv4 address or a domain name",
          "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Host\":\"a\\n.com\"}",
-         "name" : "Host with a newline inside a label",
-         "want" : {
-            "Channels" : [],
-            "Highlight" : [],
-            "Host" : "a\n.com",
-            "Nick" : "lee",
-            "Port" : 6697,
-            "SASL" : false,
-            "Ssl" : false
-         }
+         "name" : "Host with a newline inside a label"
       },
       {
+         "error" : "Host must be an IPv4 address or a domain name",
          "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Host\":\"irc\\n.libera.chat\"}",
-         "name" : "Host with a newline at the end of a label",
-         "want" : {
-            "Channels" : [],
-            "Highlight" : [],
-            "Host" : "irc\n.libera.chat",
-            "Nick" : "lee",
-            "Port" : 6697,
-            "SASL" : false,
-            "Ssl" : false
-         }
+         "name" : "Host with a newline at the end of a label"
       },
       {
          "input" : "{\"Host\":\"irc.libera.chat\",\"Port\":6697,\"Nick\":\"lee\",\"Host\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}",
