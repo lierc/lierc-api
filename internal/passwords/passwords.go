@@ -9,8 +9,10 @@ import (
 
 const (
 	cost = 12
-	// bcrypt ignores everything past 72 bytes; Go's GenerateFromPassword
-	// refuses it, so passwords are cut here, as Perl's Crypt::Bcrypt does.
+	// bcrypt ignores everything past 72 bytes and Go's
+	// GenerateFromPassword refuses it, so passwords are cut here: new ones
+	// over 72 bytes are refused before this (accounts), and older ones are
+	// checked by their first 72 bytes, as they were hashed.
 	maxBytes = 72
 
 	// Dummy is a cost-12 hash nobody has the password for, to check against

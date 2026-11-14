@@ -106,6 +106,14 @@ var (
 	xslateEscape = strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;", `"`, "&quot;", "'", "&#39;")
 )
 
+// maxPassword is the most bytes of a password bcrypt reads; a longer new
+// password is refused rather than silently cut. Login still checks a
+// longer one by its first 72 bytes, so older passwords keep working.
+const (
+	maxPassword = 72
+	msgPassLong = "Password must be at most 72 bytes"
+)
+
 func userError(code int, msg string) error { return &Error{code, msg} }
 
 func (s *Service) now() time.Time {
@@ -230,6 +238,9 @@ func (s *Service) Register(ctx context.Context, name, email, pass string) (User,
 		if !nonSpace.MatchString(f.value) {
 			return User{}, userError(400, f.field+" is required")
 		}
+	}
+	if len(pass) > maxPassword {
+		return User{}, userError(400, msgPassLong)
 	}
 	// stored as typed; unique and looked up regardless of case
 	if !username.MatchString(name) {
@@ -411,6 +422,9 @@ func resetFingerprint(hash *string) string {
 func (s *Service) ResetConfirm(ctx context.Context, token, pass string) (User, error) {
 	if !nonSpace.MatchString(pass) {
 		return User{}, userError(400, msgNoPassword)
+	}
+	if len(pass) > maxPassword {
+		return User{}, userError(400, msgPassLong)
 	}
 	id, ok := TokenUser(token)
 	if !ok {
