@@ -1518,3 +1518,19 @@ func TestSaveChannelsWrongId(t *testing.T) {
 		}
 	}
 }
+
+// A liercd status answer other than 200 isn't saved, even with a body
+// that reads as a status.
+func TestSaveChannelsNon200(t *testing.T) {
+	e := setup(t)
+	u := e.addUser("alice")
+	ctx := context.Background()
+	e.addConn("c1", u, `{"Host":"irc.x","Channels":["#old"]}`)
+	e.fake.Respond("GET", "/c1/status", 500, statusJSON("c1", "me", true, true, `,"Channels":[{"Name":"#x"}]`))
+	e.s.saveChannels(ctx, u)
+
+	raw, _, _ := e.db.LookupConfig(ctx, "c1")
+	if !testenv.SameJSON(string(raw), `{"Host":"irc.x","Channels":["#old"]}`) {
+		t.Errorf("c1 config %s", raw)
+	}
+}

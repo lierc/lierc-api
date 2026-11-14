@@ -190,9 +190,8 @@ func (s *Server) saveChannels(ctx context.Context, user string) {
 		return
 	}
 	for _, c := range conns {
-		// Perl ignores the status code; a non-JSON body fails to decode.
 		res, err := s.lc.Do(ctx, http.MethodGet, c.ID+"/status", nil)
-		if err != nil {
+		if err != nil || res.Status != http.StatusOK {
 			continue
 		}
 		var stat struct {
