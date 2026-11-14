@@ -23,9 +23,8 @@ const (
 )
 
 var (
-	tokenChars = regexp.MustCompile(`^[A-Za-z0-9_-]+$`)
-	// Perl's /^\d+$/: "$" also matches before one trailing newline.
-	tokenExpires = regexp.MustCompile(`^[0-9]+\n?$`)
+	tokenChars   = regexp.MustCompile(`^[A-Za-z0-9_-]+$`)
+	tokenExpires = regexp.MustCompile(`^[0-9]+$`)
 )
 
 func tokenMac(secret, purpose, user, expires, fingerprint string) string {
@@ -46,12 +45,7 @@ func tokenParts(token string) (user, expires, mac string, ok bool) {
 	if !tokenChars.MatchString(token) {
 		return "", "", "", false
 	}
-	// Perl's decode_base64url pads and decodes leniently: a lone final
-	// character (length 1 mod 4) carries no whole byte and is ignored.
-	if len(token)%4 == 1 {
-		token = token[:len(token)-1]
-	}
-	b, err := base64.RawURLEncoding.DecodeString(token)
+	b, err := base64.RawURLEncoding.Strict().DecodeString(token)
 	if err != nil {
 		return "", "", "", false
 	}
@@ -81,13 +75,13 @@ func TokenValid(secret, purpose, token, fingerprint string, now int64) bool {
 }
 
 // after reports whether now > expires, where expires is a string of digits
-// (perhaps with leading zeros, a trailing newline, or more digits than an
-// int64 holds), compared as numbers without overflow.
+// (perhaps with leading zeros, or more digits than an int64 holds),
+// compared as numbers without overflow.
 func after(now int64, expires string) bool {
 	if now < 0 {
 		return false
 	}
-	e := strings.TrimLeft(strings.TrimSuffix(expires, "\n"), "0")
+	e := strings.TrimLeft(expires, "0")
 	n := strconv.FormatInt(now, 10)
 	if n == "0" {
 		n = ""

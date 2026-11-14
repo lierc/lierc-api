@@ -8,7 +8,9 @@ import (
 
 // authFixtures is testdata/fixtures/auth.json, written by gen.pl from the
 // real Perl: API::SignedToken, Data::Validate::Email::is_email and
-// Util->irc_nick.
+// Util->irc_nick. Token parsing is stricter than Perl's (no trailing
+// newline in the expiry, strict base64url); the Parsing cases those
+// change were edited by hand.
 type authFixtures struct {
 	Tokens struct {
 		Make []struct {
@@ -52,12 +54,12 @@ func loadAuthFixtures(t *testing.T) authFixtures {
 	return fx
 }
 
-func TestTokensMatchPerl(t *testing.T) {
+func TestTokenFixtures(t *testing.T) {
 	fx := loadAuthFixtures(t)
 	for _, c := range fx.Tokens.Make {
 		got := MakeToken(c.Secret, c.Purpose, c.User, c.Fingerprint, c.Expires)
 		if got != c.Token {
-			t.Errorf("MakeToken(%s, %s, %s): got %q, Perl %q", c.Purpose, c.User, c.Fingerprint, got, c.Token)
+			t.Errorf("MakeToken(%s, %s, %s): got %q, want %q", c.Purpose, c.User, c.Fingerprint, got, c.Token)
 		}
 		if u, ok := TokenUser(c.Token); !ok || u != c.User {
 			t.Errorf("TokenUser(%q) = %q, %v; want %q", c.Token, u, ok, c.User)
@@ -65,7 +67,7 @@ func TestTokensMatchPerl(t *testing.T) {
 	}
 	for _, c := range fx.Tokens.Valid {
 		if got := TokenValid(c.Secret, c.Purpose, c.Token, c.Fingerprint, c.Now); got != c.Valid {
-			t.Errorf("%s: TokenValid = %v, Perl %v", c.Name, got, c.Valid)
+			t.Errorf("%s: TokenValid = %v, want %v", c.Name, got, c.Valid)
 		}
 	}
 	// Odd tokens: Perl's verify purpose, fingerprint and now (see gen.pl).
@@ -74,12 +76,12 @@ func TestTokensMatchPerl(t *testing.T) {
 		u, ok := TokenUser(c.Token)
 		switch {
 		case c.User == nil && ok:
-			t.Errorf("TokenUser(%q) = %q; Perl names no user", c.Token, u)
+			t.Errorf("TokenUser(%q) = %q; want no user", c.Token, u)
 		case c.User != nil && (!ok || u != *c.User):
-			t.Errorf("TokenUser(%q) = %q, %v; Perl %q", c.Token, u, ok, *c.User)
+			t.Errorf("TokenUser(%q) = %q, %v; want %q", c.Token, u, ok, *c.User)
 		}
 		if got := TokenValid("test-secret", "verify", c.Token, "lee@example.com", now); got != c.Valid {
-			t.Errorf("TokenValid(%q) = %v, Perl %v", c.Token, got, c.Valid)
+			t.Errorf("TokenValid(%q) = %v, want %v", c.Token, got, c.Valid)
 		}
 	}
 }
