@@ -55,10 +55,7 @@ func TestSetPreference(t *testing.T) {
 	e.sendWant("POST", "/preference/long", a, strings.Repeat("é", 513), 400, `{"status":"error","error":"preference value is too long"}`)
 	e.sendWant("POST", "/preference/long", a, strings.Repeat("é", 512), 204, "")
 	e.sendWant("POST", "/preference/huge", a, strings.Repeat("a", 65*1024), 400, `{"status":"error","error":"request body is too large"}`)
-	e.sendWant("POST", "/preference/bad", a, "ab\xffc", 204, "")
-	if v := e.row(`SELECT value FROM pref WHERE "user"=$1 AND name='bad'`, a); v != "ab�c" {
-		t.Errorf("bad = %q", v)
-	}
+	e.sendWant("POST", "/preference/bad", a, "ab\xffc", 400, `{"status":"error","error":"request body isn't valid UTF-8"}`)
 }
 
 func TestSetSeenRoute(t *testing.T) {

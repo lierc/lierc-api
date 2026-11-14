@@ -43,8 +43,13 @@ func (a *api) owned(h func(w http.ResponseWriter, r *http.Request, user, id stri
 // subscription, is well under 1 KiB.
 const maxBody = 64 << 10
 
-// readBody is r's body with invalid UTF-8 replaced, as Perl's decode utf8
-// does. Over maxBody it answers 400 and reports false.
+// invalidUTF8 answers 400 for a request body that isn't valid UTF-8.
+func invalidUTF8(w http.ResponseWriter) {
+	respond.Error(w, http.StatusBadRequest, "request body isn't valid UTF-8")
+}
+
+// readBody is r's body. Over maxBody, or not valid UTF-8, it answers 400
+// and reports false.
 func readBody(w http.ResponseWriter, r *http.Request) (string, bool) {
 	b, err := io.ReadAll(http.MaxBytesReader(w, r.Body, maxBody))
 	if err != nil {
@@ -56,7 +61,11 @@ func readBody(w http.ResponseWriter, r *http.Request) (string, bool) {
 		}
 		return "", false
 	}
-	return strings.ToValidUTF8(string(b), "�"), true
+	if !utf8.Valid(b) {
+		invalidUTF8(w)
+		return "", false
+	}
+	return string(b), true
 }
 
 // pathText is r's path value name with invalid UTF-8 replaced.

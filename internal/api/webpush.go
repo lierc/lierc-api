@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"regexp"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/lierc/lierc-api/internal/respond"
 )
@@ -114,10 +115,18 @@ func formParams(w http.ResponseWriter, r *http.Request) (func(string) string, bo
 		}
 		return nil, false
 	}
+	for _, vs := range r.Form {
+		for _, v := range vs {
+			if !utf8.ValidString(v) {
+				invalidUTF8(w)
+				return nil, false
+			}
+		}
+	}
 	return func(name string) string {
 		if r.PostForm.Has(name) {
-			return strings.ToValidUTF8(r.PostForm.Get(name), "�")
+			return r.PostForm.Get(name)
 		}
-		return strings.ToValidUTF8(r.URL.Query().Get(name), "�")
+		return r.URL.Query().Get(name)
 	}, true
 }
