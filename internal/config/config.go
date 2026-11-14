@@ -35,8 +35,7 @@ type Config struct {
 	// state-changing requests: API_ORIGINS split on whitespace, else
 	// API_URL (API::Config origins). Empty counts as unset.
 	Origins []string
-	// Secure marks the login cookie Secure (API_SECURE, true as Perl reads
-	// it: set, and not "0").
+	// Secure marks the login cookie Secure (API_SECURE, a boolean).
 	Secure bool
 	// SMTPOpts is SMTP_OPTS, parsed by mail.ParseOpts; "" when unset.
 	SMTPOpts string
@@ -44,8 +43,7 @@ type Config struct {
 	FromAddress string
 	// SiteURL begins the links in those emails (API_URL).
 	SiteURL string
-	// NoSMTP skips sending email (LIERC_NO_SMTP, true as Perl reads it:
-	// set, and not "0").
+	// NoSMTP skips sending email (LIERC_NO_SMTP, a boolean).
 	NoSMTP bool
 	// DefaultNetwork is the network new users get when they confirm their
 	// email (DEFAULT_NETWORK_*); nil when DEFAULT_NETWORK_HOST is empty.
@@ -76,7 +74,6 @@ func Load(getenv func(string) string) (Config, error) {
 	c := Config{
 		VAPIDPublic:    getenv("VAPID_PUBLIC"),
 		Origins:        origins(getenv),
-		Secure:         getenv("API_SECURE") != "" && getenv("API_SECURE") != "0",
 		LiercdHost:     or("LIERCD_HOST", "127.0.0.1"),
 		LiercdNextHost: or("LIERCD_NEXT_HOST", ""),
 		DBHost:         or("POSTGRES_HOST", "127.0.0.1"),
@@ -93,7 +90,6 @@ func Load(getenv func(string) string) (Config, error) {
 		SMTPOpts:           getenv("SMTP_OPTS"),
 		FromAddress:        or("FROM_ADDRESS", "do-not-reply@relaychat.party"),
 		SiteURL:            or("API_URL", "https://relaychat.party"),
-		NoSMTP:             getenv("LIERC_NO_SMTP") != "" && getenv("LIERC_NO_SMTP") != "0",
 	}
 	// NSQD_HOST may carry a port; without one nsqd's default 4150 is used.
 	if _, _, err := net.SplitHostPort(c.NSQAddr); err != nil {
@@ -122,7 +118,27 @@ func Load(getenv func(string) string) (Config, error) {
 		}
 		c.DefaultNetwork = n
 	}
+	var err error
+	if c.Secure, err = boolean(getenv, "API_SECURE"); err != nil {
+		return Config{}, err
+	}
+	if c.NoSMTP, err = boolean(getenv, "LIERC_NO_SMTP"); err != nil {
+		return Config{}, err
+	}
 	return c, nil
+}
+
+// boolean reads name as strconv.ParseBool does; unset or empty is false.
+func boolean(getenv func(string) string, name string) (bool, error) {
+	v := getenv(name)
+	if v == "" {
+		return false, nil
+	}
+	b, err := strconv.ParseBool(v)
+	if err != nil {
+		return false, fmt.Errorf("%s: %q is not true or false", name, v)
+	}
+	return b, nil
 }
 
 func origins(getenv func(string) string) []string {

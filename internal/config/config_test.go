@@ -145,11 +145,26 @@ func TestOrigins(t *testing.T) {
 	}
 }
 
-func TestSecure(t *testing.T) {
-	for v, want := range map[string]bool{"1": true, "yes": true, "0": false, "": false} {
-		c, err := Load(env(map[string]string{"API_SECURE": v}))
-		if err != nil || c.Secure != want {
-			t.Errorf("API_SECURE=%q: %v, %v", v, c.Secure, err)
+// API_SECURE and LIERC_NO_SMTP are booleans as strconv.ParseBool reads
+// them; unset or empty is false, and anything else stops Load.
+func TestBooleans(t *testing.T) {
+	get := map[string]func(Config) bool{
+		"API_SECURE":    func(c Config) bool { return c.Secure },
+		"LIERC_NO_SMTP": func(c Config) bool { return c.NoSMTP },
+	}
+	for name, field := range get {
+		c, err := Load(env(nil))
+		if err != nil || field(c) {
+			t.Errorf("%s unset: %v, %v", name, field(c), err)
+		}
+		for v, want := range map[string]bool{"1": true, "true": true, "0": false, "false": false, "": false} {
+			c, err := Load(env(map[string]string{name: v}))
+			if err != nil || field(c) != want {
+				t.Errorf("%s=%q: %v, %v", name, v, field(c), err)
+			}
+		}
+		if _, err := Load(env(map[string]string{name: "yes"})); err == nil || !strings.Contains(err.Error(), name) {
+			t.Errorf("%s=yes: error %v, want one naming %s", name, err, name)
 		}
 	}
 }
