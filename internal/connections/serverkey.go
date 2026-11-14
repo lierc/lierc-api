@@ -6,8 +6,8 @@ import (
 	"strings"
 )
 
-// serverKey is the settings liercd connects with, as one string to compare
-// (Connection.pm server_key). It reads a config as Clean writes it — Port a
+// serverKey is the settings liercd connects with, as one string to compare.
+// It reads a config as Clean writes it — Port a
 // number, Ssl/SASL booleans — and as it's decoded from the database (numbers
 // as json.Number). A value of any other type counts as a change, so the
 // connection reconnects. The nick is one: liercd registers with it, so

@@ -6,8 +6,7 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// Every list here is non-nil when empty, so it encodes as [], as Perl's
-// does.
+// Every list here is non-nil when empty, so it encodes as [], not null.
 
 // Pref is one of a user's preferences: its value is the UI's JSON text.
 type Pref struct {
@@ -15,7 +14,7 @@ type Pref struct {
 	Value string `json:"value"`
 }
 
-// Prefs is user's preferences (Pref.pm list).
+// Prefs is user's preferences.
 func (d *DB) Prefs(ctx context.Context, user string) ([]Pref, error) {
 	rows, err := d.Pool.Query(ctx, `SELECT name, value FROM pref WHERE "user"=$1`, user)
 	if err != nil {
@@ -32,7 +31,7 @@ type Private struct {
 	Time       string `json:"time"`
 }
 
-// Privates is user's private chats, oldest first (Private.pm list).
+// Privates is user's private chats, oldest first.
 func (d *DB) Privates(ctx context.Context, user string) ([]Private, error) {
 	rows, err := d.Pool.Query(ctx, `
 		SELECT p.nick, p.connection, p.time::text
@@ -53,8 +52,7 @@ type SeenRow struct {
 	MessageID  int64  `json:"message_id"`
 }
 
-// Seen is user's seen positions on connections that still exist
-// (Message.pm seen).
+// Seen is user's seen positions on connections that still exist.
 func (d *DB) Seen(ctx context.Context, user string) ([]SeenRow, error) {
 	rows, err := d.Pool.Query(ctx, `
 		SELECT s.connection, s.channel, s.message_id::bigint
@@ -68,7 +66,7 @@ func (d *DB) Seen(ctx context.Context, user string) ([]SeenRow, error) {
 }
 
 // ChannelNames is the channels conn has logs in, most recently active
-// first (Channel.pm list).
+// first.
 func (d *DB) ChannelNames(ctx context.Context, conn string) ([]string, error) {
 	rows, err := d.Pool.Query(ctx, `
 		SELECT channel FROM log WHERE connection=$1
@@ -94,7 +92,7 @@ type MissedCounts struct {
 }
 
 // Missed counts what each entry's channel has had since its message, by
-// connection then channel (Message.pm missed). Entries for connections
+// connection then channel. Entries for connections
 // user doesn't own are skipped, as are channels with nothing new.
 func (d *DB) Missed(ctx context.Context, user string, es []MissedEntry) (map[string]map[string]MissedCounts, error) {
 	out := map[string]map[string]MissedCounts{}

@@ -1,5 +1,4 @@
-// Package liercd is the HTTP client for the liercd daemon, ported from
-// lib/API/Liercd.pm and lib/API/Stream/Liercd.pm.
+// Package liercd is the HTTP client for the liercd daemon.
 package liercd
 
 import (
@@ -38,7 +37,7 @@ type Response struct {
 }
 
 // New returns a client for http://host:5005/, or host's own port if it
-// has one (Liercd.pm liercd_url()).
+// has one.
 func New(host string) *Client {
 	return &Client{
 		BaseURL: baseURL(host),

@@ -10,7 +10,7 @@ import (
 	"github.com/lierc/lierc-api/internal/respond"
 )
 
-// The history reads, ported from lib/API/Controller/{Message,Channel}.pm.
+// The history reads.
 func (a *api) history(mux *http.ServeMux) {
 	mux.Handle("GET /log/{event}", a.users.Require(a.logSince))
 	mux.Handle("GET /highlight", a.users.Require(a.highlights))
@@ -41,7 +41,8 @@ func eventID(w http.ResponseWriter, r *http.Request) (int32, bool) {
 	return int32(n), true
 }
 
-// channel is the {channel} path value, lowercased as Perl's lc did.
+// channel is the {channel} path value, lowercased with strings.ToLower, as
+// lierc's logger stores channel names.
 func channel(r *http.Request) string {
 	return strings.ToLower(pathText(r, "channel"))
 }

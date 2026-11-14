@@ -10,8 +10,7 @@ import (
 
 // sameOrigin refuses requests that can change state (anything but GET,
 // HEAD and OPTIONS) when the browser says they came from another site, so
-// other sites' pages can't act with a user's session cookie
-// (lib/API/SameOrigin.pm).
+// other sites' pages can't act with a user's session cookie.
 //
 // Browsers send Sec-Fetch-Site on every request; older ones only send
 // Origin, which must then be one of origins. Requests with neither are not

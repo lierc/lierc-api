@@ -1,5 +1,4 @@
-// Package stream is the Server-Sent Events server, ported from bin/stream.psgi
-// and lib/API/Stream/*.pm.
+// Package stream is the Server-Sent Events server.
 package stream
 
 import (
@@ -24,9 +23,9 @@ import (
 // cookie at /events, and wake pings at /events/<id>/ping, on the routes
 // Routes registers. Admin serves /stats on a separate listener.
 type Server struct {
-	// PingInterval is the time between pings to every stream (Events.pm start_pings).
+	// PingInterval is the time between pings to every stream.
 	PingInterval time.Duration
-	// WriteTimeout is how long one write may block before the stream is closed (Writer.pm wtimeout).
+	// WriteTimeout is how long one write may block before the stream is closed.
 	WriteTimeout time.Duration
 	// NSQReconnect is the wait between attempts to reach nsqd, at start and
 	// after a lost connection.
@@ -261,7 +260,7 @@ func (s *Server) Deliver(body []byte) {
 	}
 }
 
-// sseEvent is Util::event: the id line only when id is non-empty.
+// sseEvent formats a Server-Sent Event: the id line only when id is non-empty.
 func sseEvent(typ string, data []byte, id string) []byte {
 	var b bytes.Buffer
 	b.WriteString("event: ")
@@ -300,7 +299,8 @@ func streamEvent(id string) []byte {
 	return sseEvent("stream", b, "")
 }
 
-// hiresTime is Time::HiRes::time as Perl prints it (%.15g).
+// hiresTime is the Unix time in seconds, to the microsecond, with at most
+// 15 significant digits.
 func hiresTime() string {
 	return strconv.FormatFloat(float64(time.Now().UnixMicro())/1e6, 'g', 15, 64)
 }

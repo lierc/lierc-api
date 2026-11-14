@@ -10,7 +10,7 @@ import (
 	"github.com/lierc/lierc-api/internal/respond"
 )
 
-// The simple reads, ported from lib/API/Controller/*.pm.
+// The simple reads.
 func (a *api) reads(mux *http.ServeMux) {
 	mux.Handle("GET /preference", a.users.Require(a.preference))
 	mux.Handle("GET /privates", a.users.Require(a.privates))
@@ -53,7 +53,7 @@ func (a *api) missed(w http.ResponseWriter, r *http.Request, user string) {
 
 // parseMissed reads /missed's parameters. A key without a "-", or a value
 // that isn't a message id, is skipped; for a repeated key the last value
-// wins, as with Perl's parameters.
+// wins.
 func parseMissed(q url.Values) []db.MissedEntry {
 	var es []db.MissedEntry
 	for key, vals := range q {

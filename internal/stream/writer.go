@@ -25,13 +25,13 @@ const bufferSize = 1024
 // closeTimeout bounds the save_channels and last_login work done on close.
 const closeTimeout = time.Minute
 
-var padding = ":" + strings.Repeat(" ", 2<<10) + "\n" // Writer.pm send_padding(2 << 10)
+var padding = ":" + strings.Repeat(" ", 2<<10) + "\n" // a 2 KiB comment line
 
-// stream is one open event stream (Writer.pm). Only the request goroutine
+// stream is one open event stream. Only the request goroutine
 // writes to the response; everything else hands it events on out (pings and
 // live events) or replay. The writer takes from both as they come, so replay
-// and live events interleave, as they do in Perl, where live events are
-// written on arrival while the replay waits on liercd.
+// and live events interleave: live events are written on arrival while the
+// replay waits on liercd.
 type stream struct {
 	id, user, remote string
 	login            int64 // the login that opened it; 0 for none
@@ -109,7 +109,7 @@ func (s *Server) serveStream(w http.ResponseWriter, r *http.Request, user string
 	ctx, cancel := context.WithCancel(r.Context())
 	var replay sync.WaitGroup
 	defer func() {
-		// Runs once per stream, on whatever ended it (Writer.pm on_close).
+		// Runs once per stream, on whatever ended it.
 		// A slow-client drop has already deregistered it; that is harmless.
 		st.stop()
 		s.deregister(st)
@@ -218,7 +218,7 @@ func (s *Server) write(rc *http.ResponseController, w http.ResponseWriter, b []b
 	}
 	if err != nil {
 		if isTimeout(err) {
-			log.Print("write timeout, closing") // Writer.pm
+			log.Print("write timeout, closing")
 		}
 		return false
 	}

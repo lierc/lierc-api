@@ -11,8 +11,7 @@ import (
 
 // Error is any error from the database layer: Postgres errors, connect and
 // pool errors, context errors from a query, pgx.ErrNoRows. Its text can name
-// the host, user and database, so the API never shows it (Perl answers null
-// for every DBD error). errors.Is and errors.As see the wrapped error.
+// the host, user and database, so the API never shows it. errors.Is and errors.As see the wrapped error.
 type Error struct{ Err error }
 
 func (e *Error) Error() string { return e.Err.Error() }

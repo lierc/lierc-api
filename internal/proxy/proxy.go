@@ -1,6 +1,5 @@
 // Package proxy applies X-Forwarded-For from trusted proxies and writes the
-// access log, as bin/api.psgi does with Plack::Middleware::ReverseProxy
-// (enabled for 127.0.0.1) and Plack::Middleware::AccessLog.
+// access log.
 package proxy
 
 import (

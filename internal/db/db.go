@@ -1,5 +1,4 @@
-// Package db is the stream's Postgres access layer, ported from
-// lib/API/Stream/DB.pm.
+// Package db is the API's Postgres access layer.
 package db
 
 import (

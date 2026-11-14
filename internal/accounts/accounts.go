@@ -1,6 +1,5 @@
 // Package accounts is login, signup, email confirmation and password
-// reset, ported from lib/API/Controller/Auth.pm and the DB.pm helpers it
-// uses. It keeps their order of steps, SQL conditions and messages.
+// reset.
 package accounts
 
 import (
@@ -19,8 +18,8 @@ import (
 	"github.com/lierc/lierc-api/internal/passwords"
 )
 
-// Error is a problem for the user, with Perl's message and status (400 or
-// 401). Every other error is the database's, a 500.
+// Error is a problem for the user, with the message to show and a status
+// (400 or 401). Every other error is the database's, a 500.
 type Error struct {
 	Code int
 	Msg  string
@@ -99,11 +98,11 @@ hasn't changed.`
 var checkPassword = passwords.Check
 
 var (
-	// Perl's /\S/ on the request's bytes: \s is ASCII whitespace only.
+	// A byte that isn't ASCII whitespace: a field must have one.
 	nonSpace = regexp.MustCompile(`[^\t\n\v\f\r ]`)
 	username = regexp.MustCompile(`^[a-zA-Z0-9_.]{1,32}$`)
-	// Text::Xslate's default html escaping of <: $var :>
-	xslateEscape = strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;", `"`, "&quot;", "'", "&#39;")
+	// The html escaping of the email templates' <: $var :> placeholders
+	htmlEscape = strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;", `"`, "&quot;", "'", "&#39;")
 )
 
 // maxPassword is the most bytes of a password bcrypt reads; a longer new
@@ -160,7 +159,7 @@ func detached(ctx context.Context) (context.Context, context.CancelFunc) {
 	return context.WithTimeout(context.WithoutCancel(ctx), stepTimeout)
 }
 
-// asciiLower is Perl's lc on bytes: only A-Z change.
+// asciiLower lowercases A-Z only; other bytes stay as they are.
 func asciiLower(s string) string {
 	return strings.Map(func(r rune) rune {
 		if r >= 'A' && r <= 'Z' {
@@ -171,10 +170,10 @@ func asciiLower(s string) string {
 }
 
 func render(template, name, link string) string {
-	return strings.NewReplacer("<: $name :>", xslateEscape.Replace(name), "<: $link :>", xslateEscape.Replace(link)).Replace(template)
+	return strings.NewReplacer("<: $name :>", htmlEscape.Replace(name), "<: $link :>", htmlEscape.Replace(link)).Replace(template)
 }
 
-// Show is the logged-in user (DB.pm lookup_user); a missing one is a 401.
+// Show is the logged-in user; a missing one is a 401.
 func (s *Service) Show(ctx context.Context, id string) (User, error) {
 	u, ok, err := s.Store.AccountByID(ctx, id)
 	if err != nil {
@@ -231,7 +230,7 @@ func (s *Service) rehash(ctx context.Context, r db.AccountAuth, pass string) err
 	return err
 }
 
-// Register adds a user (Auth.pm register and DB.pm add_user) and queues
+// Register adds a user and queues
 // the confirmation email. The default network comes at confirmation.
 func (s *Service) Register(ctx context.Context, name, email, pass string) (User, error) {
 	for _, f := range []struct{ field, value string }{{"username", name}, {"email", email}, {"pass", pass}} {
@@ -333,8 +332,7 @@ func (s *Service) addFirstNetwork(ctx context.Context, user, name string) error 
 	return nil
 }
 
-// addDefaultNetwork is Auth.pm add_default_network: the configured
-// network, with the user's name as nick, username and highlight.
+// addDefaultNetwork creates the configured default network for user, with the user's name as nick, username and highlight.
 func (s *Service) addDefaultNetwork(ctx context.Context, user, name string) error {
 	n := s.DefaultNetwork
 	if n == nil {
@@ -343,7 +341,7 @@ func (s *Service) addDefaultNetwork(ctx context.Context, user, name string) erro
 	nick := IrcNick(name)
 	channels := n.Channels
 	if channels == nil {
-		channels = []string{} // Perl's [ split ' ', "" ]
+		channels = []string{} // saved as [], not null
 	}
 	_, err := s.Conns.CreateDefault(ctx, user, map[string]any{
 		"Host":      n.Host,

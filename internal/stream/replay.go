@@ -66,7 +66,8 @@ type ircPayload struct {
 	Message      ircMessage
 }
 
-// ircEvent is Util::irc_event. Time is float seconds, as Time::HiRes::time.
+// ircEvent is an "irc" event for connection id. Time is Unix seconds as a
+// float (hiresTime).
 func ircEvent(id, prefix, command string, params ...any) []byte {
 	if params == nil {
 		params = []any{}
@@ -78,9 +79,8 @@ func ircEvent(id, prefix, command string, params ...any) []byte {
 	return sseEvent("irc", b, "")
 }
 
-// replay pushes the fake events that bring a new stream up to date
-// (Events.pm push_fake_events). If any connection's status cannot be found or
-// recreated, nothing is sent: Perl's callback dies before replaying (R4).
+// replay pushes the fake events that bring a new stream up to date. If any
+// connection's status cannot be found or recreated, nothing is sent.
 func (s *Server) replay(ctx context.Context, st *stream, conns []db.Connection) {
 	statuses := make([]*status, len(conns))
 	errs := make([]error, len(conns))
@@ -119,10 +119,9 @@ func (s *Server) replay(ctx context.Context, st *stream, conns []db.Connection) 
 	}
 
 	// The connections snapshot, first: every connection the user has, so
-	// the UI adds missing ones and drops ones deleted while it was away
-	// (this replaces Perl's push_connect CREATE and CONNECT).
+	// the UI adds missing ones and drops ones deleted while it was away.
 	evs = append(evs, snapshotEvent(statuses))
-	// push_welcome. A missing Isupport would die in Perl; it is treated as empty.
+	// Welcome, ISUPPORT and CAP ACK; a missing Isupport is treated as empty.
 	for _, stat := range registered {
 		emit(stat.Id, liercdPrefix, rplWelcome, stat.Nick, "Welcome to the Internet Relay Network "+stat.Nick)
 		if len(stat.Isupport) > 0 {
@@ -132,13 +131,13 @@ func (s *Server) replay(ctx context.Context, st *stream, conns []db.Connection) 
 			emit(stat.Id, liercdPrefix, "CAP", "*", "ACK", strings.Join(stat.CapsAcked, " "))
 		}
 	}
-	// push_joins
+	// Joins
 	for _, stat := range registered {
 		for _, ch := range stat.Channels {
 			emit(stat.Id, stat.Nick, "JOIN", ch.Name)
 		}
 	}
-	// push_topics
+	// Topics
 	for _, stat := range registered {
 		for _, ch := range stat.Channels {
 			if ch.Topic != nil && ch.Topic.Topic != "" {
@@ -147,7 +146,7 @@ func (s *Server) replay(ctx context.Context, st *stream, conns []db.Connection) 
 			}
 		}
 	}
-	// push_nicks: an empty Nicks array still gets its 366, as in Perl.
+	// Names: an empty Nicks array still gets its 366.
 	for _, stat := range registered {
 		for _, ch := range stat.Channels {
 			if ch.Nicks == nil {
@@ -162,7 +161,7 @@ func (s *Server) replay(ctx context.Context, st *stream, conns []db.Connection) 
 			emit(stat.Id, liercdPrefix, rplEndOfNames, stat.Nick, ch.Name, "End of /NAMES list.")
 		}
 	}
-	// push_modes
+	// Modes
 	for _, stat := range registered {
 		for _, ch := range stat.Channels {
 			if ch.Mode != "" {
@@ -182,7 +181,7 @@ func (s *Server) replay(ctx context.Context, st *stream, conns []db.Connection) 
 var errSkip = errors.New("skip")
 
 // saveChannels stores each connection's current channel list from liercd in
-// its config (Events.pm save_channels). Failures skip that connection.
+// its config. Failures skip that connection.
 func (s *Server) saveChannels(ctx context.Context, user string) {
 	conns, err := s.db.Connections(ctx, user)
 	if err != nil {

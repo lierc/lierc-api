@@ -1,4 +1,4 @@
-// Package ids generates the base-62 identifiers Perl's Util->uuid produces.
+// Package ids generates base-62 identifiers.
 package ids
 
 import (
@@ -32,8 +32,7 @@ func FromHex(h string) string {
 	return string(out)
 }
 
-// New returns a random id, like Util->uuid (Data::UUID create_hex converted
-// to base 62).
+// New returns a random id: 16 random bytes in base 62.
 func New() string {
 	b := make([]byte, 16)
 	if _, err := rand.Read(b); err != nil {

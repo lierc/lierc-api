@@ -1,5 +1,4 @@
-// Package respond writes responses in the Perl API's shape
-// (lib/API/Responses.pm).
+// Package respond writes the API's JSON responses.
 package respond
 
 import (
@@ -21,7 +20,7 @@ func Marshal(v any) ([]byte, error) {
 	return bytes.TrimSuffix(buf.Bytes(), []byte("\n")), nil
 }
 
-// JSON is API::Responses json.
+// JSON answers code with v as JSON.
 func JSON(w http.ResponseWriter, code int, v any) {
 	b, err := Marshal(v)
 	if err != nil {
@@ -40,7 +39,7 @@ type errorBody struct {
 	Error  string `json:"error"`
 }
 
-// Error is API::Responses error.
+// Error answers code with {"status":"error","error":msg}.
 func Error(w http.ResponseWriter, code int, msg string) {
 	JSON(w, code, errorBody{"error", msg})
 }

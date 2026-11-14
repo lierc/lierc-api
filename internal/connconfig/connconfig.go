@@ -3,8 +3,7 @@
 // addresses. Text fields must be JSON strings, Port a JSON number, Ssl/SASL
 // JSON booleans, Channels/Highlight lists of strings (null counts as
 // missing); text is trimmed of Unicode whitespace, and every pattern must
-// match the whole value. testdata/connection-config-cases.json, first
-// generated from the Perl API's rules and edited by hand since, is the
+// match the whole value. testdata/connection-config-cases.json is the
 // record of these rules: a rule changed here must change there too.
 package connconfig
 
@@ -33,8 +32,7 @@ import (
 // body (Go's \s is ASCII only); channel names can't contain any of it.
 const unicodeSpace = `\t\n\v\f\r \x{85}\x{a0}\x{1680}\x{2000}-\x{200a}\x{2028}\x{2029}\x{202f}\x{205f}\x{3000}`
 
-// A nick follows Ergo's rule under casemapping "permissive" (see
-// lib/API/ConnectionConfig.pm): letters, numbers, punctuation and symbols
+// A nick follows Ergo's rule under casemapping "permissive": letters, numbers, punctuation and symbols
 // only, none of nickForbidden, not starting with # ~ & @ % + - or $, at most
 // 32 bytes before and after folding, and not a name Ergo reserves.
 const nickForbidden = ` ,*?.!@:<>'";#/`
@@ -83,8 +81,7 @@ func str(v any, label string) (s string, present bool, err error) {
 	return x, true, nil
 }
 
-// list is Perl's list() for a list of strings: the trimmed, non-blank
-// items.
+// list is a list of strings' trimmed, non-blank items.
 func list(v any, name string) ([]string, error) {
 	out := []string{}
 	if v == nil {
@@ -262,9 +259,8 @@ func Clean(raw []byte) (map[string]any, error) {
 	return config, nil
 }
 
-// Addresses liercd must not connect to. The same list is in
-// lib/API/ConnectionConfig.pm and lierc's pkg/lierc/dialguard.go; keep the
-// three in step.
+// Addresses liercd must not connect to. The same list is in lierc's
+// pkg/lierc/dialguard.go; keep the two in step.
 var blocked = func() []netip.Prefix {
 	var out []netip.Prefix
 	for _, p := range []string{
@@ -279,8 +275,7 @@ var blocked = func() []netip.Prefix {
 }()
 
 // BlockedIP reports whether liercd must not connect to ip. Anything that
-// isn't an address (including one with a zone, which Perl's inet_pton
-// rejects) is blocked; an IPv4-mapped address is checked as the IPv4
+// isn't a plain address (one with a zone included) is blocked; an IPv4-mapped address is checked as the IPv4
 // address it carries.
 func BlockedIP(ip string) bool {
 	a, err := netip.ParseAddr(ip)
@@ -288,7 +283,7 @@ func BlockedIP(ip string) bool {
 		return true
 	}
 	if strings.Contains(ip, ":") != a.Is6() {
-		return true // Perl picks the family by the presence of ':'
+		return true // the text must say the family: ':' for IPv6 only
 	}
 	a = a.Unmap()
 	for _, p := range blocked {
@@ -367,7 +362,7 @@ func Display(v any) (string, bool) {
 }
 
 // CleanNames checks and normalises the settings that don't need a
-// reconnect (API::ConnectionConfig clean_names): Highlight, always set,
+// reconnect: Highlight, always set,
 // and Alias, set unless blank. Clean uses it for those keys.
 func CleanNames(params map[string]any) (map[string]any, error) {
 	names := map[string]any{}

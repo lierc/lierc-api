@@ -24,7 +24,7 @@ type User struct {
 // the connections.
 type UserDetail struct {
 	User
-	Password       string       `json:"password"` // "bcrypt", "legacy" or "none"
+	Password       string       `json:"password"` // "bcrypt" or "none"
 	ConnectionList []Connection `json:"connection_list"`
 }
 

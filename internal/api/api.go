@@ -1,5 +1,4 @@
-// Package api is relaychat's HTTP API. It ported the Perl API's routes
-// (lib/API in git history); an unknown path is a 404.
+// Package api is relaychat's HTTP API; an unknown path is a 404.
 package api
 
 import (

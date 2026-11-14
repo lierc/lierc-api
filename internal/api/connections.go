@@ -19,8 +19,7 @@ var checkHost = func(ctx context.Context, host string, port int) error {
 	return connconfig.CheckHost(ctx, os.Getenv, connconfig.SystemResolver, host, port)
 }
 
-// The connection routes, ported from lib/API/Controller/Connection.pm; the
-// work is in internal/connections.
+// The connection routes; the work is in internal/connections.
 func (a *api) connections(mux *http.ServeMux) {
 	mux.Handle("GET /connection", a.users.Require(a.listConnections))
 	mux.Handle("POST /connection", a.users.Require(a.createConnection))
@@ -36,7 +35,7 @@ type connectionJSON struct {
 	Config json.RawMessage
 }
 
-// failed answers err: a user's problem as Perl's 400, anything else 500.
+// failed answers err: a user's problem as a 400, anything else 500.
 func failed(w http.ResponseWriter, what string, err error) {
 	if msg, ok := connections.IsUserError(err); ok {
 		respond.Error(w, http.StatusBadRequest, msg)
@@ -128,8 +127,8 @@ func (a *api) deleteConnection(w http.ResponseWriter, r *http.Request, user, id 
 	ok(w)
 }
 
-// send passes the body, an IRC line, to the connection in liercd
-// (Connection.pm send). The bytes go as they came, as in Perl.
+// send passes the body, an IRC line, to the connection in liercd, bytes
+// unchanged.
 func (a *api) send(w http.ResponseWriter, r *http.Request, user, id string) {
 	line, err := io.ReadAll(http.MaxBytesReader(w, r.Body, maxBody))
 	if err != nil {

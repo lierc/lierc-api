@@ -1,7 +1,6 @@
 // Package connections creates, edits, saves and deletes a user's IRC
-// connections: the row, liercd, and telling the user's open tabs. It is
-// ported from lib/API/Controller/Connection.pm and keeps its order of
-// steps, which is where the care is.
+// connections: the row, liercd, and telling the user's open tabs. The
+// order of steps is where the care is.
 package connections
 
 import (
@@ -20,7 +19,7 @@ import (
 	"github.com/lierc/lierc-api/internal/respond"
 )
 
-// UserError is a problem to show the user, with Perl's message.
+// UserError is a problem to show the user.
 type UserError struct{ Msg string }
 
 func (e *UserError) Error() string { return e.Msg }
@@ -46,7 +45,7 @@ type Service struct {
 	Announce         func(ctx context.Context, c db.ConnectionChange)
 	NotifyHighlights func(ctx context.Context) error
 	CheckHost        func(ctx context.Context, host string, port int) error
-	// Limit is how many connections a user can have (API::Limits).
+	// Limit is how many connections a user can have.
 	Limit int
 }
 
@@ -60,17 +59,17 @@ func NotifyHighlights(d db.Store) func(ctx context.Context) error {
 const stepTimeout = time.Minute
 
 // detached is ctx without its cancellation, bounded by stepTimeout: once
-// started, the steps finish even if the browser goes away, as Perl's did.
+// started, the steps finish even if the browser goes away.
 // A cancelled request mustn't stop an undo, or leave a destroyed
 // connection un-recreated.
 func detached(ctx context.Context) (context.Context, context.CancelFunc) {
 	return context.WithTimeout(context.WithoutCancel(ctx), stepTimeout)
 }
 
-// newID makes connection ids (Util->uuid); tests fix it.
+// newID makes connection ids; tests fix it.
 var newID = ids.New
 
-// object decodes raw as a JSON object, or fails with Perl's message.
+// object decodes raw as a JSON object, or fails with errInvalid.
 func object(raw []byte) (map[string]any, error) {
 	v, err := connconfig.Decode(raw)
 	if m, ok := v.(map[string]any); err == nil && ok {
@@ -92,7 +91,7 @@ func (s *Service) clean(ctx context.Context, raw []byte) (map[string]any, error)
 }
 
 // liercd posts body to liercd's path and returns the status, or a user
-// error when liercd can't be reached (Perl showed LWP's text).
+// error with the reason when liercd can't be reached.
 func (s *Service) liercd(ctx context.Context, path string, body []byte) (*liercd.Response, error) {
 	res, err := s.Liercd.Do(ctx, http.MethodPost, path, body)
 	if err != nil {
@@ -105,8 +104,7 @@ func (s *Service) announce(ctx context.Context, user, id, action string) {
 	s.Announce(ctx, db.ConnectionChange{User: user, Connection: id, Action: action})
 }
 
-// Create saves a new connection and starts it in liercd (Connection.pm
-// create and start). The row is saved first: which liercd it goes to is
+// Create saves a new connection and starts it in liercd. The row is saved first: which liercd it goes to is
 // looked up from the row, and the stream sends its first events to whoever
 // the row says owns it. The create is announced before liercd connects, so
 // the owner's tabs have it before its first status can arrive; a create
@@ -149,10 +147,10 @@ func (s *Service) Create(ctx context.Context, user string, raw []byte) (string, 
 	return id, s.NotifyHighlights(ctx)
 }
 
-// CreateDefault adds the signup network (Auth.pm add_default_network). It
+// CreateDefault adds the signup network. It
 // differs from Create in exactly these ways: the config is saved as given
 // (no Clean, no limit, no host check), nothing is announced, and the row
-// stays when liercd fails, as in Perl; the stream re-creates it when the
+// stays when liercd fails; the stream re-creates it when the
 // user next connects. On a liercd failure the id comes back with the error.
 func (s *Service) CreateDefault(ctx context.Context, user string, config map[string]any) (string, error) {
 	ctx, cancel := detached(ctx)
@@ -186,7 +184,7 @@ func savedObject(raw []byte) map[string]any {
 }
 
 // edited is the request's settings for an existing connection, with the
-// saved channel list (Connection.pm edited_config). Channels are only set
+// saved channel list. Channels are only set
 // when a connection is created; after that, joining and leaving change
 // them. A request without a nick keeps the saved one, which isn't
 // re-checked, so an old nick today's rules refuse can't block an edit.
@@ -221,7 +219,7 @@ func (s *Service) edited(ctx context.Context, id string, raw []byte, saved map[s
 	return config, nil
 }
 
-// Edit changes a connection's settings (Connection.pm edit). Everything is
+// Edit changes a connection's settings. Everything is
 // checked before the running connection is touched. If nothing liercd
 // connects with changed, the settings are just saved; otherwise liercd
 // destroys and recreates it, and the row stays put meanwhile, so the
@@ -284,7 +282,7 @@ func (s *Service) updated(ctx context.Context, user, id string) error {
 }
 
 // Save changes a connection's highlight words and alias, which don't need
-// a reconnect (Connection.pm save). The rest of the saved config is kept as
+// a reconnect. The rest of the saved config is kept as
 // it is: it's what liercd is running, and an old value or a DNS failure
 // can't block this.
 func (s *Service) Save(ctx context.Context, user, id string, raw []byte) error {
@@ -318,9 +316,9 @@ func (s *Service) Save(ctx context.Context, user, id string, raw []byte) error {
 	return s.updated(ctx, user, id)
 }
 
-// Delete destroys a connection in liercd and deletes its row (Connection.pm
-// delete). A connection liercd no longer has (404) is deleted too: Perl
-// refused, so a network liercd had lost could never be removed.
+// Delete destroys a connection in liercd and deletes its row. A connection
+// liercd no longer has (404) is deleted too, so a network liercd has lost
+// can still be removed.
 func (s *Service) Delete(ctx context.Context, user, id string) error {
 	ctx, cancel := detached(ctx)
 	defer cancel()

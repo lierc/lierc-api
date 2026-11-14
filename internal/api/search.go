@@ -28,7 +28,7 @@ var channelDate = db.Store.ChannelDate
 
 var dateShape = regexp.MustCompile(`^\d{4}-\d\d-\d\d$`)
 
-// day is d as a strict YYYY-MM-DD real calendar date (Channel.pm _day).
+// day is d as a strict YYYY-MM-DD real calendar date.
 func day(d string) (time.Time, bool) {
 	if !dateShape.MatchString(d) {
 		return time.Time{}, false
@@ -37,7 +37,7 @@ func day(d string) (time.Time, bool) {
 	return t, err == nil
 }
 
-// sseEvent writes an event as Util::event does, with no id line.
+// sseEvent writes a Server-Sent Event with no id line.
 func sseEvent(w io.Writer, typ string, data []byte) error {
 	_, err := io.WriteString(w, "event: "+typ+"\ndata: "+string(data)+"\n\n")
 	return err
@@ -54,7 +54,7 @@ func optional(r *http.Request, name string) *string {
 
 // dateSearch streams the channel's messages from {from} through {to}, as
 // "log" events read as they come, filtered by the text and sender
-// parameters (Channel.pm date). Problems are "search_error" events: the
+// parameters. Problems are "search_error" events: the
 // stream has started by then.
 func (a *api) dateSearch(w http.ResponseWriter, r *http.Request, user, id string) {
 	w.Header().Set("Content-Type", "text/event-stream;charset=utf-8")

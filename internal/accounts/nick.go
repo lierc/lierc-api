@@ -2,9 +2,9 @@ package accounts
 
 import "strings"
 
-// IrcNick is Util->irc_nick: anything outside [A-Za-z0-9_] becomes "_", a
+// IrcNick is the nick for a username: anything outside [A-Za-z0-9_] becomes "_", a
 // leading digit gets a "_" prefix, and it keeps at most 32 characters.
-// It works on characters, as Perl does on a decoded string.
+// It works on characters, not bytes.
 func IrcNick(username string) string {
 	nick := []rune(strings.Map(func(r rune) rune {
 		switch {

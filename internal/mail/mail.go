@@ -1,5 +1,5 @@
 // Package mail sends the API's emails over SMTP, configured from SMTP_OPTS
-// as the Perl API and the notifier read it.
+// (lierc's notifier reads the same variable).
 package mail
 
 import (

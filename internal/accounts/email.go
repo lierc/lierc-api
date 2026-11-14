@@ -7,12 +7,8 @@ import (
 	"golang.org/x/net/publicsuffix"
 )
 
-// IsEmail ports Data::Validate::Email::is_email as Auth.pm calls it (no
-// options): exactly one "@", a local part of [A-Za-z0-9_.+-], and a domain
-// that passes Data::Validate::Domain::is_domain with its defaults.
-//
-// One difference, on purpose: Perl's split drops trailing empty fields, so
-// it takes "a@b.com@". IsEmail refuses it.
+// IsEmail reports whether s is an address the API takes: exactly one "@",
+// a local part of [A-Za-z0-9_.+-], and a domain isDomain takes.
 func IsEmail(s string) bool {
 	parts := strings.Split(s, "@")
 	if len(parts) != 2 {
@@ -21,17 +17,16 @@ func IsEmail(s string) bool {
 	return emailLocal.MatchString(parts[0]) && isDomain(parts[1])
 }
 
-// Go's "$" is the end of the text, so these are Perl's patterns plus its
-// "untainted value equals the input" check, which refuses a trailing
-// newline that Perl's "$" would let through.
+// Both patterns match the whole value (Go's "$" is the end of the text), so
+// a trailing newline is refused.
 var (
 	emailLocal  = regexp.MustCompile(`^[A-Za-z0-9_.+-]+$`)
 	domainLabel = regexp.MustCompile(`^(?:[0-9A-Za-z]|[0-9A-Za-z][0-9A-Za-z-]*[0-9A-Za-z])$`)
 )
 
-// isDomain is Data::Validate::Domain::is_domain with default options (no
-// underscores, at least two labels), except that the TLD is checked against
-// the Public Suffix List's ICANN section rather than Perl's Net::Domain::TLD.
+// isDomain reports a domain name of at least two labels of letters, digits
+// and inner hyphens (no underscores), at most 63 bytes a label and 255
+// encoded, whose TLD is in the Public Suffix List's ICANN section.
 func isDomain(d string) bool {
 	trailingDot := strings.HasSuffix(d, ".")
 	d = strings.TrimSuffix(d, ".")

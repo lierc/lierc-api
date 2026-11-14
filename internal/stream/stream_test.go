@@ -398,7 +398,7 @@ func TestStats(t *testing.T) {
 		t.Errorf("unknown user stats = %s", body)
 	}
 
-	// Routes has no /stats (the api package sends it to Perl).
+	// Routes has no /stats: it is on the admin listener.
 	res = e.get("/stats", "")
 	res.Body.Close()
 	if res.StatusCode != 404 {

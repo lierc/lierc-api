@@ -192,7 +192,7 @@ func printCommands(w io.Writer, cmds []Command) {
 
 // OpenEnv builds the real Env from the environment the services share
 // (/etc/lierc.env in production). The database name is POSTGRES_DB (default
-// lierc), as the Perl API reads it. Only a command with NeedsDB gets a
+// lierc). Only a command with NeedsDB gets a
 // Store, and its liercd calls are routed by the store; the others route by
 // asking the admin API.
 func OpenEnv(ctx context.Context, sys System, needsDB bool) (*Env, func(), error) {

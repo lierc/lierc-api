@@ -99,8 +99,8 @@ func (u Users) require(h Handler, any bool) http.Handler {
 }
 
 // check finds the login for the cookie value v, renewing it and setting the
-// login cookie as needed. Anything but a login token (an old Perl-format
-// cookie, say) is no login.
+// login cookie as needed. Anything but a login token (a cookie from
+// before login tokens, say) is no login.
 func (u Users) check(w http.ResponseWriter, r *http.Request, v string) (login.Login, bool, error) {
 	ctx := r.Context()
 	if login.IsToken(v) {

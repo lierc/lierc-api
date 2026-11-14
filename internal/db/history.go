@@ -7,8 +7,8 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// The history reads, ported from lib/API/Controller/{Message,Channel}.pm.
-// Message is the stored JSON as it is (jsonb's key order, not Perl's).
+// The history reads. Message is the stored JSON as it is, in jsonb's key
+// order.
 
 // Message is a channel message as the channel reads send it.
 type Message struct {
@@ -32,7 +32,7 @@ type UserMessage struct {
 const LogMax = 251
 
 // LogSince is user's messages with ids above after, oldest first, at most
-// LogMax of them (Message.pm log).
+// LogMax of them.
 func (d *DB) LogSince(ctx context.Context, user string, after int32) ([]UserMessage, error) {
 	rows, err := d.Pool.Query(ctx, `
 		SELECT * FROM (
@@ -50,7 +50,7 @@ func (d *DB) LogSince(ctx context.Context, user string, after int32) ([]UserMess
 }
 
 // Highlights is user's highlighted messages, newest first, below before
-// when it is set (Message.pm highlight).
+// when it is set.
 func (d *DB) Highlights(ctx context.Context, user string, before *int32, limit int) ([]UserMessage, error) {
 	rows, err := d.Pool.Query(ctx, `
 		SELECT l.id, l.message::text, l.connection, l.self, l.highlight
@@ -66,26 +66,25 @@ func (d *DB) Highlights(ctx context.Context, user string, before *int32, limit i
 }
 
 // ChannelLogs is the newest limit messages of channel on conn, from log
-// and log_archive, newest first (Channel.pm logs).
+// and log_archive, newest first.
 func (d *DB) ChannelLogs(ctx context.Context, conn, channel string, limit int) ([]Message, error) {
 	return d.messages(ctx, Query("channel_logs"), channel, conn, limit)
 }
 
-// ChannelLogsBefore is ChannelLogs below message before (Channel.pm
-// logs_id).
+// ChannelLogsBefore is ChannelLogs below message before.
 func (d *DB) ChannelLogsBefore(ctx context.Context, conn, channel string, before int32, limit int) ([]Message, error) {
 	return d.messages(ctx, Query("channel_logs_before"), channel, conn, before, limit)
 }
 
 // ChannelLast is the last week's PRIVMSGs in channel matching query, with
-// the match marked (Channel.pm last). A nil query matches nothing.
+// the match marked. A nil query matches nothing.
 func (d *DB) ChannelLast(ctx context.Context, conn, channel string, query *string, limit int) ([]Message, error) {
 	return d.messages(ctx, Query("channel_last"), channel, conn, query, limit)
 }
 
 // ChannelDate calls each for the messages of channel on conn from date
 // from through date to, oldest first, as they're read; text and sender
-// filter when set (Channel.pm date). It stops with each's error.
+// filter when set. It stops with each's error.
 func (d *DB) ChannelDate(ctx context.Context, conn, channel, from, to string, text, sender *string, each func(Message) error) error {
 	rows, err := d.Pool.Query(ctx, Query("channel_date"), conn, channel, from, to, text, sender)
 	if err != nil {

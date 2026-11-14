@@ -11,12 +11,11 @@ import (
 	"strings"
 )
 
-// Signed, self-expiring tokens for emailed links, a port of
-// lib/API/SignedToken.pm. The token is base64url (unpadded) of
+// Signed, self-expiring tokens for emailed links. The token is base64url (unpadded) of
 // "<user>:<expires>:<mac>"; the mac is the hex HMAC-SHA256 of
 // "purpose|user|expires|fingerprint" keyed by the secret.
 
-// Token lifetimes in seconds, as in SignedToken.pm.
+// Token lifetimes in seconds.
 const (
 	ResetLifetime  = 3600
 	VerifyLifetime = 30 * 86400
@@ -33,14 +32,15 @@ func tokenMac(secret, purpose, user, expires, fingerprint string) string {
 	return hex.EncodeToString(m.Sum(nil))
 }
 
-// MakeToken is SignedToken->make.
+// MakeToken signs a token for user's purpose that expires at expires (Unix
+// seconds).
 func MakeToken(secret, purpose, user, fingerprint string, expires int64) string {
 	e := strconv.FormatInt(expires, 10)
 	return base64.RawURLEncoding.EncodeToString(
 		[]byte(user + ":" + e + ":" + tokenMac(secret, purpose, user, e, fingerprint)))
 }
 
-// tokenParts is SignedToken.pm's parts: user, expires and mac, as strings.
+// tokenParts splits a token into user, expires and mac, as strings.
 func tokenParts(token string) (user, expires, mac string, ok bool) {
 	if !tokenChars.MatchString(token) {
 		return "", "", "", false

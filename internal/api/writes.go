@@ -13,7 +13,7 @@ import (
 	"github.com/lierc/lierc-api/internal/respond"
 )
 
-// The small writes, ported from lib/API/Controller/*.pm.
+// The small writes.
 func (a *api) writes(mux *http.ServeMux) {
 	mux.Handle("POST /preference/{pref}", a.users.Require(a.setPreference))
 	mux.Handle("POST /connection/{id}/channel/{channel}/seen", a.users.Require(a.owned(a.setSeen)))
@@ -21,8 +21,8 @@ func (a *api) writes(mux *http.ServeMux) {
 	mux.Handle("DELETE /connection/{id}/nick/{nick}", a.users.Require(a.owned(a.deletePrivate)))
 }
 
-// owned runs h for a user who owns connection {id} (Perl verify_owner,
-// run by Dispatch.pm for every route with an id).
+// owned runs h for a user who owns connection {id}; every route with an id
+// goes through it.
 func (a *api) owned(h func(w http.ResponseWriter, r *http.Request, user, id string)) auth.Handler {
 	return func(w http.ResponseWriter, r *http.Request, user string) {
 		id := r.PathValue("id")

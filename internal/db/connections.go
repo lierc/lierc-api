@@ -8,7 +8,7 @@ import (
 )
 
 // SaveConnectionLimited saves the connection only if user has fewer than
-// max, and says whether it did (DB.pm save_connection_limited). The user's
+// max, and says whether it did. The user's
 // row is locked while it counts, so two creates at once are counted one
 // after the other; a user that's gone saves nothing.
 func (d *DB) SaveConnectionLimited(ctx context.Context, id, user string, config []byte, max int) (bool, error) {

@@ -1,5 +1,4 @@
-// Package config loads the stream server's settings from the environment,
-// mirroring lib/API/Config.pm.
+// Package config loads the API's settings from the environment.
 package config
 
 import (
@@ -33,7 +32,7 @@ type Config struct {
 	VAPIDPublic string
 	// Origins are the origins the UI is served from, which may make
 	// state-changing requests: API_ORIGINS split on whitespace, else
-	// API_URL (API::Config origins). Empty counts as unset.
+	// API_URL. Empty counts as unset.
 	Origins []string
 	// Secure marks the login cookie Secure (API_SECURE, a boolean).
 	Secure bool
@@ -50,7 +49,7 @@ type Config struct {
 	DefaultNetwork *DefaultNetwork
 }
 
-// DefaultNetwork is the signup network (API::Config default_network).
+// DefaultNetwork is the signup network.
 type DefaultNetwork struct {
 	Host     string
 	Port     int
@@ -61,8 +60,7 @@ type DefaultNetwork struct {
 // DefaultDBMaxConns is the DB_MAX_CONNS default.
 const DefaultDBMaxConns = 20
 
-// Load builds a Config. As in Config.pm, an empty variable counts as unset
-// (Perl's `||`).
+// Load builds a Config. An empty variable counts as unset.
 func Load(getenv func(string) string) (Config, error) {
 	or := func(key, def string) string {
 		if v := getenv(key); v != "" {
@@ -79,8 +77,8 @@ func Load(getenv func(string) string) (Config, error) {
 		DBHost:         or("POSTGRES_HOST", "127.0.0.1"),
 		DBUser:         or("POSTGRES_USER", ""),
 		DBPass:         or("POSTGRES_PASSWORD", ""),
-		// Stream's Postgres pool hard-codes dbname "lierc" (bin/stream.psgi),
-		// so POSTGRES_DB is ignored.
+		// The API's database is always "lierc": POSTGRES_DB is ignored here
+		// (lctl.OpenEnv reads it).
 		DBName:             "lierc",
 		AccountTokenSecret: getenv("ACCOUNT_TOKEN_SECRET"),
 		UnsubscribeSecret:  getenv("UNSUBSCRIBE_SECRET"),

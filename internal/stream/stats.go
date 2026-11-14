@@ -21,8 +21,7 @@ func (s *Server) Admin() http.Handler {
 	return mux
 }
 
-// serveStats answers /stats (bin/stream.psgi, Events.pm stats): stream counts
-// per user, or one user's stream details with ?user=.
+// serveStats answers /stats: stream counts per user, or one user's stream details with ?user=.
 func (s *Server) serveStats(w http.ResponseWriter, r *http.Request) {
 	respond.JSON(w, http.StatusOK, s.stats(r.URL.Query().Get("user")))
 }
