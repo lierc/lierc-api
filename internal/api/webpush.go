@@ -74,8 +74,7 @@ func checkSubscription(endpoint, key, auth string) string {
 	return ""
 }
 
-// subscribe saves the subscription in the form body (or, as with Perl's
-// parameters, the query when the body lacks a field).
+// subscribe saves the subscription in the form body.
 func (a *api) subscribe(w http.ResponseWriter, r *http.Request, user string) {
 	param, ok := formParams(w, r)
 	if !ok {
@@ -102,8 +101,8 @@ func (a *api) unsubscribePush(w http.ResponseWriter, r *http.Request, user strin
 }
 
 // formParams reads the form body, and answers a function giving a field
-// from it, or, as with Perl's parameters, from the query when the body
-// lacks it. Over maxBody it answers 400 and reports false.
+// from it; the query isn't read. Over maxBody, or not valid UTF-8, it
+// answers 400 and reports false.
 func formParams(w http.ResponseWriter, r *http.Request) (func(string) string, bool) {
 	r.Body = http.MaxBytesReader(w, r.Body, maxBody)
 	if err := r.ParseForm(); err != nil {
@@ -115,7 +114,7 @@ func formParams(w http.ResponseWriter, r *http.Request) (func(string) string, bo
 		}
 		return nil, false
 	}
-	for _, vs := range r.Form {
+	for _, vs := range r.PostForm {
 		for _, v := range vs {
 			if !utf8.ValidString(v) {
 				invalidUTF8(w)
@@ -123,10 +122,5 @@ func formParams(w http.ResponseWriter, r *http.Request) (func(string) string, bo
 			}
 		}
 	}
-	return func(name string) string {
-		if r.PostForm.Has(name) {
-			return r.PostForm.Get(name)
-		}
-		return r.URL.Query().Get(name)
-	}, true
+	return r.PostForm.Get, true
 }

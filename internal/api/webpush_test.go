@@ -84,8 +84,8 @@ func TestWebPushRoutes(t *testing.T) {
 		t.Errorf("http endpoint: %d %s", c, b)
 	}
 	ep2 := ep + "2"
-	if c, b := post("?key="+url.QueryEscape(goodKey), url.Values{"endpoint": {ep2}, "auth": {goodAuth}}.Encode()); c != 204 {
-		t.Errorf("key in query: %d %s", c, b)
+	if c, b := post("?key="+url.QueryEscape(goodKey), url.Values{"endpoint": {ep2}, "auth": {goodAuth}}.Encode()); c != 400 || b != `{"status":"error","error":"key is required"}` {
+		t.Errorf("key in query isn't read: %d %s", c, b)
 	}
 	if c, b := post("?key="+url.QueryEscape(goodKey), url.Values{"endpoint": {ep2}, "key": {"not base64!"}, "auth": {goodAuth}}.Encode()); c != 400 || b != `{"status":"error","error":"key is not base64url"}` {
 		t.Errorf("body key wins: %d %s", c, b)

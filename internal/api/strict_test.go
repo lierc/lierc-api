@@ -2,6 +2,7 @@ package api
 
 import (
 	"io"
+	"net/url"
 	"strings"
 	"testing"
 
@@ -26,4 +27,16 @@ func TestFormInvalidUTF8(t *testing.T) {
 
 	a := testenv.AddUser(t, e.db, "bob")
 	e.sendWant("POST", "/preference/theme", a, "\xff", 400, invalidUTF8Body)
+}
+
+// Form fields come from the body only: credentials in the query don't log
+// in.
+func TestFormBodyOnly(t *testing.T) {
+	e := setup(t)
+	id := testenv.AddUser(t, e.db, "alice")
+	e.setPassword(id, "hunter2")
+	res, body := e.form("POST", "/auth?email=alice&pass=hunter2", "", url.Values{})
+	if res.StatusCode == 200 || chatsCookie(res) != nil {
+		t.Errorf("query login: %d %s", res.StatusCode, body)
+	}
 }

@@ -134,11 +134,6 @@ func TestLoginRoute(t *testing.T) {
 	if pref.StatusCode != 200 {
 		t.Errorf("GET /preference with the new cookie: %d", pref.StatusCode)
 	}
-	// the query is the fallback for a field the body lacks
-	res, _ = e.form("POST", "/auth?email=alice&pass=hunter2", "", url.Values{})
-	if res.StatusCode != 200 {
-		t.Errorf("query login: %d", res.StatusCode)
-	}
 
 	res, body = e.form("POST", "/auth", "", url.Values{"email": {"alice"}, "pass": {"wrong"}})
 	if res.StatusCode != 401 || chatsCookie(res) != nil || strings.TrimSpace(body) != `{"status":"error","error":"Invalid email or password"}` {

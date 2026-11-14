@@ -235,7 +235,13 @@ func (a *api) unsubscribe(w http.ResponseWriter, r *http.Request) {
 	if !good {
 		return
 	}
-	user, valid := accounts.CheckUnsubscribeToken(a.cfg.UnsubscribeSecret, param("token"))
+	// A mail provider's one-click button (RFC 8058) POSTs to the
+	// List-Unsubscribe URL, so the token is in its query.
+	token := param("token")
+	if token == "" {
+		token = r.URL.Query().Get("token")
+	}
+	user, valid := accounts.CheckUnsubscribeToken(a.cfg.UnsubscribeSecret, token)
 	if !valid {
 		respond.Error(w, http.StatusBadRequest, "This unsubscribe link isn't valid.")
 		return
