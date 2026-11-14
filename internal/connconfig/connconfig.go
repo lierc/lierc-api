@@ -55,7 +55,6 @@ var (
 	userRe    = regexp.MustCompile(`^[^ \x00\r\n:][^ \x00\r\n]{0,31}$`)
 	channelRe = regexp.MustCompile(`^[#&+!][^` + unicodeSpace + `,\x00-\x1f\x7f]{1,199}$`)
 	aliasRe   = regexp.MustCompile(`^[A-Za-z0-9 .-]{1,32}$`)
-	portRe    = regexp.MustCompile(`^[ \t\n\r\f\v]*([0-9]{1,5})[ \t\n\r\f\v]*$`)
 	ipv4Re    = regexp.MustCompile(`^([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3})$`)
 	labelRe   = regexp.MustCompile(`^[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?$`)
 	digitsRe  = regexp.MustCompile(`^[0-9]+$`)
