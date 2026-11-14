@@ -71,16 +71,14 @@ func Load(getenv func(string) string) (Config, error) {
 	}
 
 	c := Config{
-		VAPIDPublic:    getenv("VAPID_PUBLIC"),
-		Origins:        origins(getenv),
-		LiercdHost:     or("LIERCD_HOST", "127.0.0.1"),
-		LiercdNextHost: or("LIERCD_NEXT_HOST", ""),
-		DBHost:         or("POSTGRES_HOST", "127.0.0.1"),
-		DBUser:         or("POSTGRES_USER", ""),
-		DBPass:         or("POSTGRES_PASSWORD", ""),
-		// The API's database is always "lierc": POSTGRES_DB is ignored here
-		// (lctl.OpenEnv reads it).
-		DBName:             "lierc",
+		VAPIDPublic:        getenv("VAPID_PUBLIC"),
+		Origins:            origins(getenv),
+		LiercdHost:         or("LIERCD_HOST", "127.0.0.1"),
+		LiercdNextHost:     or("LIERCD_NEXT_HOST", ""),
+		DBHost:             or("POSTGRES_HOST", "127.0.0.1"),
+		DBUser:             or("POSTGRES_USER", ""),
+		DBPass:             or("POSTGRES_PASSWORD", ""),
+		DBName:             or("POSTGRES_DB", "lierc"),
 		AccountTokenSecret: getenv("ACCOUNT_TOKEN_SECRET"),
 		UnsubscribeSecret:  getenv("UNSUBSCRIBE_SECRET"),
 		NSQAddr:            or("NSQD_HOST", "127.0.0.1"),

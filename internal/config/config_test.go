@@ -96,10 +96,12 @@ func TestNSQDHostWithPort(t *testing.T) {
 	}
 }
 
-func TestIgnoresPostgresDB(t *testing.T) {
-	c, _ := Load(env(map[string]string{"POSTGRES_DB": "other"}))
-	if c.DBName != "lierc" {
-		t.Errorf("DBName = %q", c.DBName)
+func TestPostgresDB(t *testing.T) {
+	for v, want := range map[string]string{"other": "other", "": "lierc"} {
+		c, err := Load(env(map[string]string{"POSTGRES_DB": v}))
+		if err != nil || c.DBName != want {
+			t.Errorf("POSTGRES_DB=%q: DBName = %q, %v; want %q", v, c.DBName, err, want)
+		}
 	}
 }
 
