@@ -1534,3 +1534,15 @@ func TestSaveChannelsNon200(t *testing.T) {
 		t.Errorf("c1 config %s", raw)
 	}
 }
+
+// "0" is a user id like any other, not "no user".
+func TestStatsUserZero(t *testing.T) {
+	e := setup(t)
+	e.open(e.addUser("alice"))
+	res := e.adminGet("/stats?user=0")
+	body, _ := io.ReadAll(res.Body)
+	res.Body.Close()
+	if string(body) != "[]" {
+		t.Errorf("stats for user 0 = %s, want []", body)
+	}
+}

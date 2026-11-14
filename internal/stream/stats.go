@@ -31,7 +31,7 @@ func (s *Server) serveStats(w http.ResponseWriter, r *http.Request) {
 func (s *Server) stats(user string) any {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if user != "" && user != "0" { // Perl: if ($user)
+	if user != "" {
 		data := []streamInfo{}
 		for _, st := range s.streams[user] {
 			data = append(data, streamInfo{st.remote, st.agent, st.created})
