@@ -202,15 +202,18 @@ func (s *Server) saveChannels(ctx context.Context, user string) {
 		if json.Unmarshal(res.Body, &stat) != nil || len(stat.Channels) == 0 {
 			continue
 		}
+		if stat.Id != c.ID {
+			log.Printf("stream: save channels: liercd answered %q for %s, skipped", stat.Id, c.ID)
+			continue
+		}
 		names := make([]string, len(stat.Channels))
 		for i, ch := range stat.Channels {
 			names[i] = ch.Name
 		}
-		// Perl updates the row named by the status Id, not the connection
-		// id. The row is locked from read to write, so a channel liercd
-		// saves meanwhile (MergeConfig) isn't overwritten; a row that's
-		// gone, or isn't an object, is skipped.
-		_, err = s.db.EditConfig(ctx, stat.Id, func(stored []byte) ([]byte, error) {
+		// The row is locked from read to write, so a channel liercd saves
+		// meanwhile (MergeConfig) isn't overwritten; a row that's gone, or
+		// isn't an object, is skipped.
+		_, err = s.db.EditConfig(ctx, c.ID, func(stored []byte) ([]byte, error) {
 			var cfg map[string]json.RawMessage
 			if json.Unmarshal(stored, &cfg) != nil {
 				return nil, errSkip

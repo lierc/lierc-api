@@ -1495,3 +1495,26 @@ func TestSaveChannelsSkipsDeleted(t *testing.T) {
 		t.Errorf("c2 config %s", raw)
 	}
 }
+
+// saveChannels saves only to the connection it asked liercd about: an
+// answer naming another connection, or none, changes nothing.
+func TestSaveChannelsWrongId(t *testing.T) {
+	e := setup(t)
+	u := e.addUser("alice")
+	ctx := context.Background()
+	e.addConn("c1", u, `{"Host":"irc.x","Channels":["#old"]}`)
+	e.addConn("c2", u, `{"Host":"irc.y","Channels":["#old"]}`)
+	e.fake.Respond("GET", "/c1/status", 200, statusJSON("c2", "me", true, true, `,"Channels":[{"Name":"#x"}]`))
+	e.fake.Respond("GET", "/c2/status", 200, statusJSON("", "me", true, true, `,"Channels":[{"Name":"#y"}]`))
+	e.s.saveChannels(ctx, u)
+
+	for _, c := range []struct{ id, want string }{
+		{"c1", `{"Host":"irc.x","Channels":["#old"]}`},
+		{"c2", `{"Host":"irc.y","Channels":["#old"]}`},
+	} {
+		raw, _, _ := e.db.LookupConfig(ctx, c.id)
+		if !testenv.SameJSON(string(raw), c.want) {
+			t.Errorf("%s config %s, want %s", c.id, raw, c.want)
+		}
+	}
+}
