@@ -210,8 +210,13 @@ func TestDefaultNetwork(t *testing.T) {
 	if n == nil || n.Port != 6697 || !n.Ssl || !reflect.DeepEqual(n.Channels, []string{"#a", "#b"}) {
 		t.Errorf("all set = %+v", n)
 	}
-	if n = load(map[string]string{"DEFAULT_NETWORK_HOST": "h", "DEFAULT_NETWORK_SSL": "0"}); n.Ssl {
-		t.Error("SSL=0 is true")
+	for v, want := range map[string]bool{"0": false, "false": false, "true": true} {
+		if n = load(map[string]string{"DEFAULT_NETWORK_HOST": "h", "DEFAULT_NETWORK_SSL": v}); n.Ssl != want {
+			t.Errorf("SSL=%q is %v", v, n.Ssl)
+		}
+	}
+	if _, err := Load(env(map[string]string{"DEFAULT_NETWORK_HOST": "h", "DEFAULT_NETWORK_SSL": "yes"})); err == nil || !strings.Contains(err.Error(), "DEFAULT_NETWORK_SSL") {
+		t.Errorf("SSL=yes: error %v, want one naming DEFAULT_NETWORK_SSL", err)
 	}
 	for port, want := range map[string]int{"x": 6667, "-5": 6667, "0": 6667, "70000": 6667, " 6697 ": 6697, "6697": 6697} {
 		if n = load(map[string]string{"DEFAULT_NETWORK_HOST": "h", "DEFAULT_NETWORK_PORT": port}); n.Port != want {

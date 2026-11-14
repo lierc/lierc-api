@@ -109,16 +109,18 @@ func Load(getenv func(string) string) (Config, error) {
 	} else {
 		c.DBMaxConns = int(n)
 	}
+	var err error
 	if host := getenv("DEFAULT_NETWORK_HOST"); host != "" {
 		n := &DefaultNetwork{
 			Host:     host,
 			Port:     DefaultNetworkPort(getenv("DEFAULT_NETWORK_PORT")),
-			Ssl:      getenv("DEFAULT_NETWORK_SSL") != "" && getenv("DEFAULT_NETWORK_SSL") != "0",
 			Channels: strings.Fields(getenv("DEFAULT_NETWORK_CHANNELS")),
+		}
+		if n.Ssl, err = boolean(getenv, "DEFAULT_NETWORK_SSL"); err != nil {
+			return Config{}, err
 		}
 		c.DefaultNetwork = n
 	}
-	var err error
 	if c.Secure, err = boolean(getenv, "API_SECURE"); err != nil {
 		return Config{}, err
 	}
