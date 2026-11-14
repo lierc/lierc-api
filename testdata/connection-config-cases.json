@@ -1,5 +1,5 @@
 {
-   "_comment" : "Run by internal/connconfig. Generated from what the Perl API's lib/API/ConnectionConfig.pm returned (the Perl code and its generator are in git history); edited by hand since. 'input' is the raw request JSON. Go must match every case whose fields have their proper JSON types (strings, a number for Port, booleans for Ssl/SASL) and refuse the rest. The exempt cases follow config.DefaultNetworkPort: DEFAULT_NETWORK_PORT is a whole number from 1 to 65535 or 6667, no longer Perl's int().",
+   "_comment" : "Run by internal/connconfig. Generated from what the Perl API's lib/API/ConnectionConfig.pm returned (the Perl code and its generator are in git history); edited by hand since. 'input' is the raw request JSON. Go must match every case whose fields have their proper JSON types (strings, a number for Port, booleans for Ssl/SASL) and refuse the rest. The exempt cases follow config.DefaultNetworkPort: DEFAULT_NETWORK_PORT must be a whole number from 1 to 65535; unset or any other value exempts nothing (the API won't start).",
    "blocked" : [
       {
          "blocked" : true,
@@ -256,7 +256,7 @@
       },
       {
          "env_host" : "IRC.relaychat.party",
-         "env_port" : null,
+         "env_port" : "6667",
          "error" : "",
          "host" : "irc.relaychat.party",
          "port" : 6667,
@@ -267,7 +267,7 @@
       },
       {
          "env_host" : "irc.relaychat.party",
-         "env_port" : null,
+         "env_port" : "6667",
          "error" : "Host irc.relaychat.party points to a private address",
          "host" : "irc.relaychat.party",
          "port" : 5005,
@@ -300,7 +300,7 @@
       },
       {
          "env_host" : "127.0.0.1",
-         "env_port" : null,
+         "env_port" : "6667",
          "error" : "",
          "host" : "127.0.0.1",
          "port" : 6667,
@@ -2815,28 +2815,28 @@
    "exempt" : [
       {
          "env_host" : "irc.relaychat.party",
-         "env_port" : "",
+         "env_port" : "6667",
          "exempt" : true,
          "host" : "irc.relaychat.party",
          "port" : 6667
       },
       {
          "env_host" : "irc.relaychat.party",
-         "env_port" : "",
+         "env_port" : "6667",
          "exempt" : true,
          "host" : "IRC.relaychat.party",
          "port" : 6667
       },
       {
          "env_host" : "IRC.relaychat.party",
-         "env_port" : "",
+         "env_port" : "6667",
          "exempt" : true,
          "host" : "irc.relaychat.party",
          "port" : 6667
       },
       {
          "env_host" : "irc.relaychat.party",
-         "env_port" : "",
+         "env_port" : "6667",
          "exempt" : false,
          "host" : "irc.relaychat.party",
          "port" : 5005
@@ -2857,22 +2857,29 @@
       },
       {
          "env_host" : "irc.relaychat.party",
+         "env_port" : "",
+         "exempt" : false,
+         "host" : "irc.relaychat.party",
+         "port" : 6667
+      },
+      {
+         "env_host" : "irc.relaychat.party",
          "env_port" : "abc",
-         "exempt" : true,
+         "exempt" : false,
          "host" : "irc.relaychat.party",
          "port" : 6667
       },
       {
          "env_host" : "irc.relaychat.party",
          "env_port" : "0",
-         "exempt" : true,
+         "exempt" : false,
          "host" : "irc.relaychat.party",
          "port" : 6667
       },
       {
          "env_host" : "irc.relaychat.party",
          "env_port" : " 6697",
-         "exempt" : true,
+         "exempt" : false,
          "host" : "irc.relaychat.party",
          "port" : 6697
       },
@@ -2886,14 +2893,14 @@
       {
          "env_host" : "irc.relaychat.party",
          "env_port" : "6697x",
-         "exempt" : true,
+         "exempt" : false,
          "host" : "irc.relaychat.party",
          "port" : 6667
       },
       {
          "env_host" : "irc.relaychat.party",
          "env_port" : "70000",
-         "exempt" : true,
+         "exempt" : false,
          "host" : "irc.relaychat.party",
          "port" : 6667
       },
@@ -2913,7 +2920,7 @@
       },
       {
          "env_host" : "ergo",
-         "env_port" : "",
+         "env_port" : "6667",
          "exempt" : false,
          "host" : "ergo.",
          "port" : 6667

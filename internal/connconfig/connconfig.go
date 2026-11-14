@@ -295,14 +295,16 @@ func BlockedIP(ip string) bool {
 }
 
 // Exempt reports whether host and port are the default network
-// (DEFAULT_NETWORK_HOST on DEFAULT_NETWORK_PORT, default 6667), which may be
-// private, e.g. irc.relaychat.party -> 127.0.0.1 in /etc/hosts.
+// (DEFAULT_NETWORK_HOST on DEFAULT_NETWORK_PORT), which may be private, e.g.
+// irc.relaychat.party -> 127.0.0.1 in /etc/hosts. With a missing or bad
+// DEFAULT_NETWORK_PORT nothing is exempt (the API won't start with one).
 func Exempt(getenv func(string) string, host string, port int) bool {
 	def := getenv("DEFAULT_NETWORK_HOST")
 	if def == "" {
 		return false
 	}
-	return strings.ToLower(host) == strings.ToLower(def) && port == config.DefaultNetworkPort(getenv("DEFAULT_NETWORK_PORT"))
+	p, err := config.DefaultNetworkPort(getenv("DEFAULT_NETWORK_PORT"))
+	return err == nil && strings.ToLower(host) == strings.ToLower(def) && port == p
 }
 
 // A Resolver returns the addresses a host name resolves to; an error or no

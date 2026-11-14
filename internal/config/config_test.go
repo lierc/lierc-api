@@ -202,38 +202,46 @@ func TestDefaultNetwork(t *testing.T) {
 	if n := load(nil); n != nil {
 		t.Errorf("unset = %+v", n)
 	}
-	n := load(map[string]string{"DEFAULT_NETWORK_HOST": "h"})
+	if _, err := Load(env(map[string]string{"DEFAULT_NETWORK_HOST": "h"})); err == nil || !strings.Contains(err.Error(), "DEFAULT_NETWORK_PORT") {
+		t.Errorf("host without port: error %v, want one naming DEFAULT_NETWORK_PORT", err)
+	}
+	n := load(map[string]string{"DEFAULT_NETWORK_HOST": "h", "DEFAULT_NETWORK_PORT": "6667"})
 	if n == nil || n.Host != "h" || n.Port != 6667 || n.Ssl || len(n.Channels) != 0 {
-		t.Errorf("host only = %+v", n)
+		t.Errorf("host and port only = %+v", n)
 	}
 	n = load(map[string]string{"DEFAULT_NETWORK_HOST": "h", "DEFAULT_NETWORK_PORT": "6697", "DEFAULT_NETWORK_SSL": "1", "DEFAULT_NETWORK_CHANNELS": " #a  #b\n"})
 	if n == nil || n.Port != 6697 || !n.Ssl || !reflect.DeepEqual(n.Channels, []string{"#a", "#b"}) {
 		t.Errorf("all set = %+v", n)
 	}
 	for v, want := range map[string]bool{"0": false, "false": false, "true": true} {
-		if n = load(map[string]string{"DEFAULT_NETWORK_HOST": "h", "DEFAULT_NETWORK_SSL": v}); n.Ssl != want {
+		if n = load(map[string]string{"DEFAULT_NETWORK_HOST": "h", "DEFAULT_NETWORK_PORT": "6667", "DEFAULT_NETWORK_SSL": v}); n.Ssl != want {
 			t.Errorf("SSL=%q is %v", v, n.Ssl)
 		}
 	}
-	if _, err := Load(env(map[string]string{"DEFAULT_NETWORK_HOST": "h", "DEFAULT_NETWORK_SSL": "yes"})); err == nil || !strings.Contains(err.Error(), "DEFAULT_NETWORK_SSL") {
+	if _, err := Load(env(map[string]string{"DEFAULT_NETWORK_HOST": "h", "DEFAULT_NETWORK_PORT": "6667", "DEFAULT_NETWORK_SSL": "yes"})); err == nil || !strings.Contains(err.Error(), "DEFAULT_NETWORK_SSL") {
 		t.Errorf("SSL=yes: error %v, want one naming DEFAULT_NETWORK_SSL", err)
 	}
-	for port, want := range map[string]int{"x": 6667, "-5": 6667, "0": 6667, "70000": 6667, " 6697 ": 6697, "6697": 6697} {
-		if n = load(map[string]string{"DEFAULT_NETWORK_HOST": "h", "DEFAULT_NETWORK_PORT": port}); n.Port != want {
-			t.Errorf("port %q = %d, want %d", port, n.Port, want)
+	if n = load(map[string]string{"DEFAULT_NETWORK_HOST": "h", "DEFAULT_NETWORK_PORT": "6697"}); n.Port != 6697 {
+		t.Errorf("port 6697 = %d", n.Port)
+	}
+	for _, port := range []string{"x", "-5", "0", "70000", " 6697 ", "66.5"} {
+		if _, err := Load(env(map[string]string{"DEFAULT_NETWORK_HOST": "h", "DEFAULT_NETWORK_PORT": port})); err == nil || !strings.Contains(err.Error(), "DEFAULT_NETWORK_PORT") {
+			t.Errorf("port %q: error %v, want one naming DEFAULT_NETWORK_PORT", port, err)
 		}
 	}
 }
 
 // DefaultNetworkPort is the one reading of DEFAULT_NETWORK_PORT: a whole
-// number from 1 to 65535 (surrounding spaces allowed), or 6667.
+// number from 1 to 65535; unset is an error.
 func TestDefaultNetworkPort(t *testing.T) {
-	for in, want := range map[string]int{
-		"": 6667, "0": 6667, "abc": 6667, "6697x": 6667, "70000": 6667, "-1": 6667, "66.5": 6667,
-		"6697": 6697, " 6697 ": 6697, "1": 1, "65535": 65535,
-	} {
-		if got := DefaultNetworkPort(in); got != want {
-			t.Errorf("DefaultNetworkPort(%q) = %d, want %d", in, got, want)
+	for in, want := range map[string]int{"6697": 6697, "1": 1, "65535": 65535} {
+		if got, err := DefaultNetworkPort(in); err != nil || got != want {
+			t.Errorf("DefaultNetworkPort(%q) = %d, %v; want %d", in, got, err, want)
+		}
+	}
+	for _, in := range []string{"", "0", "abc", "6697x", "70000", "-1", "66.5", " 6697 ", "+6697"} {
+		if _, err := DefaultNetworkPort(in); err == nil {
+			t.Errorf("DefaultNetworkPort(%q) has no error", in)
 		}
 	}
 }

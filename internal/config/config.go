@@ -2,6 +2,7 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"net"
 	"strconv"
@@ -111,8 +112,10 @@ func Load(getenv func(string) string) (Config, error) {
 	if host := getenv("DEFAULT_NETWORK_HOST"); host != "" {
 		n := &DefaultNetwork{
 			Host:     host,
-			Port:     DefaultNetworkPort(getenv("DEFAULT_NETWORK_PORT")),
 			Channels: strings.Fields(getenv("DEFAULT_NETWORK_CHANNELS")),
+		}
+		if n.Port, err = DefaultNetworkPort(getenv("DEFAULT_NETWORK_PORT")); err != nil {
+			return Config{}, err
 		}
 		if n.Ssl, err = boolean(getenv, "DEFAULT_NETWORK_SSL"); err != nil {
 			return Config{}, err
@@ -152,14 +155,18 @@ func origins(getenv func(string) string) []string {
 }
 
 // DefaultNetworkPort is DEFAULT_NETWORK_PORT as a port: a whole number from
-// 1 to 65535, surrounding spaces allowed, or 6667. A bad value never stops
-// startup. connconfig.Exempt reads it the same way, so the default network
-// is exempt on the port it's created with.
-func DefaultNetworkPort(s string) int {
-	if p, err := strconv.ParseInt(strings.TrimSpace(s), 10, 32); err == nil && p >= 1 && p <= 65535 {
-		return int(p)
+// 1 to 65535. Anything else, unset included, is an error, and Load fails
+// when DEFAULT_NETWORK_HOST is set. connconfig.Exempt reads it the same
+// way, so the default network is exempt on the port it's created with.
+func DefaultNetworkPort(s string) (int, error) {
+	if s == "" {
+		return 0, errors.New("DEFAULT_NETWORK_PORT is not set")
 	}
-	return 6667
+	p, err := strconv.Atoi(s)
+	if err != nil || p < 1 || p > 65535 || strconv.Itoa(p) != s {
+		return 0, fmt.Errorf("DEFAULT_NETWORK_PORT: %q is not a port from 1 to 65535", s)
+	}
+	return p, nil
 }
 
 // RequireSecrets reports a missing signing secret. They have no default,
