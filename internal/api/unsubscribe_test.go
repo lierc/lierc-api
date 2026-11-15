@@ -105,3 +105,32 @@ func TestUnsubscribeGetRedirects(t *testing.T) {
 		t.Errorf("email pref = %s after GETs, want untouched", v)
 	}
 }
+
+// A webmail page that sends the one-click POST from the browser makes a
+// cross-site request. It's let through: unsubscribe reads no cookie, only
+// the token, so there's no session for another site to borrow. A bad token
+// is still refused.
+func TestUnsubscribeCrossSite(t *testing.T) {
+	e := setup(t)
+	a := testenv.AddUser(t, e.db, "alice")
+	for name, hdr := range map[string][]string{
+		"Sec-Fetch-Site": {"Sec-Fetch-Site", "cross-site"},
+		"Origin":         {"Origin", "https://webmail.example"},
+	} {
+		res := e.doReq("POST", "/unsubscribe?token="+url.QueryEscape(e.unsubscribeToken(a)), "", "List-Unsubscribe=One-Click",
+			append([]string{"Content-Type", formType}, hdr...)...)
+		res.Body.Close()
+		if res.StatusCode != 200 {
+			t.Errorf("%s: %d, want 200", name, res.StatusCode)
+		}
+		res = e.doReq("POST", "/unsubscribe?token=junk", "", "List-Unsubscribe=One-Click",
+			append([]string{"Content-Type", formType}, hdr...)...)
+		res.Body.Close()
+		if res.StatusCode != 400 {
+			t.Errorf("%s, bad token: %d, want 400", name, res.StatusCode)
+		}
+	}
+	if v := e.emailPref(a); v != "false" {
+		t.Errorf("email = %s, want false", v)
+	}
+}

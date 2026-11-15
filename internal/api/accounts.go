@@ -49,7 +49,7 @@ func (a *api) accounts(mux *http.ServeMux) {
 	mux.Handle("POST /verify/resend", a.users.RequireAny(a.resend))
 	mux.HandleFunc("POST /reset", a.reset)
 	mux.HandleFunc("POST /reset/confirm", a.resetConfirm)
-	mux.HandleFunc("POST /unsubscribe", a.unsubscribe)
+	// POST /unsubscribe is routed in New, outside sameOrigin.
 	mux.HandleFunc("GET /unsubscribe", unsubscribePage)
 }
 

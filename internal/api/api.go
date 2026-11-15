@@ -65,5 +65,13 @@ func New(cfg config.Config, s db.Store, streams *stream.Server, lc *liercd.Clien
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		respond.Error(w, http.StatusNotFound, "not found")
 	})
-	return sameOrigin(cfg.Origins, mux)
+
+	// POST /unsubscribe skips sameOrigin: it reads no cookie, only the
+	// signed token, so another site has no session to borrow. A webmail
+	// page that sends the one-click POST (RFC 8058) from the browser is
+	// cross-site.
+	outer := http.NewServeMux()
+	outer.HandleFunc("POST /unsubscribe", a.unsubscribe)
+	outer.Handle("/", sameOrigin(cfg.Origins, mux))
+	return outer
 }
