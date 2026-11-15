@@ -270,7 +270,8 @@ func (e *env) withToken(method, path, token string) *http.Response {
 	return res
 }
 
-// logIn posts /auth (optionally with an existing token) and returns the new token.
+// logIn posts /auth (optionally with an existing token) and returns the
+// new token.
 func (e *env) logIn(email, pass, oldToken string, hdr ...string) string {
 	e.t.Helper()
 	if oldToken != "" {

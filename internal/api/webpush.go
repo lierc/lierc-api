@@ -30,9 +30,10 @@ var (
 	base64url = regexp.MustCompile(`\A[A-Za-z0-9_-]+={0,2}\z`)
 )
 
-// checkSubscription is why a subscription can't be saved, or "". The endpoint must be https on a known push service;
-// key and auth must be the browser's P-256 public key (65 bytes,
-// uncompressed) and 16 byte auth secret, base64url encoded.
+// checkSubscription is why a subscription can't be saved, or "". The
+// endpoint must be https on a known push service; key and auth must be the
+// browser's P-256 public key (65 bytes, uncompressed) and 16 byte auth
+// secret, base64url encoded.
 func checkSubscription(endpoint, key, auth string) string {
 	if endpoint == "" {
 		return "endpoint is required"
