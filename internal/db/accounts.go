@@ -4,8 +4,8 @@ import (
 	"context"
 	"errors"
 
+	sq "github.com/Masterminds/squirrel"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
 )
 
 // The user table's account columns: signup, login, email confirmation and
@@ -28,7 +28,7 @@ type AccountAuth struct {
 // AccountByID finds the user with id.
 func (d *DB) AccountByID(ctx context.Context, id string) (Account, bool, error) {
 	var a Account
-	err := d.Pool.QueryRow(ctx, `SELECT id, username, email, verified FROM "user" WHERE id=$1`, id).
+	err := queryRow(ctx, d.Pool, psql.Select("id", "username", "email", "verified").From(`"user"`).Where(sq.Eq{"id": id})).
 		Scan(&a.ID, &a.Username, &a.Email, &a.Verified)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Account{}, false, nil
@@ -39,9 +39,8 @@ func (d *DB) AccountByID(ctx context.Context, id string) (Account, bool, error) 
 // AccountsByLogin finds the users whose email or username is name, ignoring
 // case.
 func (d *DB) AccountsByLogin(ctx context.Context, name string) ([]AccountAuth, error) {
-	rows, err := d.Pool.Query(ctx,
-		`SELECT id, username, email, verified, password_hash FROM "user" WHERE lower(email) = lower($1) OR lower(username) = lower($1)`,
-		name)
+	rows, err := query(ctx, d.Pool, psql.Select("id", "username", "email", "verified", "password_hash").From(`"user"`).
+		Where(sq.Or{sq.Expr("lower(email) = lower(?)", name), sq.Expr("lower(username) = lower(?)", name)}))
 	if err != nil {
 		return nil, err
 	}
@@ -61,8 +60,7 @@ func (d *DB) AccountsByLogin(ctx context.Context, name string) ([]AccountAuth, e
 // Verified is not read.
 func (d *DB) AccountAuthByEmail(ctx context.Context, email string) (AccountAuth, bool, error) {
 	var a AccountAuth
-	err := d.Pool.QueryRow(ctx,
-		`SELECT id, username, email, password_hash FROM "user" WHERE lower(email) = lower($1)`, email).
+	err := queryRow(ctx, d.Pool, accountAuth().Where("lower(email) = lower(?)", email)).
 		Scan(&a.ID, &a.Username, &a.Email, &a.PasswordHash)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return AccountAuth{}, false, nil
@@ -70,10 +68,15 @@ func (d *DB) AccountAuthByEmail(ctx context.Context, email string) (AccountAuth,
 	return a, err == nil, err
 }
 
+// accountAuth selects an AccountAuth's columns, but not verified.
+func accountAuth() sq.SelectBuilder {
+	return psql.Select("id", "username", "email", "password_hash").From(`"user"`)
+}
+
 // AccountAuthByID finds the user with id. Verified is not read.
 func (d *DB) AccountAuthByID(ctx context.Context, id string) (AccountAuth, bool, error) {
 	var a AccountAuth
-	err := d.Pool.QueryRow(ctx, `SELECT id, username, email, password_hash FROM "user" WHERE id=$1`, id).
+	err := queryRow(ctx, d.Pool, accountAuth().Where(sq.Eq{"id": id})).
 		Scan(&a.ID, &a.Username, &a.Email, &a.PasswordHash)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return AccountAuth{}, false, nil
@@ -85,16 +88,16 @@ func (d *DB) AccountAuthByID(ctx context.Context, id string) (AccountAuth, bool,
 // being sent (verify_sent). A taken username or email is a Postgres unique
 // violation, 23505.
 func (d *DB) InsertUser(ctx context.Context, id, username, email, hash string) error {
-	_, err := d.Pool.Exec(ctx,
-		`INSERT INTO "user" (id, username, email, password_hash, verify_sent, registered) VALUES ($1, $2, $3, $4, now(), now())`,
-		id, username, email, hash)
+	_, err := exec(ctx, d.Pool, psql.Insert(`"user"`).
+		Columns("id", "username", "email", "password_hash", "verify_sent", "registered").
+		Values(id, username, email, hash, sq.Expr("now()"), sq.Expr("now()")))
 	return err
 }
 
 // UserHasConnection reports whether user has any connection.
 func (d *DB) UserHasConnection(ctx context.Context, user string) (bool, error) {
 	var has int
-	err := d.Pool.QueryRow(ctx, `SELECT 1 FROM connection WHERE "user"=$1 LIMIT 1`, user).Scan(&has)
+	err := queryRow(ctx, d.Pool, psql.Select("1").From("connection").Where(sq.Eq{`"user"`: user}).Limit(1)).Scan(&has)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return false, nil
 	}
@@ -106,41 +109,27 @@ func (d *DB) UserHasConnection(ctx context.Context, user string) (bool, error) {
 // minSeconds; it reports whether it was claimed. The update both checks and
 // records, so two at once claim once.
 func (d *DB) ClaimVerifyResend(ctx context.Context, id string, minSeconds float64) (bool, error) {
-	tag, err := d.Pool.Exec(ctx,
-		`UPDATE "user" SET verify_sent = now()
-		 WHERE id = $1 AND verified = false
-		   AND (verify_sent IS NULL OR verify_sent < now() - make_interval(secs => $2))`,
-		id, minSeconds)
+	n, err := affected(ctx, d.Pool, psql.Update(`"user"`).Set("verify_sent", sq.Expr("now()")).
+		Where(sq.Eq{"id": id, "verified": false}).
+		Where(sq.Or{sq.Eq{"verify_sent": nil}, sq.Expr("verify_sent < now() - make_interval(secs => ?)", minSeconds)}))
+	return n == 1, err
+}
+
+func replacePasswordHash(ctx context.Context, r runner, id, hash string, oldHash *string) (int64, error) {
+	return affected(ctx, r, psql.Update(`"user"`).Set("password_hash", hash).
+		Where(sq.Eq{"id": id}).Where("password_hash IS NOT DISTINCT FROM ?", oldHash))
+}
+
+func markVerified(ctx context.Context, r runner, id string) (bool, error) {
+	verify := psql.Update(`"user"`).Set("verified", true)
+	n, err := affected(ctx, r, verify.Where(sq.Eq{"id": id, "verified": false}))
 	if err != nil {
 		return false, err
 	}
-	return tag.RowsAffected() == 1, nil
-}
-
-// Execer is a pgx.Tx or a pool.
-type Execer interface {
-	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
-}
-
-func replacePasswordHash(ctx context.Context, q Execer, id, hash string, oldHash *string) (int64, error) {
-	tag, err := q.Exec(ctx,
-		`UPDATE "user" SET password_hash=$2 WHERE id=$1 AND password_hash IS NOT DISTINCT FROM $3`,
-		id, hash, oldHash)
-	if err != nil {
-		return 0, err
-	}
-	return tag.RowsAffected(), nil
-}
-
-func markVerified(ctx context.Context, q Execer, id string) (bool, error) {
-	tag, err := q.Exec(ctx, `UPDATE "user" SET verified=true WHERE id=$1 AND verified=false`, id)
-	if err != nil {
+	if _, err := exec(ctx, r, verify.Where(sq.Eq{"id": id, "verified": nil})); err != nil {
 		return false, err
 	}
-	if _, err := q.Exec(ctx, `UPDATE "user" SET verified=true WHERE id=$1 AND verified IS NULL`, id); err != nil {
-		return false, err
-	}
-	return tag.RowsAffected() == 1, nil
+	return n == 1, nil
 }
 
 // ReplacePasswordHash saves hash only if the stored one is still oldHash

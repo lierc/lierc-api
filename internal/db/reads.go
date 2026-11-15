@@ -3,6 +3,7 @@ package db
 import (
 	"context"
 
+	sq "github.com/Masterminds/squirrel"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -16,7 +17,7 @@ type Pref struct {
 
 // Prefs is user's preferences.
 func (d *DB) Prefs(ctx context.Context, user string) ([]Pref, error) {
-	rows, err := d.Pool.Query(ctx, `SELECT name, value FROM pref WHERE "user"=$1`, user)
+	rows, err := query(ctx, d.Pool, psql.Select("name", "value").From("pref").Where(sq.Eq{`"user"`: user}))
 	if err != nil {
 		return nil, err
 	}
@@ -33,12 +34,9 @@ type Private struct {
 
 // Privates is user's private chats, oldest first.
 func (d *DB) Privates(ctx context.Context, user string) ([]Private, error) {
-	rows, err := d.Pool.Query(ctx, `
-		SELECT p.nick, p.connection, p.time::text
-		FROM private AS p
-		JOIN connection AS c ON c.id=p.connection
-		WHERE c."user"=$1
-		ORDER BY p.time ASC`, user)
+	rows, err := query(ctx, d.Pool, psql.Select("p.nick", "p.connection", "p.time::text").
+		From("private AS p").Join("connection AS c ON c.id = p.connection").
+		Where(sq.Eq{`c."user"`: user}).OrderBy("p.time ASC"))
 	if err != nil {
 		return nil, err
 	}
@@ -54,11 +52,9 @@ type SeenRow struct {
 
 // Seen is user's seen positions on connections that still exist.
 func (d *DB) Seen(ctx context.Context, user string) ([]SeenRow, error) {
-	rows, err := d.Pool.Query(ctx, `
-		SELECT s.connection, s.channel, s.message_id::bigint
-		FROM seen AS s
-		JOIN connection AS c ON c.id=s.connection
-		WHERE s."user"=$1`, user)
+	rows, err := query(ctx, d.Pool, psql.Select("s.connection", "s.channel", "s.message_id::bigint").
+		From("seen AS s").Join("connection AS c ON c.id = s.connection").
+		Where(sq.Eq{`s."user"`: user}))
 	if err != nil {
 		return nil, err
 	}
@@ -68,9 +64,8 @@ func (d *DB) Seen(ctx context.Context, user string) ([]SeenRow, error) {
 // ChannelNames is the channels conn has logs in, most recently active
 // first.
 func (d *DB) ChannelNames(ctx context.Context, conn string) ([]string, error) {
-	rows, err := d.Pool.Query(ctx, `
-		SELECT channel FROM log WHERE connection=$1
-		GROUP BY channel ORDER BY MAX(id) DESC`, conn)
+	rows, err := query(ctx, d.Pool, psql.Select("channel").From("log").Where(sq.Eq{"connection": conn}).
+		GroupBy("channel").OrderBy("max(id) DESC"))
 	if err != nil {
 		return nil, err
 	}
@@ -105,6 +100,7 @@ func (d *DB) Missed(ctx context.Context, user string, es []MissedEntry) (map[str
 	for i, e := range es {
 		conns[i], chans[i], after[i] = e.Connection, e.Channel, e.After
 	}
+	// unnest over three arrays doesn't fit the builder
 	rows, err := d.Pool.Query(ctx, `
 		SELECT l.connection, l.channel,
 			SUM(CASE WHEN l.command = 'PRIVMSG' THEN 1 ELSE 0 END),

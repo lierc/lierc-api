@@ -5,6 +5,7 @@ import (
 	"errors"
 	"time"
 
+	sq "github.com/Masterminds/squirrel"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -33,19 +34,17 @@ type LoginInfo struct {
 
 // InsertLogin logs user in under tokenHash. An empty ip is stored as NULL.
 func (d *DB) InsertLogin(ctx context.Context, tokenHash []byte, user, userAgent, ip string) error {
-	_, err := d.Pool.Exec(ctx,
-		`INSERT INTO login (token_hash, "user", user_agent, ip) VALUES ($1, $2, $3, NULLIF($4::text, '')::inet)`,
-		tokenHash, user, userAgent, ip)
+	_, err := exec(ctx, d.Pool, psql.Insert("login").Columns("token_hash", `"user"`, "user_agent", "ip").
+		Values(tokenHash, user, userAgent, sq.Expr("NULLIF(?::text, '')::inet", ip)))
 	return err
 }
 
 // LoginByHash finds the live login for tokenHash.
 func (d *DB) LoginByHash(ctx context.Context, tokenHash []byte) (Login, bool, error) {
 	var l Login
-	err := d.Pool.QueryRow(ctx,
-		`SELECT l.id, l."user", u.verified IS NOT DISTINCT FROM false, l.last_used
-		 FROM login l JOIN "user" u ON u.id = l."user"
-		 WHERE l.token_hash = $1 AND l.`+live, tokenHash).
+	err := queryRow(ctx, d.Pool, psql.Select("l.id", `l."user"`, "u.verified IS NOT DISTINCT FROM false", "l.last_used").
+		From("login l").Join(`"user" u ON u.id = l."user"`).
+		Where(sq.Eq{"l.token_hash": tokenHash}).Where("l."+live)).
 		Scan(&l.ID, &l.User, &l.Unverified, &l.LastUsed)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Login{}, false, nil
@@ -58,23 +57,20 @@ func (d *DB) LoginByHash(ctx context.Context, tokenHash []byte) (Login, bool, er
 
 // TouchLogin marks login id as used now.
 func (d *DB) TouchLogin(ctx context.Context, id int64) error {
-	_, err := d.Pool.Exec(ctx, `UPDATE login SET last_used = now() WHERE id = $1`, id)
+	_, err := exec(ctx, d.Pool, psql.Update("login").Set("last_used", sq.Expr("now()")).Where(sq.Eq{"id": id}))
 	return err
 }
 
 // DeleteLogin deletes login id if it belongs to user, and reports whether it did.
 func (d *DB) DeleteLogin(ctx context.Context, user string, id int64) (bool, error) {
-	tag, err := d.Pool.Exec(ctx, `DELETE FROM login WHERE id = $1 AND "user" = $2`, id, user)
-	if err != nil {
-		return false, err
-	}
-	return tag.RowsAffected() > 0, nil
+	n, err := affected(ctx, d.Pool, psql.Delete("login").Where(sq.Eq{"id": id, `"user"`: user}))
+	return n > 0, err
 }
 
 // DeleteLoginByHash deletes the login for tokenHash; it is no error if
 // there is none.
 func (d *DB) DeleteLoginByHash(ctx context.Context, tokenHash []byte) error {
-	_, err := d.Pool.Exec(ctx, `DELETE FROM login WHERE token_hash = $1`, tokenHash)
+	_, err := exec(ctx, d.Pool, psql.Delete("login").Where(sq.Eq{"token_hash": tokenHash}))
 	return err
 }
 
@@ -83,27 +79,23 @@ func (d *DB) DeleteLogins(ctx context.Context, user string) (int64, error) {
 	return deleteLogins(ctx, d.Pool, user)
 }
 
-// deleteLogins ends every login of user, in q (the pool or a transaction).
-func deleteLogins(ctx context.Context, q Execer, user string) (int64, error) {
-	tag, err := q.Exec(ctx, `DELETE FROM login WHERE "user" = $1`, user)
-	if err != nil {
-		return 0, err
-	}
-	return tag.RowsAffected(), nil
+// deleteLogins ends every login of user, in r (the pool or a transaction).
+func deleteLogins(ctx context.Context, r runner, user string) (int64, error) {
+	return affected(ctx, r, psql.Delete("login").Where(sq.Eq{`"user"`: user}))
 }
 
 // LoginAlive reports whether login id exists and has not expired.
 func (d *DB) LoginAlive(ctx context.Context, id int64) (bool, error) {
 	var ok bool
-	err := d.Pool.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM login WHERE id = $1 AND `+live+`)`, id).Scan(&ok)
+	err := queryRow(ctx, d.Pool, psql.Select().
+		Column(sq.Expr("EXISTS (?)", sub.Select("1").From("login").Where(sq.Eq{"id": id}).Where(live)))).Scan(&ok)
 	return ok, err
 }
 
 // Logins returns user's live logins, most recently used first.
 func (d *DB) Logins(ctx context.Context, user string) ([]LoginInfo, error) {
-	rows, err := d.Pool.Query(ctx,
-		`SELECT id, created, last_used, user_agent, COALESCE(host(ip), '')
-		 FROM login WHERE "user" = $1 AND `+live+` ORDER BY last_used DESC, id DESC`, user)
+	rows, err := query(ctx, d.Pool, psql.Select("id", "created", "last_used", "user_agent", "COALESCE(host(ip), '')").
+		From("login").Where(sq.Eq{`"user"`: user}).Where(live).OrderBy("last_used DESC", "id DESC"))
 	if err != nil {
 		return nil, err
 	}
@@ -121,9 +113,5 @@ func (d *DB) Logins(ctx context.Context, user string) ([]LoginInfo, error) {
 
 // PruneLogins deletes expired logins and returns how many there were.
 func (d *DB) PruneLogins(ctx context.Context) (int64, error) {
-	tag, err := d.Pool.Exec(ctx, `DELETE FROM login WHERE last_used <= now() - interval '7 days'`)
-	if err != nil {
-		return 0, err
-	}
-	return tag.RowsAffected(), nil
+	return affected(ctx, d.Pool, psql.Delete("login").Where("NOT ("+live+")"))
 }

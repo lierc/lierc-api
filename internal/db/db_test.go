@@ -211,6 +211,25 @@ func TestLookupLiercd(t *testing.T) {
 	}
 }
 
+// SetLiercd stores an instance, and "" as NULL.
+func TestSetLiercd(t *testing.T) {
+	d := testenv.Postgres(t)
+	testenv.AddConnection(t, d, "c1", "u1", `{}`)
+	for _, inst := range []string{"next", ""} {
+		if err := d.SetLiercd(ctx, "c1", inst); err != nil {
+			t.Fatal(err)
+		}
+		var isNull bool
+		var got string
+		if err := d.Pool.QueryRow(ctx, `SELECT liercd IS NULL, coalesce(liercd, '') FROM connection WHERE id='c1'`).Scan(&isNull, &got); err != nil {
+			t.Fatal(err)
+		}
+		if got != inst || isNull != (inst == "") {
+			t.Errorf("SetLiercd(%q): stored %q, null %v", inst, got, isNull)
+		}
+	}
+}
+
 func TestUserExists(t *testing.T) {
 	d := testenv.Postgres(t)
 	id := testenv.AddUser(t, d, "alice")

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 
+	sq "github.com/Masterminds/squirrel"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -34,15 +35,10 @@ const LogMax = 251
 // LogSince is user's messages with ids above after, oldest first, at most
 // LogMax of them.
 func (d *DB) LogSince(ctx context.Context, user string, after int32) ([]UserMessage, error) {
-	rows, err := d.Pool.Query(ctx, `
-		SELECT * FROM (
-			SELECT l.id, l.message::text, l.connection, l.self, l.highlight
-			FROM log AS l
-			JOIN connection AS c ON c.id = l.connection
-			WHERE c."user" = $1 AND l.id > $2
-			ORDER BY l.id DESC
-			LIMIT $3
-		) newest ORDER BY id ASC`, user, after, LogMax)
+	newest := userMessages(sub).Join("connection AS c ON c.id = l.connection").
+		Where(sq.Eq{`c."user"`: user}).Where(sq.Gt{"l.id": after}).
+		OrderBy("l.id DESC").Limit(LogMax)
+	rows, err := query(ctx, d.Pool, psql.Select("*").FromSelect(newest, "newest").OrderBy("id ASC"))
 	if err != nil {
 		return nil, err
 	}
@@ -52,13 +48,11 @@ func (d *DB) LogSince(ctx context.Context, user string, after int32) ([]UserMess
 // Highlights is user's highlighted messages, newest first, below before
 // when it is set.
 func (d *DB) Highlights(ctx context.Context, user string, before *int32, limit int) ([]UserMessage, error) {
-	rows, err := d.Pool.Query(ctx, `
-		SELECT l.id, l.message::text, l.connection, l.self, l.highlight
-		FROM log AS l
-		WHERE l."user" = $1 AND l.highlight = true
-		  AND ($2::int IS NULL OR l.id < $2::int)
-		ORDER BY l.id DESC
-		LIMIT $3`, user, before, limit)
+	q := userMessages(psql).Where(sq.Eq{`l."user"`: user, "l.highlight": true})
+	if before != nil {
+		q = q.Where(sq.Lt{"l.id": *before})
+	}
+	rows, err := query(ctx, d.Pool, q.OrderBy("l.id DESC").Suffix("LIMIT ?", limit))
 	if err != nil {
 		return nil, err
 	}
@@ -109,6 +103,12 @@ func (d *DB) messages(ctx context.Context, sql string, args ...any) ([]Message, 
 		return nil, err
 	}
 	return collect(rows, scanMessage)
+}
+
+// userMessages selects a UserMessage's columns from log AS l, with b (psql,
+// or sub for a subquery).
+func userMessages(b sq.StatementBuilderType) sq.SelectBuilder {
+	return b.Select("l.id", "l.message::text", "l.connection", "l.self", "l.highlight").From("log AS l")
 }
 
 func scanMessage(row pgx.CollectableRow) (Message, error) {

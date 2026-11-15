@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 
+	sq "github.com/Masterminds/squirrel"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -18,34 +19,39 @@ func (d *DB) SaveConnectionLimited(ctx context.Context, id, user string, config 
 	}
 	defer tx.Rollback(ctx)
 	var one int
-	if err := tx.QueryRow(ctx, `SELECT 1 FROM "user" WHERE id=$1 FOR UPDATE`, user).Scan(&one); err != nil {
+	if err := queryRow(ctx, tx, psql.Select("1").From(`"user"`).Where(sq.Eq{"id": user}).Suffix("FOR UPDATE")).Scan(&one); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return false, nil
 		}
 		return false, err
 	}
 	var n int
-	if err := tx.QueryRow(ctx, `SELECT count(*) FROM connection WHERE "user"=$1`, user).Scan(&n); err != nil {
+	if err := queryRow(ctx, tx, psql.Select("count(*)").From("connection").Where(sq.Eq{`"user"`: user})).Scan(&n); err != nil {
 		return false, err
 	}
 	if n >= max {
 		return false, nil
 	}
-	if _, err := tx.Exec(ctx, `INSERT INTO connection (id, "user", config, created, updated) VALUES ($1,$2,$3,NOW(),NOW())`, id, user, string(config)); err != nil {
+	if _, err := exec(ctx, tx, insertConnection(id, user, config)); err != nil {
 		return false, err
 	}
 	return true, tx.Commit(ctx)
 }
 
+func insertConnection(id, user string, config []byte) sq.InsertBuilder {
+	return psql.Insert("connection").Columns("id", `"user"`, "config", "created", "updated").
+		Values(id, user, string(config), sq.Expr("now()"), sq.Expr("now()"))
+}
+
 // SaveConnection saves a connection with no limit check.
 func (d *DB) SaveConnection(ctx context.Context, id, user string, config []byte) error {
-	_, err := d.Pool.Exec(ctx, `INSERT INTO connection (id, "user", config, created, updated) VALUES ($1,$2,$3,NOW(),NOW())`, id, user, string(config))
+	_, err := exec(ctx, d.Pool, insertConnection(id, user, config))
 	return err
 }
 
 // DeleteConnection deletes connection id's row.
 func (d *DB) DeleteConnection(ctx context.Context, id string) error {
-	_, err := d.Pool.Exec(ctx, `DELETE FROM connection WHERE id=$1`, id)
+	_, err := exec(ctx, d.Pool, psql.Delete("connection").Where(sq.Eq{"id": id}))
 	return err
 }
 
@@ -55,10 +61,11 @@ func (d *DB) DeleteConnection(ctx context.Context, id string) error {
 // of the same row, then lands on top of it. A missing connection, or a
 // config or fields that aren't objects, change nothing and aren't errors.
 func (d *DB) MergeConfig(ctx context.Context, id string, fields []byte) error {
-	_, err := d.Pool.Exec(ctx,
-		`UPDATE connection SET config = config::jsonb || $2::jsonb
-		WHERE id = $1 AND jsonb_typeof(config::jsonb) = 'object' AND jsonb_typeof($2::jsonb) = 'object'`,
-		id, string(fields))
+	f := string(fields)
+	_, err := exec(ctx, d.Pool, psql.Update("connection").Set("config", sq.Expr("config::jsonb || ?::jsonb", f)).
+		Where(sq.Eq{"id": id}).
+		Where("jsonb_typeof(config::jsonb) = 'object'").
+		Where("jsonb_typeof(?::jsonb) = 'object'", f))
 	return err
 }
 
@@ -74,7 +81,7 @@ func (d *DB) EditConfig(ctx context.Context, id string, edit func(saved []byte) 
 	}
 	defer tx.Rollback(ctx)
 	var saved []byte
-	if err := tx.QueryRow(ctx, `SELECT config FROM connection WHERE id=$1 FOR UPDATE`, id).Scan(&saved); err != nil {
+	if err := queryRow(ctx, tx, connectionByID(id, "config").Suffix("FOR UPDATE")).Scan(&saved); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return false, nil
 		}
@@ -84,7 +91,8 @@ func (d *DB) EditConfig(ctx context.Context, id string, edit func(saved []byte) 
 	if err != nil {
 		return true, err
 	}
-	if _, err := tx.Exec(ctx, `UPDATE connection SET config=$1, updated=NOW() WHERE id=$2`, config, id); err != nil {
+	if _, err := exec(ctx, tx, psql.Update("connection").Set("config", config).Set("updated", sq.Expr("now()")).
+		Where(sq.Eq{"id": id})); err != nil {
 		return true, err
 	}
 	return true, tx.Commit(ctx)

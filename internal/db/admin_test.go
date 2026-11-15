@@ -252,6 +252,14 @@ func TestListConnections(t *testing.T) {
 	if err != nil || !reflect.DeepEqual(cids(got), []string{"r1"}) {
 		t.Errorf("id = %v, %v", cids(got), err)
 	}
+	got, err = d.ListConnections(ctx, db.ConnectionFilter{User: old})
+	if err != nil || !reflect.DeepEqual(cids(got), []string{"o1", "o2"}) {
+		t.Errorf("user = %v, %v", cids(got), err)
+	}
+	got, err = d.ListConnections(ctx, db.ConnectionFilter{User: old, Instance: "next"})
+	if err != nil || !reflect.DeepEqual(cids(got), []string{"o2"}) {
+		t.Errorf("user and instance = %v, %v", cids(got), err)
+	}
 }
 
 func TestLastLogID(t *testing.T) {
