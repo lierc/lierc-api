@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/base64"
+	"mime/multipart"
 	"net/http"
 	"net/url"
 	"strings"
@@ -66,6 +67,25 @@ func TestUnsubscribeOneClick(t *testing.T) {
 	res.Body.Close()
 	if res.StatusCode != 200 {
 		t.Fatalf("one-click: %d", res.StatusCode)
+	}
+	if v := e.emailPref(a); v != "false" {
+		t.Errorf("email = %s, want false", v)
+	}
+}
+
+// RFC 8058 allows the one-click body as multipart/form-data. The token is
+// in the query either way, so the body only has to be accepted.
+func TestUnsubscribeOneClickMultipart(t *testing.T) {
+	e := setup(t)
+	a := testenv.AddUser(t, e.db, "alice")
+	var body strings.Builder
+	mw := multipart.NewWriter(&body)
+	mw.WriteField("List-Unsubscribe", "One-Click")
+	mw.Close()
+	res := e.doReq("POST", "/unsubscribe?token="+url.QueryEscape(e.unsubscribeToken(a)), "", body.String(), "Content-Type", mw.FormDataContentType())
+	res.Body.Close()
+	if res.StatusCode != 200 {
+		t.Fatalf("multipart one-click: %d", res.StatusCode)
 	}
 	if v := e.emailPref(a); v != "false" {
 		t.Errorf("email = %s, want false", v)

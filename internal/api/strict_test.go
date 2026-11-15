@@ -30,13 +30,17 @@ func TestFormInvalidUTF8(t *testing.T) {
 }
 
 // Form fields come from the body only: credentials in the query don't log
-// in.
+// in, though the same ones in the body do.
 func TestFormBodyOnly(t *testing.T) {
 	e := setup(t)
 	id := testenv.AddUser(t, e.db, "alice")
 	e.setPassword(id, "hunter2")
 	res, body := e.form("POST", "/auth?email=alice&pass=hunter2", "", url.Values{})
-	if res.StatusCode == 200 || chatsCookie(res) != nil {
+	if res.StatusCode != 401 || chatsCookie(res) != nil || strings.TrimSpace(body) != `{"status":"error","error":"Invalid email or password"}` {
 		t.Errorf("query login: %d %s", res.StatusCode, body)
+	}
+	res, body = e.form("POST", "/auth", "", url.Values{"email": {"alice"}, "pass": {"hunter2"}})
+	if res.StatusCode != 200 || chatsCookie(res) == nil {
+		t.Errorf("body login: %d %s", res.StatusCode, body)
 	}
 }

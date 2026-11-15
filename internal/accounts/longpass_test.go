@@ -4,6 +4,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"golang.org/x/crypto/bcrypt"
 )
 
 func TestRegisterLongPassword(t *testing.T) {
@@ -42,5 +44,27 @@ func TestLoginLongPasswordStillWorks(t *testing.T) {
 	h.addUser("old", "old@example.com", long, ptr(true))
 	if _, err := h.s.Login(ctx, "old", long); err != nil {
 		t.Errorf("80-byte password: %v", err)
+	}
+}
+
+// An old hash of a password over 72 bytes, at another cost, logs in and is
+// rehashed at cost 12, and the password still works after. bcrypt read only
+// the first 72 bytes when the old hash was made; Go's bcrypt refuses longer
+// passwords, so the rehash has to cut it the same way.
+func TestLoginRehashLongPassword(t *testing.T) {
+	h := setup(t)
+	long := strings.Repeat("p", 72) + "-tail"
+	id := h.addUserHash("oldlong", "oldlong@example.com", otherCostHash(t, long[:72]), ptr(true))
+
+	if u, err := h.s.Login(ctx, "oldlong", long); err != nil || u.ID != id {
+		t.Fatalf("Login = %+v, %v", u, err)
+	}
+	var hash string
+	h.d.Pool.QueryRow(ctx, `SELECT password_hash FROM "user" WHERE id=$1`, id).Scan(&hash)
+	if c, err := bcrypt.Cost([]byte(hash)); err != nil || c != 12 {
+		t.Errorf("after login: cost %d, %v", c, err)
+	}
+	if u, err := h.s.Login(ctx, "oldlong", long); err != nil || u.ID != id {
+		t.Errorf("Login after the rehash = %+v, %v", u, err)
 	}
 }
