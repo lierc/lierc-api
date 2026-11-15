@@ -3,16 +3,15 @@
 package mail
 
 import (
-	"bytes"
+	"context"
 	"crypto/tls"
 	"fmt"
-	"mime"
-	"mime/quotedprintable"
 	"net"
-	"net/smtp"
 	"strconv"
 	"strings"
 	"time"
+
+	gomail "github.com/wneessen/go-mail"
 )
 
 const (
@@ -91,9 +90,87 @@ type Sender struct {
 	From string
 }
 
-// deadlineConn gives every read and write its own deadline, so a server
+// Send sends one email.
+func (s *Sender) Send(to, subject, body string) error {
+	if strings.ContainsAny(to+subject+s.From, "\r\n") {
+		return fmt.Errorf("mail: newline in a header value")
+	}
+	m := gomail.NewMsg()
+	if err := m.From(s.From); err != nil {
+		return err
+	}
+	if err := m.To(to); err != nil {
+		return err
+	}
+	m.Subject(subject)
+	m.SetUserAgent("relaychat")
+	m.SetBodyString(gomail.TypeTextPlain, body)
+
+	c, err := client(s.Opts)
+	if err != nil {
+		return err
+	}
+	return c.DialAndSend(m)
+}
+
+// client connects as Opts says: implicit TLS with SSL, otherwise STARTTLS
+// when the server offers it, and PLAIN auth when AuthUser is set (only
+// over TLS, unless the server is localhost).
+func client(o Opts) (*gomail.Client, error) {
+	host, port, timeout := o.Host, o.Port, o.Timeout
+	if host == "" {
+		host = DefaultHost
+	}
+	if port == 0 {
+		port = DefaultPort
+	}
+	if timeout <= 0 {
+		timeout = DefaultTimeout
+	}
+	opts := []gomail.Option{
+		gomail.WithPort(port),
+		gomail.WithTimeout(timeout),
+		gomail.WithDialContextFunc(dialer(host, o.SSL, timeout)),
+		gomail.WithSMTPAuth(gomail.SMTPAuthNoAuth),
+	}
+	if o.SSL {
+		// dialer does the TLS; this keeps go-mail from trying STARTTLS
+		opts = append(opts, gomail.WithSSL())
+	} else {
+		opts = append(opts, gomail.WithTLSPolicy(gomail.TLSOpportunistic))
+	}
+	if o.AuthUser != "" {
+		opts = append(opts, gomail.WithSMTPAuth(gomail.SMTPAuthPlain),
+			gomail.WithUsername(o.AuthUser), gomail.WithPassword(o.AuthPass))
+	}
+	return gomail.NewClient(host, opts...)
+}
+
+// dialer connects with a deadline on every read and write, so a server
 // that stops answering fails the send, while a slow but working one
-// doesn't.
+// doesn't (go-mail's own timeout is for the whole session). With ssl it
+// does the TLS handshake, which go-mail leaves to a custom dialer.
+func dialer(host string, ssl bool, timeout time.Duration) gomail.DialContextFunc {
+	return func(ctx context.Context, network, addr string) (net.Conn, error) {
+		raw, err := (&net.Dialer{Timeout: timeout}).DialContext(ctx, network, addr)
+		if err != nil {
+			return nil, err
+		}
+		conn := &deadlineConn{Conn: raw, timeout: timeout}
+		if !ssl {
+			return conn, nil
+		}
+		tc := tls.Client(conn, &tls.Config{ServerName: host})
+		if err := tc.HandshakeContext(ctx); err != nil {
+			raw.Close()
+			return nil, err
+		}
+		return tc, nil
+	}
+}
+
+// deadlineConn gives every read and write its own deadline, replacing the
+// one go-mail sets for the session.
 type deadlineConn struct {
 	net.Conn
 	timeout time.Duration
@@ -107,103 +184,4 @@ func (c *deadlineConn) Read(b []byte) (int, error) {
 func (c *deadlineConn) Write(b []byte) (int, error) {
 	c.Conn.SetDeadline(time.Now().Add(c.timeout))
 	return c.Conn.Write(b)
-}
-
-func (s *Sender) message(to, subject, body string) ([]byte, error) {
-	if strings.ContainsAny(to+subject+s.From, "\r\n") {
-		return nil, fmt.Errorf("mail: newline in a header value")
-	}
-	var b bytes.Buffer
-	fmt.Fprintf(&b, "From: %s\r\n", s.From)
-	fmt.Fprintf(&b, "To: %s\r\n", to)
-	fmt.Fprintf(&b, "Subject: %s\r\n", mime.QEncoding.Encode("UTF-8", subject))
-	b.WriteString("MIME-Version: 1.0\r\n")
-	b.WriteString("Content-Type: text/plain; charset=UTF-8\r\n")
-	b.WriteString("Content-Transfer-Encoding: quoted-printable\r\n")
-	b.WriteString("\r\n")
-	w := quotedprintable.NewWriter(&b)
-	if _, err := w.Write([]byte(body)); err != nil {
-		return nil, err
-	}
-	if err := w.Close(); err != nil {
-		return nil, err
-	}
-	return b.Bytes(), nil
-}
-
-// Send sends one email.
-func (s *Sender) Send(to, subject, body string) error {
-	msg, err := s.message(to, subject, body)
-	if err != nil {
-		return err
-	}
-
-	o := s.Opts
-	host, port, timeout := o.Host, o.Port, o.Timeout
-	if host == "" {
-		host = DefaultHost
-	}
-	if port == 0 {
-		port = DefaultPort
-	}
-	if timeout <= 0 {
-		timeout = DefaultTimeout
-	}
-	addr := net.JoinHostPort(host, strconv.Itoa(port))
-
-	raw, err := (&net.Dialer{Timeout: timeout}).Dial("tcp", addr)
-	if err != nil {
-		return err
-	}
-	var conn net.Conn = &deadlineConn{Conn: raw, timeout: timeout}
-	tlsConfig := &tls.Config{ServerName: host}
-
-	if o.SSL {
-		tc := tls.Client(conn, tlsConfig)
-		if err := tc.Handshake(); err != nil {
-			raw.Close()
-			return err
-		}
-		conn = tc
-	}
-
-	c, err := smtp.NewClient(conn, host)
-	if err != nil {
-		raw.Close()
-		return err
-	}
-	defer c.Close()
-
-	// as smtp.SendMail does: upgrade a plain connection when offered
-	if !o.SSL {
-		if ok, _ := c.Extension("STARTTLS"); ok {
-			if err := c.StartTLS(tlsConfig); err != nil {
-				return err
-			}
-		}
-	}
-
-	if o.AuthUser != "" {
-		if err := c.Auth(smtp.PlainAuth("", o.AuthUser, o.AuthPass, host)); err != nil {
-			return err
-		}
-	}
-
-	if err := c.Mail(s.From); err != nil {
-		return err
-	}
-	if err := c.Rcpt(to); err != nil {
-		return err
-	}
-	w, err := c.Data()
-	if err != nil {
-		return err
-	}
-	if _, err := w.Write(msg); err != nil {
-		return err
-	}
-	if err := w.Close(); err != nil {
-		return err
-	}
-	return c.Quit()
 }

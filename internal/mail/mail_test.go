@@ -113,8 +113,8 @@ func TestSend(t *testing.T) {
 		t.Fatalf("no header/body split: %q", g.data)
 	}
 	for _, h := range []string{
-		"From: do-not-reply@relaychat.party",
-		"To: zoe@example.com",
+		"From: <do-not-reply@relaychat.party>",
+		"To: <zoe@example.com>",
 		"Subject: Confirm your relaychat.party email address",
 		"MIME-Version: 1.0",
 		"Content-Type: text/plain; charset=UTF-8",
@@ -139,6 +139,31 @@ func TestSend(t *testing.T) {
 	}
 }
 
+// Every email has a Date and a Message-ID, which spam filters look for.
+func TestSendDateAndMessageID(t *testing.T) {
+	port, res := fakeSMTP(t)
+	s := &Sender{Opts: Opts{Host: "127.0.0.1", Port: port, Timeout: 5 * time.Second}, From: "do-not-reply@relaychat.party"}
+	if err := s.Send("zoe@example.com", "hi", "body"); err != nil {
+		t.Fatal(err)
+	}
+	hdr, _, _ := strings.Cut((<-res).data, "\n\n")
+	for _, h := range []string{"\nDate: ", "\nMessage-ID: <"} {
+		if !strings.Contains("\n"+hdr, h) {
+			t.Errorf("missing %q in %q", strings.TrimSpace(h), hdr)
+		}
+	}
+}
+
+// A newline in a header value is refused, not sent.
+func TestSendRefusesHeaderNewline(t *testing.T) {
+	s := &Sender{Opts: Opts{Host: "127.0.0.1", Port: 1, Timeout: time.Second}, From: "a@b.c"}
+	for _, c := range [][2]string{{"x@y.z\r\nBcc: v@w.x", "s"}, {"x@y.z", "s\nBcc: v@w.x"}} {
+		if err := s.Send(c[0], c[1], "b"); err == nil || !strings.Contains(err.Error(), "newline") {
+			t.Errorf("Send(%q, %q) = %v, want a newline error", c[0], c[1], err)
+		}
+	}
+}
+
 func TestSendTimeout(t *testing.T) {
 	l, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -153,12 +178,60 @@ func TestSendTimeout(t *testing.T) {
 		}
 	}()
 	port, _ := strconv.Atoi(strings.Split(l.Addr().String(), ":")[1])
-	s := &Sender{Opts: Opts{Host: "127.0.0.1", Port: port, Timeout: 300 * time.Millisecond}, From: "a@b.c"}
-	start := time.Now()
-	if err := s.Send("x@y.z", "s", "b"); err == nil {
-		t.Fatal("want an error")
+	for _, ssl := range []bool{false, true} {
+		s := &Sender{Opts: Opts{Host: "127.0.0.1", Port: port, SSL: ssl, Timeout: 300 * time.Millisecond}, From: "a@b.c"}
+		start := time.Now()
+		if err := s.Send("x@y.z", "s", "b"); err == nil {
+			t.Fatalf("ssl=%v: want an error", ssl)
+		}
+		if d := time.Since(start); d > 3*time.Second {
+			t.Errorf("ssl=%v: took %v", ssl, d)
+		}
 	}
-	if d := time.Since(start); d > 3*time.Second {
-		t.Errorf("took %v", d)
+}
+
+// The timeout is per read and write: a server slower than the timeout in
+// total, but not on any one reply, still gets the mail.
+func TestSendSlowServer(t *testing.T) {
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer l.Close()
+	go func() {
+		c, err := l.Accept()
+		if err != nil {
+			return
+		}
+		defer c.Close()
+		tp := textproto.NewConn(c)
+		reply := func(s string) { time.Sleep(60 * time.Millisecond); tp.PrintfLine("%s", s) }
+		reply("220 slow")
+		for {
+			line, err := tp.ReadLine()
+			if err != nil {
+				return
+			}
+			switch cmd := strings.ToUpper(line); {
+			case cmd == "DATA":
+				reply("354 go")
+				io.ReadAll(tp.DotReader())
+				reply("250 queued")
+			case cmd == "QUIT":
+				reply("221 bye")
+				return
+			default:
+				reply("250 ok")
+			}
+		}
+	}()
+	port := l.Addr().(*net.TCPAddr).Port
+	s := &Sender{Opts: Opts{Host: "127.0.0.1", Port: port, Timeout: 200 * time.Millisecond}, From: "a@b.c"}
+	start := time.Now()
+	if err := s.Send("x@y.z", "s", "b"); err != nil {
+		t.Fatal(err)
+	}
+	if d := time.Since(start); d < 200*time.Millisecond {
+		t.Fatalf("took %s; the server should be slower than the timeout in total", d)
 	}
 }

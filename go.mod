@@ -7,6 +7,7 @@ require (
 	github.com/fergusstrange/embedded-postgres v1.32.0
 	github.com/jackc/pgx/v5 v5.7.6
 	github.com/nsqio/go-nsq v1.1.0
+	github.com/wneessen/go-mail v0.8.2
 	golang.org/x/crypto v0.58.0
 	golang.org/x/net v0.62.0
 	golang.org/x/term v0.47.0
