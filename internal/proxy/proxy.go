@@ -54,7 +54,8 @@ func Wrap(trusted []string, next http.Handler) http.Handler {
 			host, port = r.RemoteAddr, ""
 		}
 		if isTrusted(net.ParseIP(host)) {
-			// Plack::Middleware::ReverseProxy: REMOTE_ADDR = last XFF entry.
+			// The client is the last X-Forwarded-For entry: the one our
+			// trusted proxy added.
 			if m := lastHop.FindStringSubmatch(r.Header.Get("X-Forwarded-For")); m != nil {
 				host = m[1]
 				r.RemoteAddr = net.JoinHostPort(host, port)
