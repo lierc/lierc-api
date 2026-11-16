@@ -18,6 +18,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/lierc/lierc-api/internal/config"
 	"github.com/lierc/lierc-api/internal/db"
+	"github.com/lierc/lierc-api/internal/passwords"
 )
 
 const templateDB = "lierc_template"
@@ -35,6 +36,7 @@ var (
 // (started lazily by the first Postgres call) and removes its files and the
 // nsqd binary NSQD builds.
 func Main(m *testing.M) {
+	passwords.UseTestCost()
 	code := m.Run()
 	if pgServer != nil {
 		pgServer.Stop()

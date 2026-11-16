@@ -137,11 +137,12 @@ func (h *harness) verified(id string) *bool {
 
 func ptr(b bool) *bool { return &b }
 
-// otherCostHash is a bcrypt hash of pw at cost 13, which Login rehashes to
-// cost 12 (accounts converted from the Perl API's hashes are at 15).
+// otherCostHash is a bcrypt hash of pw at a cost other than passwords.Cost(),
+// which Login rehashes (accounts converted from the Perl API's hashes are
+// at 15).
 func otherCostHash(t *testing.T, pw string) string {
 	t.Helper()
-	b, err := bcrypt.GenerateFromPassword([]byte(pw), 13)
+	b, err := bcrypt.GenerateFromPassword([]byte(pw), passwords.Cost()+1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -225,7 +226,7 @@ func TestLoginRehash(t *testing.T) {
 	}
 	var hash string
 	h.d.Pool.QueryRow(ctx, `SELECT password_hash FROM users WHERE id=$1`, id).Scan(&hash)
-	if c, err := bcrypt.Cost([]byte(hash)); err != nil || c != 12 {
+	if c, err := bcrypt.Cost([]byte(hash)); err != nil || c != passwords.Cost() {
 		t.Errorf("after login: hash %q (cost %d, %v)", hash, c, err)
 	}
 
@@ -297,7 +298,7 @@ func TestRegister(t *testing.T) {
 	var sent, registered bool
 	h.d.Pool.QueryRow(ctx, `SELECT email, password_hash, verify_sent IS NOT NULL, registered IS NOT NULL FROM users WHERE id=$1`, u.ID).
 		Scan(&email, &hash, &sent, &registered)
-	if c, _ := bcrypt.Cost([]byte(hash)); email != "new@example.com" || c != 12 || !sent || !registered || !passwords.Check("a password", hash) {
+	if c, _ := bcrypt.Cost([]byte(hash)); email != "new@example.com" || c != passwords.Cost() || !sent || !registered || !passwords.Check("a password", hash) {
 		t.Errorf("row: email %q hash %q sent %v registered %v", email, hash, sent, registered)
 	}
 	if n := len(h.connections(u.ID)); n != 0 {

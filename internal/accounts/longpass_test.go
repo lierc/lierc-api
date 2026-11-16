@@ -6,6 +6,8 @@ import (
 	"time"
 
 	"golang.org/x/crypto/bcrypt"
+
+	"github.com/lierc/lierc-api/internal/passwords"
 )
 
 func TestRegisterLongPassword(t *testing.T) {
@@ -48,7 +50,7 @@ func TestLoginLongPasswordStillWorks(t *testing.T) {
 }
 
 // An old hash of a password over 72 bytes, at another cost, logs in and is
-// rehashed at cost 12, and the password still works after. bcrypt read only
+// rehashed at passwords.Cost(), and the password still works after. bcrypt read only
 // the first 72 bytes when the old hash was made; Go's bcrypt refuses longer
 // passwords, so the rehash has to cut it the same way.
 func TestLoginRehashLongPassword(t *testing.T) {
@@ -61,7 +63,7 @@ func TestLoginRehashLongPassword(t *testing.T) {
 	}
 	var hash string
 	h.d.Pool.QueryRow(ctx, `SELECT password_hash FROM users WHERE id=$1`, id).Scan(&hash)
-	if c, err := bcrypt.Cost([]byte(hash)); err != nil || c != 12 {
+	if c, err := bcrypt.Cost([]byte(hash)); err != nil || c != passwords.Cost() {
 		t.Errorf("after login: cost %d, %v", c, err)
 	}
 	if u, err := h.s.Login(ctx, "oldlong", long); err != nil || u.ID != id {

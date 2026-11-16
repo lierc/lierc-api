@@ -58,3 +58,31 @@ func TestDummy(t *testing.T) {
 		t.Error("dummy should be cost 12")
 	}
 }
+
+func TestUseTestCost(t *testing.T) {
+	oldCost, oldDummy := cost, Dummy
+	t.Cleanup(func() { cost, Dummy = oldCost, oldDummy })
+
+	UseTestCost()
+	if Cost() != bcrypt.MinCost {
+		t.Fatalf("Cost() = %d, want %d", Cost(), bcrypt.MinCost)
+	}
+	h, err := Hash("pw")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c, _ := bcrypt.Cost([]byte(h)); c != bcrypt.MinCost || NeedsRehash(h) || !Check("pw", h) {
+		t.Errorf("hash %q: cost %d, NeedsRehash %v", h, c, NeedsRehash(h))
+	}
+	if c, _ := bcrypt.Cost([]byte(Dummy)); c != bcrypt.MinCost || Check("anything", Dummy) || Check("", Dummy) {
+		t.Errorf("dummy %q at cost %d, or it matched", Dummy, c)
+	}
+}
+
+// Without UseTestCost (this package never calls it outside the test
+// above), hashes are made at the production cost.
+func TestProductionCost(t *testing.T) {
+	if Cost() != 12 {
+		t.Errorf("Cost() = %d, want 12", Cost())
+	}
+}
