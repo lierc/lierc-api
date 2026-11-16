@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jackc/pgx/v5"
+	"github.com/lierc/lierc-api/internal/db"
 	"github.com/lierc/lierc-api/internal/testenv"
 )
 
@@ -33,22 +33,14 @@ func TestArgumentsRefused(t *testing.T) {
 }
 
 func TestServesStreamUnauthorized(t *testing.T) {
-	d := testenv.Postgres(t)
 	nsqAddr, _ := testenv.NSQD(t)
-	// The stream always opens database "lierc", which testenv does not
-	// create; the pool connects lazily and a request without a cookie never
-	// queries it.
-	cc := d.Pool.Config().ConnConfig
-	env := map[string]string{
-		"POSTGRES_HOST":        net.JoinHostPort(cc.Host, strconv.Itoa(int(cc.Port))),
-		"POSTGRES_USER":        cc.User,
-		"POSTGRES_PASSWORD":    cc.Password,
+	env := dbEnv(t, testenv.Postgres(t), map[string]string{
 		"LISTEN":               "127.0.0.1:0",
 		"ADMIN_LISTEN":         "127.0.0.1:0",
 		"ACCOUNT_TOKEN_SECRET": "acct",
 		"UNSUBSCRIBE_SECRET":   "unsub",
 		"NSQD_HOST":            nsqAddr,
-	}
+	})
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	addr := make(chan net.Addr, 1)
@@ -88,14 +80,13 @@ func TestServesStreamUnauthorized(t *testing.T) {
 
 // The server starts and serves without nsqd, and still shuts down cleanly.
 func TestStreamServesWithoutNSQ(t *testing.T) {
-	env := map[string]string{
-		"POSTGRES_HOST":        "127.0.0.1:1", // never queried without a cookie
+	env := dbEnv(t, testenv.Postgres(t), map[string]string{
 		"LISTEN":               "127.0.0.1:0",
 		"ADMIN_LISTEN":         "127.0.0.1:0",
 		"ACCOUNT_TOKEN_SECRET": "acct",
 		"UNSUBSCRIBE_SECRET":   "unsub",
 		"NSQD_HOST":            "127.0.0.2:1", // nothing listens here
-	}
+	})
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	addr := make(chan net.Addr, 1)
@@ -139,14 +130,13 @@ func TestStreamServesWithoutNSQ(t *testing.T) {
 
 // /stats is served, without a key, on the admin listener only.
 func TestAdminListenerServesStats(t *testing.T) {
-	env := map[string]string{
-		"POSTGRES_HOST":        "127.0.0.1:1", // never queried
+	env := dbEnv(t, testenv.Postgres(t), map[string]string{
 		"LISTEN":               "127.0.0.1:0",
 		"ADMIN_LISTEN":         "127.0.0.1:0",
 		"ACCOUNT_TOKEN_SECRET": "acct",
 		"UNSUBSCRIBE_SECRET":   "unsub",
 		"NSQD_HOST":            "127.0.0.2:1",
-	}
+	})
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	addrs := make(chan [2]net.Addr, 1)
@@ -201,14 +191,13 @@ func TestAdminListenInUse(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer taken.Close()
-	env := map[string]string{
-		"POSTGRES_HOST":        "127.0.0.1:1",
+	env := dbEnv(t, testenv.Postgres(t), map[string]string{
 		"LISTEN":               "127.0.0.1:0",
 		"ADMIN_LISTEN":         taken.Addr().String(),
 		"ACCOUNT_TOKEN_SECRET": "acct",
 		"UNSUBSCRIBE_SECRET":   "unsub",
 		"NSQD_HOST":            "127.0.0.2:1",
-	}
+	})
 	var logs syncBuffer
 	if code := run(context.Background(), nil, func(k string) string { return env[k] }, &logs, nil); code != 1 {
 		t.Errorf("exit %d, want 1", code)
@@ -263,31 +252,15 @@ func (b *syncBuffer) String() string {
 // the public one.
 func TestAdminRoutesMounted(t *testing.T) {
 	d := testenv.Postgres(t)
-	// run always opens database "lierc"; make one from the same template
-	// the test databases come from.
-	cc := d.Pool.Config().ConnConfig
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	admin, err := pgx.Connect(ctx, "postgres://"+cc.User+":"+cc.Password+"@"+net.JoinHostPort(cc.Host, strconv.Itoa(int(cc.Port)))+"/postgres?sslmode=disable")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer admin.Close(context.Background())
-	if _, err := admin.Exec(ctx, "CREATE DATABASE lierc TEMPLATE lierc_template"); err != nil {
-		t.Fatal(err)
-	}
-	defer admin.Exec(context.Background(), "DROP DATABASE IF EXISTS lierc WITH (FORCE)")
-
-	env := map[string]string{
-		"POSTGRES_HOST":        net.JoinHostPort(cc.Host, strconv.Itoa(int(cc.Port))),
-		"POSTGRES_USER":        cc.User,
-		"POSTGRES_PASSWORD":    cc.Password,
+	env := dbEnv(t, d, map[string]string{
 		"LISTEN":               "127.0.0.1:0",
 		"ADMIN_LISTEN":         "127.0.0.1:0",
 		"ACCOUNT_TOKEN_SECRET": "acct",
 		"UNSUBSCRIBE_SECRET":   "unsub",
 		"NSQD_HOST":            "127.0.0.2:1",
-	}
+	})
 	addrs := make(chan [2]net.Addr, 1)
 	done := make(chan int, 1)
 	var logs syncBuffer
@@ -326,5 +299,68 @@ func TestAdminRoutesMounted(t *testing.T) {
 	case <-done:
 	case <-time.After(15 * time.Second):
 		t.Fatal("no shutdown")
+	}
+}
+
+// dbEnv is env plus the POSTGRES_ settings for d's database.
+func dbEnv(t *testing.T, d *db.DB, env map[string]string) map[string]string {
+	t.Helper()
+	cc := d.Pool.Config().ConnConfig
+	env["POSTGRES_HOST"] = net.JoinHostPort(cc.Host, strconv.Itoa(int(cc.Port)))
+	env["POSTGRES_USER"] = cc.User
+	env["POSTGRES_PASSWORD"] = cc.Password
+	env["POSTGRES_DB"] = cc.Database
+	return env
+}
+
+// lierc-api applies the migrations before it listens, and exits when one
+// fails. The embedded Postgres lacks lz4, so on an empty database the real
+// 0001_initial fails there.
+func TestExitsWhenMigrationFails(t *testing.T) {
+	env := dbEnv(t, testenv.EmptyPostgres(t), map[string]string{
+		"LISTEN":               "127.0.0.1:0",
+		"ADMIN_LISTEN":         "127.0.0.1:0",
+		"ACCOUNT_TOKEN_SECRET": "acct",
+		"UNSUBSCRIBE_SECRET":   "unsub",
+		"NSQD_HOST":            "127.0.0.2:1",
+	})
+	exitsBeforeListening(t, env, "0001_initial")
+}
+
+func TestRefusesWithMissingDatabase(t *testing.T) {
+	env := dbEnv(t, testenv.Postgres(t), map[string]string{
+		"LISTEN":               "127.0.0.1:0",
+		"ADMIN_LISTEN":         "127.0.0.1:0",
+		"ACCOUNT_TOKEN_SECRET": "acct",
+		"UNSUBSCRIBE_SECRET":   "unsub",
+		"NSQD_HOST":            "127.0.0.2:1",
+	})
+	env["POSTGRES_DB"] = "nosuch"
+	exitsBeforeListening(t, env, "nosuch")
+}
+
+// exitsBeforeListening runs lierc-api with env and wants exit 1 within 10s,
+// a "migrate" log line containing want, and no listener.
+func exitsBeforeListening(t *testing.T, env map[string]string, want string) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	var logs syncBuffer
+	listened := false
+	code := run(ctx, nil, func(k string) string { return env[k] }, &logs, func(_, _ net.Addr) { listened = true; cancel() })
+	if code != 1 {
+		t.Errorf("exit %d, want 1", code)
+	}
+	if listened {
+		t.Error("it listened")
+	}
+	found := false
+	for _, line := range strings.Split(logs.String(), "\n") {
+		if strings.Contains(line, "migrate") && strings.Contains(line, want) {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("no migrate line naming %s in %q", want, logs.String())
 	}
 }

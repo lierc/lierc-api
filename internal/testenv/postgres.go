@@ -7,7 +7,6 @@ import (
 	"net"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -80,21 +79,12 @@ func adminConn(ctx context.Context) (*pgx.Conn, error) {
 		"postgres://postgres:postgres@127.0.0.1:%d/postgres?sslmode=disable", pgPort))
 }
 
-// schema is lierc.sql without its lz4 column compression: the embedded
-// Postgres is built without lz4, and the compression method changes no
-// results.
-func schema() (string, error) {
-	_, file, _, _ := runtime.Caller(0)
-	b, err := os.ReadFile(filepath.Join(filepath.Dir(file), "..", "..", "lierc.sql"))
-	return strings.ReplaceAll(string(b), " compression lz4", ""), err
-}
-
+// createTemplate builds the template database every test database is
+// cloned from, by running the migrations. The embedded Postgres is built
+// without lz4, so the migrations' "compression lz4" is left out; the
+// compression method changes no results.
 func createTemplate() error {
 	ctx := context.Background()
-	sql, err := schema()
-	if err != nil {
-		return err
-	}
 	c, err := adminConn(ctx)
 	if err != nil {
 		return err
@@ -103,18 +93,36 @@ func createTemplate() error {
 	if _, err := c.Exec(ctx, "CREATE DATABASE "+templateDB); err != nil {
 		return err
 	}
-	tc, err := pgx.Connect(ctx, fmt.Sprintf(
-		"postgres://postgres:postgres@127.0.0.1:%d/%s?sslmode=disable", pgPort, templateDB))
+	d, err := db.Open(ctx, config.Config{
+		DBHost: fmt.Sprintf("127.0.0.1:%d", pgPort),
+		DBUser: "postgres", DBPass: "postgres", DBName: templateDB,
+	})
 	if err != nil {
 		return err
 	}
-	defer tc.Close(ctx)
-	_, err = tc.Exec(ctx, sql) // no args: simple protocol, multiple statements
-	return err
+	// Closed before any clone: CREATE DATABASE ... TEMPLATE needs the
+	// template to have no connections.
+	defer d.Close()
+	return d.Migrate(ctx, db.MigrateOptions{
+		Rewrite: func(sql string) string { return strings.ReplaceAll(sql, " compression lz4", "") },
+	})
 }
 
-// Postgres returns a DB backed by a fresh database cloned from lierc.sql.
+// Postgres returns a DB backed by a fresh database cloned from the
+// migrated template.
 func Postgres(t testing.TB) *db.DB {
+	t.Helper()
+	return newDatabase(t, " TEMPLATE "+templateDB)
+}
+
+// EmptyPostgres returns a DB backed by a fresh database with no tables.
+func EmptyPostgres(t testing.TB) *db.DB {
+	t.Helper()
+	return newDatabase(t, "")
+}
+
+// newDatabase creates a database with CREATE DATABASE's extra clause opts.
+func newDatabase(t testing.TB, opts string) *db.DB {
 	t.Helper()
 	pgOnce.Do(func() { pgErr = startPostgres() })
 	if pgErr != nil {
@@ -127,7 +135,7 @@ func Postgres(t testing.TB) *db.DB {
 		t.Fatal(err)
 	}
 	defer c.Close(ctx)
-	if _, err := c.Exec(ctx, fmt.Sprintf("CREATE DATABASE %s TEMPLATE %s", name, templateDB)); err != nil {
+	if _, err := c.Exec(ctx, "CREATE DATABASE "+name+opts); err != nil {
 		t.Fatal(err)
 	}
 	// Production's text search configuration, so search tests stem the same
@@ -154,12 +162,13 @@ func Postgres(t testing.TB) *db.DB {
 	return d
 }
 
-// AddUser inserts a user named name and returns its id.
+// AddUser inserts a user named name, logged in just now, and returns its
+// id. (The column has no default: signup leaves it NULL until a login.)
 func AddUser(t testing.TB, d *db.DB, name string) string {
 	t.Helper()
 	var id string
 	err := d.Pool.QueryRow(context.Background(),
-		`INSERT INTO "user" (id, username, email, verified) VALUES (substr(md5(random()::text), 1, 22), $1, $2, true) RETURNING id`,
+		`INSERT INTO "user" (id, username, email, verified, last_login) VALUES (substr(md5(random()::text), 1, 22), $1, $2, true, now()) RETURNING id`,
 		name, name+"@example.com").Scan(&id)
 	if err != nil {
 		t.Fatal(err)
@@ -167,11 +176,12 @@ func AddUser(t testing.TB, d *db.DB, name string) string {
 	return id
 }
 
-// AddConnection inserts a connection owned by user.
+// AddConnection inserts a connection owned by user, on the main liercd
+// (liercd NULL; the column's default is 'next').
 func AddConnection(t testing.TB, d *db.DB, id, user, config string) {
 	t.Helper()
 	if _, err := d.Pool.Exec(context.Background(),
-		`INSERT INTO connection (id, "user", config) VALUES ($1, $2, $3)`, id, user, config); err != nil {
+		`INSERT INTO connection (id, "user", config, liercd) VALUES ($1, $2, $3, NULL)`, id, user, config); err != nil {
 		t.Fatal(err)
 	}
 }

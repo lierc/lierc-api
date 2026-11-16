@@ -1,33 +1,42 @@
 package testenv
 
 import (
-	"os"
-	"path/filepath"
-	"runtime"
-	"strings"
+	"context"
 	"testing"
 )
 
-// lierc.sql compresses log_archive.messages with lz4, which production and
-// the dev stack's Postgres have; the embedded Postgres the tests run is built
-// without it, so the schema it loads leaves the compression method out.
-func TestSchemaWithoutLZ4(t *testing.T) {
-	_, file, _, _ := runtime.Caller(0)
-	raw, err := os.ReadFile(filepath.Join(filepath.Dir(file), "..", "..", "lierc.sql"))
+// The template database is built by the migrations. log_archive.messages
+// asks for lz4, which production and the dev stack's Postgres have; the
+// embedded Postgres the tests run is built without it, so the template
+// leaves the compression method out.
+func TestTemplateIsMigrated(t *testing.T) {
+	d := Postgres(t)
+	ctx := context.Background()
+	var versions []int
+	rows, err := d.Pool.Query(ctx, "SELECT version FROM schema_migrations ORDER BY version")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(raw), "compression lz4") {
-		t.Fatal("lierc.sql doesn't ask for lz4")
+	for rows.Next() {
+		var v int
+		if err := rows.Scan(&v); err != nil {
+			t.Fatal(err)
+		}
+		versions = append(versions, v)
 	}
-	s, err := schema()
+	if err := rows.Err(); err != nil {
+		t.Fatal(err)
+	}
+	if len(versions) == 0 || versions[0] != 1 {
+		t.Errorf("schema_migrations versions = %v, want them to start at 1", versions)
+	}
+	var compression string
+	err = d.Pool.QueryRow(ctx, `SELECT attcompression::text FROM pg_attribute
+		WHERE attrelid = 'log_archive'::regclass AND attname = 'messages'`).Scan(&compression)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.Contains(s, "lz4") {
-		t.Error("the test schema still asks for lz4")
-	}
-	if !strings.Contains(s, "messages    json not null") {
-		t.Error("the test schema lost the messages column")
+	if compression != "" {
+		t.Errorf("log_archive.messages compression = %q, want none", compression)
 	}
 }

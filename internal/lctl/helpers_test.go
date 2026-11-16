@@ -193,8 +193,9 @@ func (m *instancesHarness) calledNothing() {
 	}
 }
 
-// insertConn saves a connection row as given, without checking that user
-// exists (for connections whose owner is gone).
+// insertConn saves a connection row as given, on the main liercd (liercd
+// NULL), without checking that user exists (for connections whose owner is
+// gone).
 func insertConn(h *harness, id, user, config string) {
-	h.exec(`INSERT INTO connection (id, "user", config) VALUES ($1, $2, $3)`, id, user, config)
+	h.exec(`INSERT INTO connection (id, "user", config, liercd) VALUES ($1, $2, $3, NULL)`, id, user, config)
 }

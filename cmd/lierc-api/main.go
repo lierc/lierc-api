@@ -1,6 +1,6 @@
 // Command lierc-api runs the API, the SSE event stream and the admin
-// listener. It takes no arguments; the admin commands are the separate lctl
-// binary (cmd/lctl).
+// listener, after applying any pending schema migrations. It takes no
+// arguments; the admin commands are the separate lctl binary (cmd/lctl).
 package main
 
 import (
@@ -59,6 +59,11 @@ func run(ctx context.Context, args []string, getenv func(string) string, stderr 
 		return 1
 	}
 	defer d.Close()
+	// The schema first: nothing below may run against an older one.
+	if err := d.Migrate(ctx, db.MigrateOptions{Logf: logger.Printf}); err != nil {
+		logger.Printf("migrate: %v", err)
+		return 1
+	}
 
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()

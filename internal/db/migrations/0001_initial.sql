@@ -2,8 +2,9 @@ create table "user" (
   id       varchar(24) not null,
   email    varchar(256) not null,
   password_hash varchar(60),
-  username varchar(256) not null,
-  last_login timestamp not null default NOW(),
+  username varchar(255) not null,
+  -- NULL until the first login
+  last_login timestamp,
   -- when the account signed up (set by signup); NULL for accounts from
   -- before the column
   registered timestamp,
@@ -25,7 +26,7 @@ create table connection (
   id      varchar(24) not null,
   "user"  varchar(24) not null,
   config  jsonb not null,
-  liercd  text,
+  liercd  text default 'next',
   -- when the user added the connection, and when its settings last
   -- changed through the API or the stream server (not the logger's saves
   -- of the nick); NULL for connections from before the columns
@@ -42,7 +43,7 @@ create table log (
   "user"      varchar(24) not null,
   channel     varchar(32) not null,
   command     varchar(16),
-  highlight   bool not null default false,
+  highlight   bool default false,
   time        timestamp not null,
   message     jsonb not null,
   self        bool not null default false,
@@ -52,8 +53,7 @@ create table log (
 create index on log (connection, channel, id DESC);
 create index log_message_text on log USING gin ( to_tsvector( 'english', message->'Params'->1 ));
 create index log_sender on log USING gin ((message->'Prefix'->'Name'));
-create index log_user_highlight on log ("user", highlight, id DESC);
-create index log_tag_msgid on log USING gin ((message->'Tags'->'msgid'));
+create index log_user_highlight_idx on log ("user", highlight, id DESC);
 create index on log (time);
 
 create table log_archive (
@@ -75,7 +75,7 @@ create index on log_archive (connection, channel, min_time);
 create table pref (
   "user"  varchar(24) not null,
   name    varchar(128) not null,
-  value   varchar(512) not null,
+  value   varchar(512),
   primary key ("user", name)
 );
 
@@ -91,7 +91,7 @@ create table seen (
 create table private (
   connection varchar(24) not null,
   nick varchar(32) not null,
-  time timestamp not null,
+  time timestamp,
   primary key (connection, nick)
 );
 
