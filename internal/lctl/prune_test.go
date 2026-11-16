@@ -5,9 +5,9 @@ import "testing"
 func seedSeen(h *harness) {
 	u := h.user("ann")
 	insertConn(h, "live", u, cfg)
-	h.exec(`INSERT INTO seen ("user", connection, channel, message_id) VALUES ($1, 'live', '#now', 1)`, u)
-	h.exec(`INSERT INTO seen ("user", connection, channel, message_id, updated) VALUES ($1, 'live', '#old', 1, now() - interval '2 months')`, u)
-	h.exec(`INSERT INTO seen ("user", connection, channel, message_id) VALUES ($1, 'gone', '#a', 1)`, u)
+	h.exec(`INSERT INTO seen_markers (user_id, connection_id, channel, message_id) VALUES ($1, 'live', '#now', 1)`, u)
+	h.exec(`INSERT INTO seen_markers (user_id, connection_id, channel, message_id, updated) VALUES ($1, 'live', '#old', 1, now() - interval '2 months')`, u)
+	h.exec(`INSERT INTO seen_markers (user_id, connection_id, channel, message_id) VALUES ($1, 'gone', '#a', 1)`, u)
 }
 
 func TestPruneSeenDryRun(t *testing.T) {
@@ -17,7 +17,7 @@ func TestPruneSeenDryRun(t *testing.T) {
 		t.Fatal(err)
 	}
 	h.has("2 seen row(s) to delete; run with --delete to delete them\n")
-	if n := h.count(`SELECT count(*) FROM seen`); n != 3 {
+	if n := h.count(`SELECT count(*) FROM seen_markers`); n != 3 {
 		t.Errorf("%d rows, want 3", n)
 	}
 }
@@ -29,7 +29,7 @@ func TestPruneSeenDelete(t *testing.T) {
 		t.Fatal(err)
 	}
 	h.has("deleted 2 seen row(s)\n")
-	if n := h.count(`SELECT count(*) FROM seen WHERE channel = '#now'`); n != 1 || h.count(`SELECT count(*) FROM seen`) != 1 {
+	if n := h.count(`SELECT count(*) FROM seen_markers WHERE channel = '#now'`); n != 1 || h.count(`SELECT count(*) FROM seen_markers`) != 1 {
 		t.Error("wrong rows deleted")
 	}
 }

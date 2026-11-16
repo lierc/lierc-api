@@ -11,11 +11,11 @@ func TestInactiveUsers(t *testing.T) {
 	now := time.Date(2026, 11, 2, 12, 0, 0, 0, time.UTC)
 	h.env.Now = func() time.Time { return now }
 	login := func(id string, d time.Duration, verified bool) {
-		h.exec(`UPDATE "user" SET last_login = $2, verified = $3 WHERE id = $1`, id, now.Add(-d), verified)
+		h.exec(`UPDATE users SET last_login = $2, verified = $3 WHERE id = $1`, id, now.Add(-d), verified)
 	}
 	old := h.user("old")
 	login(old, 400*24*time.Hour, true)
-	h.exec(`UPDATE "user" SET registered = $2 WHERE id = $1`, old, now.Add(-700*24*time.Hour))
+	h.exec(`UPDATE users SET registered = $2 WHERE id = $1`, old, now.Add(-700*24*time.Hour))
 	h.conn("o1", old, `{"Host":"a.com","Port":6667,"Nick":"o"}`)
 	h.conn("o2", old, `{"Host":"b.com","Port":6667,"Nick":"o"}`)
 	older := h.user("older")
@@ -71,7 +71,7 @@ func TestInactiveUsersGrandfathered(t *testing.T) {
 	now := time.Date(2026, 11, 2, 12, 0, 0, 0, time.UTC)
 	h.env.Now = func() time.Time { return now }
 	g := h.user("gus")
-	h.exec(`UPDATE "user" SET last_login = $2, verified = NULL WHERE id = $1`, g, now.Add(-200*24*time.Hour))
+	h.exec(`UPDATE users SET last_login = $2, verified = NULL WHERE id = $1`, g, now.Add(-200*24*time.Hour))
 	if err := h.run("inactive-users", "--since", "90d"); err != nil {
 		t.Fatal(err)
 	}
@@ -85,11 +85,11 @@ func TestInactiveUsersNeverLoggedIn(t *testing.T) {
 	h := newHarness(t)
 	now := time.Date(2026, 11, 2, 12, 0, 0, 0, time.UTC)
 	h.env.Now = func() time.Time { return now }
-	h.exec(`ALTER TABLE "user" ALTER COLUMN last_login DROP NOT NULL`)
+	h.exec(`ALTER TABLE users ALTER COLUMN last_login DROP NOT NULL`)
 	old := h.user("old")
-	h.exec(`UPDATE "user" SET last_login = $2 WHERE id = $1`, old, now.Add(-400*24*time.Hour))
+	h.exec(`UPDATE users SET last_login = $2 WHERE id = $1`, old, now.Add(-400*24*time.Hour))
 	never := h.user("nel")
-	h.exec(`UPDATE "user" SET last_login = NULL WHERE id = $1`, never)
+	h.exec(`UPDATE users SET last_login = NULL WHERE id = $1`, never)
 	if err := h.run("inactive-users", "--since", "90d"); err != nil {
 		t.Fatal(err)
 	}

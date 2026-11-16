@@ -217,7 +217,7 @@ func TestFindOrRecreateRoutes(t *testing.T) {
 	d := testenv.Postgres(t)
 	m, n := testenv.FakeLiercd(t), testenv.FakeLiercd(t)
 	testenv.AddConnection(t, d, "c1", "u1", `{"a":1}`)
-	if _, err := d.Pool.Exec(ctx, `UPDATE connection SET liercd='next' WHERE id='c1'`); err != nil {
+	if _, err := d.Pool.Exec(ctx, `UPDATE connections SET liercd='next' WHERE id='c1'`); err != nil {
 		t.Fatal(err)
 	}
 	n.SetStatus("c1", `{"Status":"new"}`)

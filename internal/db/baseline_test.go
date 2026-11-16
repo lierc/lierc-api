@@ -14,7 +14,8 @@ func withoutLZ4(s string) string { return strings.ReplaceAll(s, " compression lz
 
 // baseline.sql marks a database that already has 0001_initial's schema
 // (production, made by hand) as having had migration 1: afterwards Migrate
-// applies nothing, and schema_migrations is the table Migrate would make.
+// applies only the later migrations, and schema_migrations is the table
+// Migrate would make.
 func TestProductionBaseline(t *testing.T) {
 	raw, err := os.ReadFile("baseline.sql")
 	if err != nil {
@@ -42,11 +43,12 @@ func TestProductionBaseline(t *testing.T) {
 	if err := d.Migrate(ctx, db.MigrateOptions{Rewrite: withoutLZ4, Logf: l.Logf}); err != nil {
 		t.Fatal(err)
 	}
-	if n := l.count("applying"); n != 0 {
-		t.Errorf("Migrate applied something after the baseline: %q", l.lines)
+	all := embeddedMigrations(t)
+	if n := l.count("applying"); n != len(all)-1 || l.count("applying", "0001_") != 0 {
+		t.Errorf("Migrate after the baseline should apply everything but 0001: %q", l.lines)
 	}
-	if got := recorded(t, d); !sameApplied(got, applied{1, "initial"}) {
-		t.Errorf("recorded %v", got)
+	if got := recorded(t, d); !sameApplied(got, all...) {
+		t.Errorf("recorded %v, want %v", got, all)
 	}
 
 	fresh := testenv.EmptyPostgres(t)
@@ -112,8 +114,8 @@ func TestBaselineMatchesProduction(t *testing.T) {
 	if err := prod.Migrate(ctx, db.MigrateOptions{Rewrite: withoutLZ4, Logf: l.Logf}); err != nil {
 		t.Fatal(err)
 	}
-	if n := l.count("applying"); n != 0 {
-		t.Errorf("Migrate applied something after the baseline: %q", l.lines)
+	if n := l.count("applying"); n != len(embeddedMigrations(t))-1 || l.count("applying", "0001_") != 0 {
+		t.Errorf("Migrate after the baseline should apply everything but 0001: %q", l.lines)
 	}
 
 	fresh := testenv.EmptyPostgres(t)

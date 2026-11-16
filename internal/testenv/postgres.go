@@ -168,7 +168,7 @@ func AddUser(t testing.TB, d *db.DB, name string) string {
 	t.Helper()
 	var id string
 	err := d.Pool.QueryRow(context.Background(),
-		`INSERT INTO "user" (id, username, email, verified, last_login) VALUES (substr(md5(random()::text), 1, 22), $1, $2, true, now()) RETURNING id`,
+		`INSERT INTO users (id, username, email, verified, last_login) VALUES (substr(md5(random()::text), 1, 22), $1, $2, true, now()) RETURNING id`,
 		name, name+"@example.com").Scan(&id)
 	if err != nil {
 		t.Fatal(err)
@@ -181,7 +181,7 @@ func AddUser(t testing.TB, d *db.DB, name string) string {
 func AddConnection(t testing.TB, d *db.DB, id, user, config string) {
 	t.Helper()
 	if _, err := d.Pool.Exec(context.Background(),
-		`INSERT INTO connection (id, "user", config, liercd) VALUES ($1, $2, $3, NULL)`, id, user, config); err != nil {
+		`INSERT INTO connections (id, user_id, config, liercd) VALUES ($1, $2, $3, NULL)`, id, user, config); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -190,7 +190,7 @@ func AddConnection(t testing.TB, d *db.DB, id, user, config string) {
 func AddLog(t testing.TB, d *db.DB, id int64, conn, user string) {
 	t.Helper()
 	if _, err := d.Pool.Exec(context.Background(),
-		`INSERT INTO log (id, connection, "user", channel, time, message) VALUES ($1, $2, $3, '#a', now(), '{}')`,
+		`INSERT INTO logs (id, connection_id, user_id, channel, time, message) VALUES ($1, $2, $3, '#a', now(), '{}')`,
 		id, conn, user); err != nil {
 		t.Fatal(err)
 	}

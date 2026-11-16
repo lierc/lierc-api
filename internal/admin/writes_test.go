@@ -72,13 +72,13 @@ func (e *env) seedUser(name string, conns ...string) string {
 	u := testenv.AddUser(e.t, e.d, name)
 	for _, c := range conns {
 		testenv.AddConnection(e.t, e.d, c, u, `{}`)
-		e.exec(`INSERT INTO seen ("user", connection, channel, message_id) VALUES ('` + u + `', '` + c + `', '#a', 1)`)
-		e.exec(`INSERT INTO private (connection, nick, time) VALUES ('` + c + `', 'n', now())`)
-		e.exec(`INSERT INTO log_archive (connection, "user", channel, first_id, last_id, min_time, max_time, count, messages)
+		e.exec(`INSERT INTO seen_markers (user_id, connection_id, channel, message_id) VALUES ('` + u + `', '` + c + `', '#a', 1)`)
+		e.exec(`INSERT INTO private_chats (connection_id, nick, time) VALUES ('` + c + `', 'n', now())`)
+		e.exec(`INSERT INTO log_archives (connection_id, user_id, channel, first_id, last_id, min_time, max_time, count, messages)
 			VALUES ('` + c + `', '` + u + `', '#a', 1, 2, now(), now(), 2, '[]')`)
 	}
-	e.exec(`INSERT INTO pref ("user", name, value) VALUES ('` + u + `', 'p', 'v')`)
-	e.exec(`INSERT INTO web_push ("user", endpoint, key, auth) VALUES ('` + u + `', 'https://e/` + name + `', 'k', 'a')`)
+	e.exec(`INSERT INTO prefs (user_id, name, value) VALUES ('` + u + `', 'p', 'v')`)
+	e.exec(`INSERT INTO web_push_subscriptions (user_id, endpoint, key, auth) VALUES ('` + u + `', 'https://e/` + name + `', 'k', 'a')`)
 	return u
 }
 
@@ -89,9 +89,9 @@ func TestDeleteUser(t *testing.T) {
 	testenv.AddLog(t, e.d, 1, "c1", a)
 	testenv.AddLog(t, e.d, 2, "gone", a) // a connection deleted before the user
 	// the earlier-deleted connection's archive and seen rows carry alice's id
-	e.exec(`INSERT INTO log_archive (connection, "user", channel, first_id, last_id, min_time, max_time, count, messages)
+	e.exec(`INSERT INTO log_archives (connection_id, user_id, channel, first_id, last_id, min_time, max_time, count, messages)
 		VALUES ('gone', '` + a + `', '#a', 3, 4, now(), now(), 2, '[]')`)
-	e.exec(`INSERT INTO seen ("user", connection, channel, message_id) VALUES ('` + a + `', 'gone', '#a', 1)`)
+	e.exec(`INSERT INTO seen_markers (user_id, connection_id, channel, message_id) VALUES ('` + a + `', 'gone', '#a', 1)`)
 	testenv.AddLog(t, e.d, 3, "b1", b)
 	testenv.Login(t, e.d, a)
 	testenv.Login(t, e.d, b)
@@ -115,17 +115,17 @@ func TestDeleteUser(t *testing.T) {
 		t.Errorf("counts = %v", res.Counts)
 	}
 	for _, q := range []string{
-		`SELECT count(*) FROM "user" WHERE id = '` + a + `'`,
-		`SELECT count(*) FROM connection WHERE "user" = '` + a + `'`,
-		`SELECT count(*) FROM log WHERE "user" = '` + a + `' OR connection IN ('c1', 'c2')`,
-		`SELECT count(*) FROM log_archive WHERE connection IN ('c1', 'c2')`,
-		`SELECT count(*) FROM seen WHERE connection IN ('c1', 'c2')`,
-		`SELECT count(*) FROM private WHERE connection IN ('c1', 'c2')`,
-		`SELECT count(*) FROM pref WHERE "user" = '` + a + `'`,
-		`SELECT count(*) FROM web_push WHERE "user" = '` + a + `'`,
-		`SELECT count(*) FROM login WHERE "user" = '` + a + `'`,
-		`SELECT count(*) FROM log_archive WHERE connection = 'gone'`,
-		`SELECT count(*) FROM seen WHERE connection = 'gone'`,
+		`SELECT count(*) FROM users WHERE id = '` + a + `'`,
+		`SELECT count(*) FROM connections WHERE user_id = '` + a + `'`,
+		`SELECT count(*) FROM logs WHERE user_id = '` + a + `' OR connection_id IN ('c1', 'c2')`,
+		`SELECT count(*) FROM log_archives WHERE connection_id IN ('c1', 'c2')`,
+		`SELECT count(*) FROM seen_markers WHERE connection_id IN ('c1', 'c2')`,
+		`SELECT count(*) FROM private_chats WHERE connection_id IN ('c1', 'c2')`,
+		`SELECT count(*) FROM prefs WHERE user_id = '` + a + `'`,
+		`SELECT count(*) FROM web_push_subscriptions WHERE user_id = '` + a + `'`,
+		`SELECT count(*) FROM logins WHERE user_id = '` + a + `'`,
+		`SELECT count(*) FROM log_archives WHERE connection_id = 'gone'`,
+		`SELECT count(*) FROM seen_markers WHERE connection_id = 'gone'`,
 	} {
 		if n := e.count(q); n != 0 {
 			t.Errorf("%s = %d, want 0", q, n)
@@ -133,15 +133,15 @@ func TestDeleteUser(t *testing.T) {
 	}
 	// bob untouched
 	for q, want := range map[string]int{
-		`SELECT count(*) FROM "user" WHERE id = '` + b + `'`:       1,
-		`SELECT count(*) FROM connection WHERE id = 'b1'`:          1,
-		`SELECT count(*) FROM log WHERE connection = 'b1'`:         1,
-		`SELECT count(*) FROM log_archive WHERE connection = 'b1'`: 1,
-		`SELECT count(*) FROM seen WHERE connection = 'b1'`:        1,
-		`SELECT count(*) FROM private WHERE connection = 'b1'`:     1,
-		`SELECT count(*) FROM pref WHERE "user" = '` + b + `'`:     1,
-		`SELECT count(*) FROM web_push WHERE "user" = '` + b + `'`: 1,
-		`SELECT count(*) FROM login WHERE "user" = '` + b + `'`:    1,
+		`SELECT count(*) FROM users WHERE id = '` + b + `'`:                       1,
+		`SELECT count(*) FROM connections WHERE id = 'b1'`:                        1,
+		`SELECT count(*) FROM logs WHERE connection_id = 'b1'`:                    1,
+		`SELECT count(*) FROM log_archives WHERE connection_id = 'b1'`:            1,
+		`SELECT count(*) FROM seen_markers WHERE connection_id = 'b1'`:            1,
+		`SELECT count(*) FROM private_chats WHERE connection_id = 'b1'`:           1,
+		`SELECT count(*) FROM prefs WHERE user_id = '` + b + `'`:                  1,
+		`SELECT count(*) FROM web_push_subscriptions WHERE user_id = '` + b + `'`: 1,
+		`SELECT count(*) FROM logins WHERE user_id = '` + b + `'`:                 1,
 	} {
 		if n := e.count(q); n != want {
 			t.Errorf("%s = %d, want %d", q, n, want)
@@ -184,10 +184,10 @@ func TestDeleteUserNoConnections(t *testing.T) {
 	if code, body := e.send("DELETE", "/admin/users/"+a); code != 200 {
 		t.Fatalf("%d %s", code, body)
 	}
-	if n := e.count(`SELECT count(*) FROM "user" WHERE id = '` + a + `'`); n != 0 {
+	if n := e.count(`SELECT count(*) FROM users WHERE id = '` + a + `'`); n != 0 {
 		t.Errorf("user remains")
 	}
-	if n := e.count(`SELECT count(*) FROM pref`); n != 0 {
+	if n := e.count(`SELECT count(*) FROM prefs`); n != 0 {
 		t.Errorf("pref remains")
 	}
 	if got := rec.all(); len(got) != 0 {
@@ -216,21 +216,21 @@ func TestDeleteConnection(t *testing.T) {
 		t.Errorf("body = %s", body)
 	}
 	for _, q := range []string{
-		`SELECT count(*) FROM connection WHERE id = 'c1'`,
-		`SELECT count(*) FROM log WHERE connection = 'c1'`,
-		`SELECT count(*) FROM log_archive WHERE connection = 'c1'`,
-		`SELECT count(*) FROM seen WHERE connection = 'c1'`,
-		`SELECT count(*) FROM private WHERE connection = 'c1'`,
+		`SELECT count(*) FROM connections WHERE id = 'c1'`,
+		`SELECT count(*) FROM logs WHERE connection_id = 'c1'`,
+		`SELECT count(*) FROM log_archives WHERE connection_id = 'c1'`,
+		`SELECT count(*) FROM seen_markers WHERE connection_id = 'c1'`,
+		`SELECT count(*) FROM private_chats WHERE connection_id = 'c1'`,
 	} {
 		if n := e.count(q); n != 0 {
 			t.Errorf("%s = %d", q, n)
 		}
 	}
 	for _, q := range []string{
-		`SELECT count(*) FROM "user" WHERE id = '` + a + `'`,
-		`SELECT count(*) FROM connection WHERE id = 'c2'`,
-		`SELECT count(*) FROM log WHERE connection = 'c2'`,
-		`SELECT count(*) FROM seen WHERE connection = 'c2'`,
+		`SELECT count(*) FROM users WHERE id = '` + a + `'`,
+		`SELECT count(*) FROM connections WHERE id = 'c2'`,
+		`SELECT count(*) FROM logs WHERE connection_id = 'c2'`,
+		`SELECT count(*) FROM seen_markers WHERE connection_id = 'c2'`,
 	} {
 		if n := e.count(q); n != 1 {
 			t.Errorf("%s = %d, want 1", q, n)
@@ -312,7 +312,7 @@ func TestDeleteSurvivesCancel(t *testing.T) {
 			t.Fatalf("%s: %d %s", path, w.Code, w.Body)
 		}
 	}
-	if n := e.count(`SELECT count(*) FROM "user" WHERE id = '` + a + `'`); n != 0 {
+	if n := e.count(`SELECT count(*) FROM users WHERE id = '` + a + `'`); n != 0 {
 		t.Errorf("user remains")
 	}
 	if got := rec.all(); len(got) != 1 {
@@ -334,7 +334,7 @@ func TestEndLogin(t *testing.T) {
 	if code != 200 || body != `{"status":"ok","ended":1}` {
 		t.Errorf("%d %s", code, body)
 	}
-	if n := e.count(`SELECT count(*) FROM login`); n != 1 {
+	if n := e.count(`SELECT count(*) FROM logins`); n != 1 {
 		t.Errorf("logins = %d", n)
 	}
 	for _, p := range []string{"/admin/users/" + a + "/logins/" + itoa(id), "/admin/users/other/logins/" + itoa(infos[1].ID), "/admin/users/" + a + "/logins/zz"} {
@@ -358,7 +358,7 @@ func TestEndAllLogins(t *testing.T) {
 	if code != 200 || body != `{"status":"ok","ended":2}` {
 		t.Errorf("%d %s", code, body)
 	}
-	if n := e.count(`SELECT count(*) FROM login`); n != 1 {
+	if n := e.count(`SELECT count(*) FROM logins`); n != 1 {
 		t.Errorf("logins = %d", n)
 	}
 	code, body = e.send("DELETE", "/admin/users/"+a+"/logins")
@@ -372,12 +372,12 @@ func TestPruneLogins(t *testing.T) {
 	a := testenv.AddUser(t, e.d, "alice")
 	testenv.Login(t, e.d, a)
 	testenv.Login(t, e.d, a)
-	e.exec(`UPDATE login SET last_used = now() - interval '8 days' WHERE id = (SELECT min(id) FROM login)`)
+	e.exec(`UPDATE logins SET last_used = now() - interval '8 days' WHERE id = (SELECT min(id) FROM logins)`)
 	code, body := e.send("POST", "/admin/logins/prune")
 	if code != 200 || body != `{"status":"ok","pruned":1}` {
 		t.Errorf("%d %s", code, body)
 	}
-	if n := e.count(`SELECT count(*) FROM login`); n != 1 {
+	if n := e.count(`SELECT count(*) FROM logins`); n != 1 {
 		t.Errorf("logins = %d", n)
 	}
 }
@@ -386,13 +386,13 @@ func TestPruneSeen(t *testing.T) {
 	e, _ := newWriteEnv(t)
 	u := testenv.AddUser(t, e.d, "u")
 	testenv.AddConnection(t, e.d, "c", u, `{}`)
-	e.exec(`INSERT INTO seen ("user", connection, channel, message_id) VALUES ('` + u + `', 'c', '#fresh', 1), ('` + u + `', 'gone', '#orphan', 1)`)
-	e.exec(`INSERT INTO seen ("user", connection, channel, message_id, updated) VALUES ('` + u + `', 'c', '#old', 1, now() - interval '2 months')`)
+	e.exec(`INSERT INTO seen_markers (user_id, connection_id, channel, message_id) VALUES ('` + u + `', 'c', '#fresh', 1), ('` + u + `', 'gone', '#orphan', 1)`)
+	e.exec(`INSERT INTO seen_markers (user_id, connection_id, channel, message_id, updated) VALUES ('` + u + `', 'c', '#old', 1, now() - interval '2 months')`)
 	code, body := e.send("POST", "/admin/seen/prune")
 	if code != 200 || body != `{"status":"ok","pruned":2}` {
 		t.Errorf("%d %s", code, body)
 	}
-	if n := e.count(`SELECT count(*) FROM seen`); n != 1 {
+	if n := e.count(`SELECT count(*) FROM seen_markers`); n != 1 {
 		t.Errorf("seen = %d", n)
 	}
 }
@@ -494,7 +494,7 @@ func TestSweepFailureStillAnnounces(t *testing.T) {
 	if got := rec.all(); len(got) != 1 || got[0].User != a || got[0].Connection != "c1" {
 		t.Errorf("announced %v", got)
 	}
-	if n := e.count(`SELECT count(*) FROM connection WHERE id = 'c1'`); n != 0 {
+	if n := e.count(`SELECT count(*) FROM connections WHERE id = 'c1'`); n != 0 {
 		t.Errorf("connection remains")
 	}
 }

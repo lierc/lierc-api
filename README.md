@@ -61,9 +61,17 @@ been deployed; fix it with another.
 
 The previous lierc-api, and the logger (lierc repo), keep running against
 the new schema until they restart. So add things (tables, nullable
-columns, indexes) in one deploy, and drop or rename them in a later one,
-once no running code uses them. lierc-api starts against a database with
+columns, indexes) in one deploy, and drop them in a later one, once no
+running code uses them. lierc-api starts against a database with
 migrations it doesn't know (after an image is rolled back), logging them.
+
+A rename is not additive: it's a coordinated deploy with everything that
+uses the name (the logger), and the lierc-api image can't be rolled back
+past it. Stop the logger first (nsqd keeps its messages), deploy, then
+start the new logger. A migration that waits more than 5 seconds for a
+lock (say behind the nightly backup) is rolled back and retried for up to
+a minute, so deploy migrations that lock busy tables outside the backup
+and nightly window (07:00-09:30 UTC).
 
 Tests
 -----

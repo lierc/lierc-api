@@ -20,7 +20,7 @@ func (e *env) unsubscribeToken(user string) string {
 
 func (e *env) emailPref(user string) string {
 	e.t.Helper()
-	return e.row(`SELECT coalesce((SELECT value FROM pref WHERE "user"=$1 AND name='email'), 'none')`, user)
+	return e.row(`SELECT coalesce((SELECT value FROM prefs WHERE user_id=$1 AND name='email'), 'none')`, user)
 }
 
 func TestUnsubscribeRoute(t *testing.T) {

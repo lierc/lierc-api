@@ -57,8 +57,8 @@ func TestListUsers(t *testing.T) {
 	a := testenv.AddUser(t, e.d, "alice")
 	b := testenv.AddUser(t, e.d, "bob")
 	testenv.AddConnection(t, e.d, "c1", a, `{}`)
-	e.exec(`UPDATE "user" SET last_login = '2020-01-02 03:04:05', registered = '2019-01-01 00:00:00' WHERE id = '` + a + `'`)
-	e.exec(`UPDATE "user" SET last_login = now() at time zone 'utc', registered = NULL, verified = NULL WHERE id = '` + b + `'`)
+	e.exec(`UPDATE users SET last_login = '2020-01-02 03:04:05', registered = '2019-01-01 00:00:00' WHERE id = '` + a + `'`)
+	e.exec(`UPDATE users SET last_login = now() at time zone 'utc', registered = NULL, verified = NULL WHERE id = '` + b + `'`)
 
 	var users []admin.User
 	e.getJSON("/admin/users", &users)
@@ -95,8 +95,8 @@ func TestLookupUsersBoth(t *testing.T) {
 	e := newEnv(t)
 	a := testenv.AddUser(t, e.d, "alice")
 	b := testenv.AddUser(t, e.d, "bob")
-	e.exec(`ALTER TABLE "user" DROP CONSTRAINT user_username_valid`)
-	e.exec(`UPDATE "user" SET username = 'ALICE@example.com' WHERE id = '` + b + `'`)
+	e.exec(`ALTER TABLE users DROP CONSTRAINT users_username_valid`)
+	e.exec(`UPDATE users SET username = 'ALICE@example.com' WHERE id = '` + b + `'`)
 	var users []admin.User
 	e.getJSON("/admin/users/lookup?q=alice@EXAMPLE.com", &users)
 	got := map[string]bool{}
@@ -115,7 +115,7 @@ func TestUserDetail(t *testing.T) {
 	e := newEnv(t)
 	a := testenv.AddUser(t, e.d, "alice") // no password
 	b := testenv.AddUser(t, e.d, "bob")
-	e.exec(`UPDATE "user" SET password_hash = 'h' WHERE id = '` + b + `'`)
+	e.exec(`UPDATE users SET password_hash = 'h' WHERE id = '` + b + `'`)
 	testenv.AddConnection(t, e.d, "c1", a, `{"Host":"h.example","Port":6667}`)
 	for id, want := range map[string]string{a: "none", b: "bcrypt"} {
 		var d admin.UserDetail
@@ -148,7 +148,7 @@ func TestUserCounts(t *testing.T) {
 	a := testenv.AddUser(t, e.d, "alice")
 	testenv.AddConnection(t, e.d, "c1", a, `{}`)
 	testenv.AddLog(t, e.d, 1, "c1", a)
-	e.exec(`INSERT INTO pref ("user", name, value) VALUES ('` + a + `', 'p', 'v')`)
+	e.exec(`INSERT INTO prefs (user_id, name, value) VALUES ('` + a + `', 'p', 'v')`)
 	var got map[string]int64
 	e.getJSON("/admin/users/"+a+"/counts", &got)
 	want := map[string]int64{"log": 1, "log_archive": 0, "seen": 0, "private": 0, "pref": 1, "web_push": 0, "connection": 1, "login": 0}
@@ -190,7 +190,7 @@ func TestConnectionCounts(t *testing.T) {
 	testenv.AddConnection(t, e.d, "c1", a, `{"Host":"h","Port":1}`)
 	testenv.AddLog(t, e.d, 1, "c1", a)
 	testenv.AddLog(t, e.d, 2, "c1", a)
-	e.exec(`INSERT INTO private (connection, nick, time) VALUES ('c1', 'n', now())`)
+	e.exec(`INSERT INTO private_chats (connection_id, nick, time) VALUES ('c1', 'n', now())`)
 	var got map[string]int64
 	e.getJSON("/admin/connections/c1/counts", &got)
 	if got["log"] != 2 || got["private"] != 1 || got["seen"] != 0 || got["log_archive"] != 0 || len(got) != 4 {
@@ -206,12 +206,12 @@ func TestListConnections(t *testing.T) {
 	e := newEnv(t)
 	old := testenv.AddUser(t, e.d, "old")
 	recent := testenv.AddUser(t, e.d, "recent")
-	e.exec(`UPDATE "user" SET last_login = '2020-01-01' WHERE id = '` + old + `'`)
+	e.exec(`UPDATE users SET last_login = '2020-01-01' WHERE id = '` + old + `'`)
 	testenv.AddConnection(t, e.d, "r1", recent, `{"Host":"r.example","Port":6667}`)
 	testenv.AddConnection(t, e.d, "o2", old, `{"Host":"o.example","Port":6697}`)
 	testenv.AddConnection(t, e.d, "o1", old, `{}`)
-	e.exec(`UPDATE connection SET liercd = 'next' WHERE id = 'o2'`)
-	e.exec(`UPDATE connection SET liercd = '' WHERE id = 'r1'`)
+	e.exec(`UPDATE connections SET liercd = 'next' WHERE id = 'o2'`)
+	e.exec(`UPDATE connections SET liercd = '' WHERE id = 'r1'`)
 
 	var cs []admin.Connection
 	e.getJSON("/admin/connections", &cs)
@@ -251,7 +251,7 @@ func TestConnectionPasswordRedacted(t *testing.T) {
 	testenv.AddConnection(t, e.d, "c3", a, `{"Host":"h","Port":1}`)
 	// a config that isn't an object (a double-encoded one) must not leak either
 	testenv.AddConnection(t, e.d, "c4", a, `{}`)
-	e.exec(`UPDATE connection SET config = '"{\"Pass\":\"hunter2\"}"'::jsonb WHERE id = 'c4'`)
+	e.exec(`UPDATE connections SET config = '"{\"Pass\":\"hunter2\"}"'::jsonb WHERE id = 'c4'`)
 	for _, path := range []string{"/admin/connections", "/admin/connections/c1", "/admin/users/" + a} {
 		code, body := e.get(path)
 		if code != 200 || strings.Contains(body, "hunter2") || !strings.Contains(body, `"Pass":"<set>"`) {
@@ -334,7 +334,7 @@ func TestStaleSeen(t *testing.T) {
 	e := newEnv(t)
 	a := testenv.AddUser(t, e.d, "alice")
 	testenv.AddConnection(t, e.d, "c1", a, `{}`)
-	e.exec(`INSERT INTO seen ("user", connection, channel, message_id) VALUES ('` + a + `', 'c1', '#a', 1), ('` + a + `', 'gone', '#a', 1)`)
+	e.exec(`INSERT INTO seen_markers (user_id, connection_id, channel, message_id) VALUES ('` + a + `', 'c1', '#a', 1), ('` + a + `', 'gone', '#a', 1)`)
 	if _, body := e.get("/admin/seen/stale"); body != `{"count":1}` {
 		t.Errorf("got %s", body)
 	}

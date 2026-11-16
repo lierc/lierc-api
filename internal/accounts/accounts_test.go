@@ -96,7 +96,7 @@ func (h *harness) addUserHash(username, email, hash string, verified *bool) stri
 	h.t.Helper()
 	var id string
 	err := h.d.Pool.QueryRow(ctx,
-		`INSERT INTO "user" (id, username, email, password_hash, verified) VALUES (substr(md5(random()::text), 1, 22), $1, $2, $3, $4) RETURNING id`,
+		`INSERT INTO users (id, username, email, password_hash, verified) VALUES (substr(md5(random()::text), 1, 22), $1, $2, $3, $4) RETURNING id`,
 		username, email, hash, verified).Scan(&id)
 	if err != nil {
 		h.t.Fatal(err)
@@ -129,7 +129,7 @@ func (h *harness) connections(user string) []map[string]any {
 func (h *harness) verified(id string) *bool {
 	h.t.Helper()
 	var v *bool
-	if err := h.d.Pool.QueryRow(ctx, `SELECT verified FROM "user" WHERE id=$1`, id).Scan(&v); err != nil {
+	if err := h.d.Pool.QueryRow(ctx, `SELECT verified FROM users WHERE id=$1`, id).Scan(&v); err != nil {
 		h.t.Fatal(err)
 	}
 	return v
@@ -224,7 +224,7 @@ func TestLoginRehash(t *testing.T) {
 		t.Fatalf("Login with the converted hash = %+v, %v", u, err)
 	}
 	var hash string
-	h.d.Pool.QueryRow(ctx, `SELECT password_hash FROM "user" WHERE id=$1`, id).Scan(&hash)
+	h.d.Pool.QueryRow(ctx, `SELECT password_hash FROM users WHERE id=$1`, id).Scan(&hash)
 	if c, err := bcrypt.Cost([]byte(hash)); err != nil || c != 12 {
 		t.Errorf("after login: hash %q (cost %d, %v)", hash, c, err)
 	}
@@ -234,7 +234,7 @@ func TestLoginRehash(t *testing.T) {
 		t.Errorf("second Login = %+v, %v", u, err)
 	}
 	var again string
-	h.d.Pool.QueryRow(ctx, `SELECT password_hash FROM "user" WHERE id=$1`, id).Scan(&again)
+	h.d.Pool.QueryRow(ctx, `SELECT password_hash FROM users WHERE id=$1`, id).Scan(&again)
 	if c := checks(); again != hash || len(c) != 1 || c[0] != hash {
 		t.Errorf("second login rehashed (%q -> %q) or checked %v", hash, again, c)
 	}
@@ -248,7 +248,7 @@ func TestLoginRehashLostRace(t *testing.T) {
 	old := checkPassword
 	checkPassword = func(pw, hash string) bool {
 		ok := old(pw, hash)
-		h.exec(`UPDATE "user" SET password_hash='$2b$12$other' WHERE id=$1`, id)
+		h.exec(`UPDATE users SET password_hash='$2b$12$other' WHERE id=$1`, id)
 		return ok
 	}
 	t.Cleanup(func() { checkPassword = old })
@@ -256,7 +256,7 @@ func TestLoginRehashLostRace(t *testing.T) {
 		t.Errorf("Login = %+v, %v", u, err)
 	}
 	var hash string
-	h.d.Pool.QueryRow(ctx, `SELECT password_hash FROM "user" WHERE id=$1`, id).Scan(&hash)
+	h.d.Pool.QueryRow(ctx, `SELECT password_hash FROM users WHERE id=$1`, id).Scan(&hash)
 	if hash != "$2b$12$other" {
 		t.Errorf("hash = %q, overwrote the other change", hash)
 	}
@@ -264,7 +264,7 @@ func TestLoginRehashLostRace(t *testing.T) {
 
 func TestLoginSeveralRows(t *testing.T) {
 	h := setup(t)
-	h.exec(`ALTER TABLE "user" DROP CONSTRAINT user_username_valid`)
+	h.exec(`ALTER TABLE users DROP CONSTRAINT users_username_valid`)
 	a := h.addUser("usera", "x@example.com", "pass a", ptr(true))
 	b := h.addUser("x@example.com", "b@example.com", "pass b", ptr(true))
 
@@ -295,7 +295,7 @@ func TestRegister(t *testing.T) {
 	}
 	var email, hash string
 	var sent, registered bool
-	h.d.Pool.QueryRow(ctx, `SELECT email, password_hash, verify_sent IS NOT NULL, registered IS NOT NULL FROM "user" WHERE id=$1`, u.ID).
+	h.d.Pool.QueryRow(ctx, `SELECT email, password_hash, verify_sent IS NOT NULL, registered IS NOT NULL FROM users WHERE id=$1`, u.ID).
 		Scan(&email, &hash, &sent, &registered)
 	if c, _ := bcrypt.Cost([]byte(hash)); email != "new@example.com" || c != 12 || !sent || !registered || !passwords.Check("a password", hash) {
 		t.Errorf("row: email %q hash %q sent %v registered %v", email, hash, sent, registered)
@@ -430,7 +430,7 @@ func TestVerify(t *testing.T) {
 	bad := h.addUser("bad", "bad@example.com", "p", ptr(false))
 	exp := time.Now().Unix() + 60
 	changed := MakeToken(secret, "verify", bad, "bad@example.com", exp)
-	h.exec(`UPDATE "user" SET email='changed@example.com' WHERE id=$1`, bad)
+	h.exec(`UPDATE users SET email='changed@example.com' WHERE id=$1`, bad)
 	expired := MakeToken(secret, "verify", bad, "changed@example.com", exp)
 	for name, tok := range map[string]string{
 		"garbage":       "not a token",
@@ -467,7 +467,7 @@ func TestResend(t *testing.T) {
 	if err := h.s.Resend(ctx, id); err != nil || len(h.mail.all()) != 1 {
 		t.Errorf("second resend within 60s: %v, %d emails", err, len(h.mail.all()))
 	}
-	h.exec(`UPDATE "user" SET verify_sent = now() - interval '1 hour' WHERE id=$1`, id)
+	h.exec(`UPDATE users SET verify_sent = now() - interval '1 hour' WHERE id=$1`, id)
 	if err := h.s.Resend(ctx, id); err != nil || len(h.mail.all()) != 2 {
 		t.Errorf("after the window: %v, %d emails", err, len(h.mail.all()))
 	}
@@ -501,7 +501,7 @@ func TestReset(t *testing.T) {
 		t.Fatalf("mail = %+v", m)
 	}
 	var hash string
-	h.d.Pool.QueryRow(ctx, `SELECT password_hash FROM "user" WHERE id=$1`, id).Scan(&hash)
+	h.d.Pool.QueryRow(ctx, `SELECT password_hash FROM users WHERE id=$1`, id).Scan(&hash)
 	token := MakeToken(secret, "reset", id, hash, now.Unix()+ResetLifetime)
 	want := "Hello forgot,\n\nSomeone asked to reset the password for your relaychat.party account.\n" +
 		"To choose a new password, open this link within the next hour:\n" + siteURL + "/reset/#" + token +
@@ -534,7 +534,7 @@ func TestResetConfirm(t *testing.T) {
 	h := setup(t)
 	id := h.addUser("forgot", "forgot@example.com", "old pw", ptr(false))
 	var hash string
-	h.d.Pool.QueryRow(ctx, `SELECT password_hash FROM "user" WHERE id=$1`, id).Scan(&hash)
+	h.d.Pool.QueryRow(ctx, `SELECT password_hash FROM users WHERE id=$1`, id).Scan(&hash)
 	token := MakeToken(secret, "reset", id, hash, time.Now().Unix()+ResetLifetime)
 
 	wantError(t, nil2(h.s.ResetConfirm(ctx, token, " \t")), 400, "A new password is required")
@@ -579,7 +579,7 @@ func TestResetConfirmConcurrent(t *testing.T) {
 	h := setup(t)
 	id := h.addUser("race", "race@example.com", "old", ptr(false))
 	var hash string
-	h.d.Pool.QueryRow(ctx, `SELECT password_hash FROM "user" WHERE id=$1`, id).Scan(&hash)
+	h.d.Pool.QueryRow(ctx, `SELECT password_hash FROM users WHERE id=$1`, id).Scan(&hash)
 	token := MakeToken(secret, "reset", id, hash, time.Now().Unix()+ResetLifetime)
 
 	var wg sync.WaitGroup
@@ -655,7 +655,7 @@ func TestMailDoesNotBlock(t *testing.T) {
 		id = u.ID
 		return err
 	})
-	h.exec(`UPDATE "user" SET verify_sent = NULL WHERE id=$1`, id)
+	h.exec(`UPDATE users SET verify_sent = NULL WHERE id=$1`, id)
 	check("Resend", func() error { return h.s.Resend(ctx, id) })
 	check("Reset", func() error { return h.s.Reset(ctx, "slow@example.com") })
 
@@ -709,7 +709,7 @@ func TestFirstNetworkSurvivesCancel(t *testing.T) {
 
 	id = h.addUser("leaver2", "leaver2@example.com", "old", ptr(false))
 	var hash string
-	h.d.Pool.QueryRow(ctx, `SELECT password_hash FROM "user" WHERE id=$1`, id).Scan(&hash)
+	h.d.Pool.QueryRow(ctx, `SELECT password_hash FROM users WHERE id=$1`, id).Scan(&hash)
 	c, cancel = context.WithCancel(context.Background())
 	h.s.Conns.Liercd, calls = cancellingLiercd(t, cancel)
 	if u, err := h.s.ResetConfirm(c, MakeToken(secret, "reset", id, hash, time.Now().Unix()+60), "new"); err != nil || u.ID != id {
@@ -791,11 +791,11 @@ func TestResetConfirmDeletesLogins(t *testing.T) {
 	testenv.Login(t, h.d, id)
 	testenv.Login(t, h.d, id)
 	count := func() (n int) {
-		h.d.Pool.QueryRow(ctx, `SELECT count(*) FROM login WHERE "user"=$1`, id).Scan(&n)
+		h.d.Pool.QueryRow(ctx, `SELECT count(*) FROM logins WHERE user_id=$1`, id).Scan(&n)
 		return
 	}
 	var hash string
-	h.d.Pool.QueryRow(ctx, `SELECT password_hash FROM "user" WHERE id=$1`, id).Scan(&hash)
+	h.d.Pool.QueryRow(ctx, `SELECT password_hash FROM users WHERE id=$1`, id).Scan(&hash)
 
 	expiredTok := MakeToken(secret, "reset", id, hash, time.Now().Unix()-60)
 	wantError(t, nil2(h.s.ResetConfirm(ctx, expiredTok, "new pw")), 400, "This reset link has expired or was already used. Request a new one.")

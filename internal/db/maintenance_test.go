@@ -67,7 +67,7 @@ func TestOrphans(t *testing.T) {
 		msgRow(t, d, i, "gone", a, "#a", "x", false, false, "2020-01-01")
 	}
 	msgRow(t, d, 5, "c1", "ghost", "#a", "x", false, false, "2020-01-01")
-	exec(t, d, `INSERT INTO log_archive (connection, "user", channel, first_id, last_id, min_time, max_time, count, messages)
+	exec(t, d, `INSERT INTO log_archives (connection_id, user_id, channel, first_id, last_id, min_time, max_time, count, messages)
 		VALUES ('gone', $1, '#a', 10, 11, now(), now(), 2, '[]'), ('c1', $1, '#a', 12, 13, now(), now(), 2, '[]')`, a)
 
 	cs, err := d.GoneConnections(ctx)
@@ -101,7 +101,7 @@ func TestOrphans(t *testing.T) {
 		t.Errorf("DeleteOrphanArchive = %d, %v", n, err)
 	}
 	var left int
-	d.Pool.QueryRow(ctx, `SELECT (SELECT count(*) FROM log) + (SELECT count(*) FROM log_archive)`).Scan(&left)
+	d.Pool.QueryRow(ctx, `SELECT (SELECT count(*) FROM logs) + (SELECT count(*) FROM log_archives)`).Scan(&left)
 	if left != 2 {
 		t.Errorf("%d rows left, want 2", left)
 	}
@@ -114,9 +114,9 @@ func TestReviveCandidates(t *testing.T) {
 	testenv.AddConnection(t, d, "c1", a, `{"x":1}`)
 	testenv.AddConnection(t, d, "c2", a, "{}")
 	testenv.AddConnection(t, d, "c3", b, "{}")
-	exec(t, d, `UPDATE connection SET liercd = 'next' WHERE id = 'c2'`)
-	exec(t, d, `UPDATE "user" SET last_login = now() WHERE id = $1`, a)
-	exec(t, d, `UPDATE "user" SET last_login = now() - interval '10 days' WHERE id = $1`, b)
+	exec(t, d, `UPDATE connections SET liercd = 'next' WHERE id = 'c2'`)
+	exec(t, d, `UPDATE users SET last_login = now() WHERE id = $1`, a)
+	exec(t, d, `UPDATE users SET last_login = now() - interval '10 days' WHERE id = $1`, b)
 
 	ids := func(instance string) []string {
 		cs, err := d.ReviveCandidates(ctx, 48*time.Hour, instance)
@@ -152,7 +152,7 @@ func TestOrphanArchiveGoneUser(t *testing.T) {
 	ctx := context.Background()
 	a := testenv.AddUser(t, d, "alice")
 	testenv.AddConnection(t, d, "c1", a, "{}")
-	exec(t, d, `INSERT INTO log_archive (connection, "user", channel, first_id, last_id, min_time, max_time, count, messages)
+	exec(t, d, `INSERT INTO log_archives (connection_id, user_id, channel, first_id, last_id, min_time, max_time, count, messages)
 		VALUES ('c1', 'ghost', '#a', 10, 11, now(), now(), 2, '[]'), ('c1', $1, '#a', 12, 13, now(), now(), 2, '[]')`, a)
 	if n, err := d.CountOrphanArchive(ctx); err != nil || n != 1 {
 		t.Errorf("CountOrphanArchive = %d, %v, want 1", n, err)
@@ -160,7 +160,7 @@ func TestOrphanArchiveGoneUser(t *testing.T) {
 	if n, err := d.DeleteOrphanArchive(ctx, 5); err != nil || n != 1 {
 		t.Errorf("DeleteOrphanArchive = %d, %v, want 1", n, err)
 	}
-	if u := one[string](t, d, `SELECT "user" FROM log_archive`); u != a {
+	if u := one[string](t, d, `SELECT user_id FROM log_archives`); u != a {
 		t.Errorf("left the block of %s, want alice's", u)
 	}
 }

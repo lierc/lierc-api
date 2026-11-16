@@ -27,10 +27,10 @@ func seedUsers(t *testing.T, d *db.DB) (never, old, recent, tie string) {
 	old = testenv.AddUser(t, d, "old")
 	recent = testenv.AddUser(t, d, "recent")
 	tie = testenv.AddUser(t, d, "tie")
-	exec(t, d, `ALTER TABLE "user" ALTER COLUMN last_login DROP NOT NULL`)
-	exec(t, d, `UPDATE "user" SET last_login = NULL WHERE id = '`+never+`'`)
-	exec(t, d, `UPDATE "user" SET last_login = '2020-01-02 03:04:05' WHERE id IN ('`+old+`','`+tie+`')`)
-	exec(t, d, `UPDATE "user" SET last_login = now() at time zone 'utc' WHERE id = '`+recent+`'`)
+	exec(t, d, `ALTER TABLE users ALTER COLUMN last_login DROP NOT NULL`)
+	exec(t, d, `UPDATE users SET last_login = NULL WHERE id = '`+never+`'`)
+	exec(t, d, `UPDATE users SET last_login = '2020-01-02 03:04:05' WHERE id IN ('`+old+`','`+tie+`')`)
+	exec(t, d, `UPDATE users SET last_login = now() at time zone 'utc' WHERE id = '`+recent+`'`)
 	return
 }
 
@@ -40,8 +40,8 @@ func TestListUsers(t *testing.T) {
 	never, old, recent, tie := seedUsers(t, d)
 	testenv.AddConnection(t, d, "c1", old, `{}`)
 	testenv.AddConnection(t, d, "c2", old, `{}`)
-	exec(t, d, `UPDATE "user" SET password_hash = 'h' WHERE id = '`+old+`'`)
-	exec(t, d, `UPDATE "user" SET registered = '2019-05-06 07:08:09', verified = NULL WHERE id = '`+old+`'`)
+	exec(t, d, `UPDATE users SET password_hash = 'h' WHERE id = '`+old+`'`)
+	exec(t, d, `UPDATE users SET registered = '2019-05-06 07:08:09', verified = NULL WHERE id = '`+old+`'`)
 
 	all, err := d.ListUsers(ctx, db.UserFilter{})
 	if err != nil {
@@ -88,7 +88,7 @@ func TestListUsers(t *testing.T) {
 func TestListUsersPasswordNone(t *testing.T) {
 	d := testenv.Postgres(t)
 	a := testenv.AddUser(t, d, "a")
-	exec(t, d, `UPDATE "user" SET password_hash = ''`)
+	exec(t, d, `UPDATE users SET password_hash = ''`)
 	got, err := d.ListUsers(context.Background(), db.UserFilter{IDs: []string{a}})
 	if err != nil || len(got) != 1 || got[0].Password != "none" {
 		t.Errorf("got %+v, %v", got, err)
@@ -103,8 +103,8 @@ func TestLookupUsers(t *testing.T) {
 	// user c's username is user b's email, differing in case
 	c := testenv.AddUser(t, d, "Bob_x")
 	// old accounts can have such names; the signup rule is a later CHECK
-	exec(t, d, `ALTER TABLE "user" DROP CONSTRAINT user_username_valid`)
-	exec(t, d, `UPDATE "user" SET username = 'BOB@example.com' WHERE id = '`+c+`'`)
+	exec(t, d, `ALTER TABLE users DROP CONSTRAINT users_username_valid`)
+	exec(t, d, `UPDATE users SET username = 'BOB@example.com' WHERE id = '`+c+`'`)
 	for _, tc := range []struct {
 		q    string
 		want []string
@@ -145,13 +145,13 @@ func seedCounts(t *testing.T, d *db.DB) (user, conn string) {
 	testenv.AddLog(t, d, 2, conn, user)
 	testenv.AddLog(t, d, 3, "gone", user) // the user's, connection already deleted
 	testenv.AddLog(t, d, 4, "otherc", other)
-	exec(t, d, `INSERT INTO log_archive (connection, "user", channel, first_id, last_id, min_time, max_time, count, messages)
+	exec(t, d, `INSERT INTO log_archives (connection_id, user_id, channel, first_id, last_id, min_time, max_time, count, messages)
 	  VALUES ('conn1', '`+user+`', '#a', 1, 1, now(), now(), 1, '[]')`)
-	exec(t, d, `INSERT INTO seen ("user", connection, channel, message_id) VALUES ('`+user+`', 'conn1', '#a', 1), ('`+user+`', 'conn2', '#a', 1), ('`+other+`', 'otherc', '#a', 1)`)
-	exec(t, d, `INSERT INTO private (connection, nick, time) VALUES ('conn1', 'n', now()), ('otherc', 'n', now())`)
-	exec(t, d, `INSERT INTO pref ("user", name, value) VALUES ('`+user+`', 'p', 'v')`)
-	exec(t, d, `INSERT INTO web_push (endpoint, key, auth, "user") VALUES ('e', 'k', 'a', '`+user+`')`)
-	exec(t, d, `INSERT INTO login (token_hash, "user") VALUES ('\x01', '`+user+`'), ('\x02', '`+user+`')`)
+	exec(t, d, `INSERT INTO seen_markers (user_id, connection_id, channel, message_id) VALUES ('`+user+`', 'conn1', '#a', 1), ('`+user+`', 'conn2', '#a', 1), ('`+other+`', 'otherc', '#a', 1)`)
+	exec(t, d, `INSERT INTO private_chats (connection_id, nick, time) VALUES ('conn1', 'n', now()), ('otherc', 'n', now())`)
+	exec(t, d, `INSERT INTO prefs (user_id, name, value) VALUES ('`+user+`', 'p', 'v')`)
+	exec(t, d, `INSERT INTO web_push_subscriptions (endpoint, key, auth, user_id) VALUES ('e', 'k', 'a', '`+user+`')`)
+	exec(t, d, `INSERT INTO logins (token_hash, user_id) VALUES ('\x01', '`+user+`'), ('\x02', '`+user+`')`)
 	return
 }
 
@@ -198,8 +198,8 @@ func TestListConnections(t *testing.T) {
 	testenv.AddConnection(t, d, "o1", old, `{}`)
 	testenv.AddConnection(t, d, "n1", never, `{}`)
 	testenv.AddConnection(t, d, "orphan", "nouser", `{}`)
-	exec(t, d, `UPDATE connection SET liercd = 'next' WHERE id IN ('o2', 'r1')`)
-	exec(t, d, `UPDATE connection SET liercd = '' WHERE id = 'o1'`)
+	exec(t, d, `UPDATE connections SET liercd = 'next' WHERE id IN ('o2', 'r1')`)
+	exec(t, d, `UPDATE connections SET liercd = '' WHERE id = 'o1'`)
 
 	all, err := d.ListConnections(ctx, db.ConnectionFilter{})
 	if err != nil {
@@ -282,8 +282,8 @@ func TestStaleSeenCount(t *testing.T) {
 	ctx := context.Background()
 	u := testenv.AddUser(t, d, "u")
 	testenv.AddConnection(t, d, "c", u, `{}`)
-	exec(t, d, `INSERT INTO seen ("user", connection, channel, message_id) VALUES ('`+u+`', 'c', '#fresh', 1), ('`+u+`', 'gone', '#orphan', 1)`)
-	exec(t, d, `INSERT INTO seen ("user", connection, channel, message_id, updated) VALUES ('`+u+`', 'c', '#old', 1, now() - interval '2 months')`)
+	exec(t, d, `INSERT INTO seen_markers (user_id, connection_id, channel, message_id) VALUES ('`+u+`', 'c', '#fresh', 1), ('`+u+`', 'gone', '#orphan', 1)`)
+	exec(t, d, `INSERT INTO seen_markers (user_id, connection_id, channel, message_id, updated) VALUES ('`+u+`', 'c', '#old', 1, now() - interval '2 months')`)
 	if n, err := d.StaleSeenCount(ctx); err != nil || n != 2 {
 		t.Errorf("got %d, %v", n, err)
 	}
@@ -345,8 +345,8 @@ func TestPruneStaleSeen(t *testing.T) {
 	ctx := context.Background()
 	u := testenv.AddUser(t, d, "u")
 	testenv.AddConnection(t, d, "c", u, `{}`)
-	exec(t, d, `INSERT INTO seen ("user", connection, channel, message_id) VALUES ('`+u+`', 'c', '#fresh', 1), ('`+u+`', 'gone', '#orphan', 1)`)
-	exec(t, d, `INSERT INTO seen ("user", connection, channel, message_id, updated) VALUES ('`+u+`', 'c', '#old', 1, now() - interval '2 months')`)
+	exec(t, d, `INSERT INTO seen_markers (user_id, connection_id, channel, message_id) VALUES ('`+u+`', 'c', '#fresh', 1), ('`+u+`', 'gone', '#orphan', 1)`)
+	exec(t, d, `INSERT INTO seen_markers (user_id, connection_id, channel, message_id, updated) VALUES ('`+u+`', 'c', '#old', 1, now() - interval '2 months')`)
 	if n, err := d.PruneStaleSeen(ctx); err != nil || n != 2 {
 		t.Errorf("got %d, %v", n, err)
 	}
@@ -365,10 +365,10 @@ func TestSweepLateLogs(t *testing.T) {
 	testenv.AddLog(t, d, 12, "c2", u)   // late, the user's other connection
 	testenv.AddLog(t, d, 13, "gone", u) // late, of a connection deleted before
 	testenv.AddLog(t, d, 14, "oc", o)   // late, someone else's
-	exec(t, d, `INSERT INTO log_archive (connection, "user", channel, first_id, last_id, min_time, max_time, count, messages)
+	exec(t, d, `INSERT INTO log_archives (connection_id, user_id, channel, first_id, last_id, min_time, max_time, count, messages)
 	  VALUES ('c1', '`+u+`', '#a', 1, 1, now(), now(), 1, '[]'), ('oc', '`+o+`', '#a', 1, 1, now(), now(), 1, '[]')`)
 	remaining := func() []int64 {
-		rows, err := d.Pool.Query(ctx, `SELECT id FROM log ORDER BY id`)
+		rows, err := d.Pool.Query(ctx, `SELECT id FROM logs ORDER BY id`)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -399,7 +399,7 @@ func TestSweepLateLogs(t *testing.T) {
 		t.Errorf("after user sweep: %v", got)
 	}
 	var archived int
-	d.Pool.QueryRow(ctx, `SELECT count(*) FROM log_archive`).Scan(&archived)
+	d.Pool.QueryRow(ctx, `SELECT count(*) FROM log_archives`).Scan(&archived)
 	if archived != 1 {
 		t.Errorf("log_archive rows = %d, want only the other user's", archived)
 	}

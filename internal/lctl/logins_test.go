@@ -16,16 +16,16 @@ func (h *harness) addLogin(user, agent, ip string, startedHoursAgo, usedHoursAgo
 		h.t.Fatal(err)
 	}
 	var id int64
-	if err := h.db.Pool.QueryRow(h.t.Context(), `SELECT max(id) FROM login`).Scan(&id); err != nil {
+	if err := h.db.Pool.QueryRow(h.t.Context(), `SELECT max(id) FROM logins`).Scan(&id); err != nil {
 		h.t.Fatal(err)
 	}
-	h.exec(`UPDATE login SET created = '2026-11-01 12:00:00+00'::timestamptz - $2 * interval '1 hour',
+	h.exec(`UPDATE logins SET created = '2026-11-01 12:00:00+00'::timestamptz - $2 * interval '1 hour',
 	  last_used = now() - $3 * interval '1 hour' WHERE id = $1`, id, startedHoursAgo, usedHoursAgo)
 	return id
 }
 
 func (h *harness) logins(user string) int {
-	return h.count(`SELECT count(*) FROM login WHERE "user" = $1`, user)
+	return h.count(`SELECT count(*) FROM logins WHERE user_id = $1`, user)
 }
 
 func TestLogins(t *testing.T) {
@@ -84,7 +84,7 @@ func TestEndLogin(t *testing.T) {
 	}
 	h.has("ended 1 login\n")
 	h.lacks("logins")
-	if h.logins(u) != 1 || h.count(`SELECT count(*) FROM login WHERE id = $1`, a) != 0 {
+	if h.logins(u) != 1 || h.count(`SELECT count(*) FROM logins WHERE id = $1`, a) != 0 {
 		t.Error("login not deleted, or the other one with it")
 	}
 
@@ -134,7 +134,7 @@ func TestPruneLogins(t *testing.T) {
 		t.Fatal(err)
 	}
 	h.has("deleted 1 expired login\n")
-	if h.count(`SELECT count(*) FROM login WHERE id = $1`, live) != 1 || h.logins(u) != 1 {
+	if h.count(`SELECT count(*) FROM logins WHERE id = $1`, live) != 1 || h.logins(u) != 1 {
 		t.Error("live login not kept, or expired one not deleted")
 	}
 	if err := h.run("prune-logins"); err != nil {

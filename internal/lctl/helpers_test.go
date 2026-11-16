@@ -101,9 +101,9 @@ func (h *harness) user(name string) string { return testenv.AddUser(h.t, h.db, n
 // conn adds a connection with a log, seen and private row.
 func (h *harness) conn(id, user, config string) {
 	testenv.AddConnection(h.t, h.db, id, user, config)
-	h.exec(`INSERT INTO log (connection, "user", channel, time, message) VALUES ($1, $2, 'status', now(), '{}')`, id, user)
-	h.exec(`INSERT INTO seen ("user", connection, channel, message_id) VALUES ($1, $2, 'status', 1)`, user, id)
-	h.exec(`INSERT INTO private (connection, nick, time) VALUES ($1, 'someone', now())`, id)
+	h.exec(`INSERT INTO logs (connection_id, user_id, channel, time, message) VALUES ($1, $2, 'status', now(), '{}')`, id, user)
+	h.exec(`INSERT INTO seen_markers (user_id, connection_id, channel, message_id) VALUES ($1, $2, 'status', 1)`, user, id)
+	h.exec(`INSERT INTO private_chats (connection_id, nick, time) VALUES ($1, 'someone', now())`, id)
 }
 
 func (h *harness) out() string { return h.stdout.String() }
@@ -197,5 +197,5 @@ func (m *instancesHarness) calledNothing() {
 // NULL), without checking that user exists (for connections whose owner is
 // gone).
 func insertConn(h *harness, id, user, config string) {
-	h.exec(`INSERT INTO connection (id, "user", config, liercd) VALUES ($1, $2, $3, NULL)`, id, user, config)
+	h.exec(`INSERT INTO connections (id, user_id, config, liercd) VALUES ($1, $2, $3, NULL)`, id, user, config)
 }

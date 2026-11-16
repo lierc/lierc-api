@@ -247,12 +247,12 @@ func TestPoolBegin(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := tx.Exec(context.Background(), `INSERT INTO pref ("user", name, value) VALUES ('u', 'n', 'v')`); err != nil {
+	if _, err := tx.Exec(context.Background(), `INSERT INTO prefs (user_id, name, value) VALUES ('u', 'n', 'v')`); err != nil {
 		t.Fatal(err)
 	}
 	tx.Rollback(context.Background())
 	var n int
-	d.Pool.QueryRow(context.Background(), `SELECT count(*) FROM pref`).Scan(&n)
+	d.Pool.QueryRow(context.Background(), `SELECT count(*) FROM prefs`).Scan(&n)
 	if n != 0 {
 		t.Fatalf("rolled back insert is visible: %d rows", n)
 	}
@@ -433,7 +433,7 @@ func TestPortedCommandsNeedNoDB(t *testing.T) {
 func TestReviveRoutesWithoutAdmin(t *testing.T) {
 	h := newHarness(t)
 	u := h.user("recent")
-	h.exec(`UPDATE "user" SET last_login = now() - interval '1 hour' WHERE id = $1`, u)
+	h.exec(`UPDATE users SET last_login = now() - interval '1 hour' WHERE id = $1`, u)
 	testenv.AddConnection(t, h.db, "stopped", u, `{"Host":"irc.example.com","Port":6667}`)
 
 	closed := httptest.NewServer(nil)

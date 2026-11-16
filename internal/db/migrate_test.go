@@ -355,11 +355,11 @@ func TestEmbeddedMigrationsApply(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !tableExists(t, d, "log_archive") {
-		t.Error("no log_archive table")
+	if !tableExists(t, d, "log_archives") {
+		t.Error("no log_archives table")
 	}
-	if got := recorded(t, d); !sameApplied(got, applied{1, "initial"}) {
-		t.Errorf("recorded %v", got)
+	if got, want := recorded(t, d), embeddedMigrations(t); !sameApplied(got, want...) {
+		t.Errorf("recorded %v, want %v", got, want)
 	}
 }
 

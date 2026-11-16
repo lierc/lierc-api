@@ -72,14 +72,14 @@ func TestEditSaveDeleteRoutes(t *testing.T) {
 	testenv.AddConnection(t, e.db, "c2", a, `{}`)
 	e.sendWant("PUT", "/connection/c1", a, `{"Host":"irc.example","Port":6667,"Nick":"me","Alias":"Net"}`, 200, `{"status":"ok"}`)
 	e.sendWant("PUT", "/connection/c1/config", a, `{"Alias":"Other"}`, 200, `{"status":"ok"}`)
-	if v := e.row(`SELECT config::json->>'Alias' FROM connection WHERE id='c1'`); v != "Other" {
+	if v := e.row(`SELECT config::json->>'Alias' FROM connections WHERE id='c1'`); v != "Other" {
 		t.Errorf("alias = %s", v)
 	}
 	e.fake.Respond("POST", "/c1/destroy", 200, "ok")
 	e.sendWant("DELETE", "/connection/c1", a, "", 200, `{"status":"ok"}`)
 	e.fake.Respond("POST", "/c2/destroy", 404, "nok\n")
 	e.sendWant("DELETE", "/connection/c2", a, "", 200, `{"status":"ok"}`)
-	if v := e.row(`SELECT count(*)::text FROM connection`); v != "0" {
+	if v := e.row(`SELECT count(*)::text FROM connections`); v != "0" {
 		t.Errorf("%s rows left", v)
 	}
 }
@@ -106,7 +106,7 @@ func TestConnectionsCrossSite(t *testing.T) {
 	if c, _ := e.send("POST", "/connection", a, `{"Host":"irc.example","Port":6667,"Nick":"me"}`, "Sec-Fetch-Site", "cross-site"); c != 403 {
 		t.Errorf("cross-site: %d", c)
 	}
-	if v := e.row(`SELECT count(*)::text FROM connection`); v != "0" {
+	if v := e.row(`SELECT count(*)::text FROM connections`); v != "0" {
 		t.Errorf("%s rows created", v)
 	}
 }

@@ -19,14 +19,14 @@ func (d *DB) SaveConnectionLimited(ctx context.Context, id, user string, config 
 	}
 	defer tx.Rollback(ctx)
 	var one int
-	if err := queryRow(ctx, tx, psql.Select("1").From(`"user"`).Where(sq.Eq{"id": user}).Suffix("FOR UPDATE")).Scan(&one); err != nil {
+	if err := queryRow(ctx, tx, psql.Select("1").From("users").Where(sq.Eq{"id": user}).Suffix("FOR UPDATE")).Scan(&one); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return false, nil
 		}
 		return false, err
 	}
 	var n int
-	if err := queryRow(ctx, tx, psql.Select("count(*)").From("connection").Where(sq.Eq{`"user"`: user})).Scan(&n); err != nil {
+	if err := queryRow(ctx, tx, psql.Select("count(*)").From("connections").Where(sq.Eq{"user_id": user})).Scan(&n); err != nil {
 		return false, err
 	}
 	if n >= max {
@@ -39,7 +39,7 @@ func (d *DB) SaveConnectionLimited(ctx context.Context, id, user string, config 
 }
 
 func insertConnection(id, user string, config []byte) sq.InsertBuilder {
-	return psql.Insert("connection").Columns("id", `"user"`, "config", "created", "updated").
+	return psql.Insert("connections").Columns("id", "user_id", "config", "created", "updated").
 		Values(id, user, string(config), sq.Expr("now()"), sq.Expr("now()"))
 }
 
@@ -51,7 +51,7 @@ func (d *DB) SaveConnection(ctx context.Context, id, user string, config []byte)
 
 // DeleteConnection deletes connection id's row.
 func (d *DB) DeleteConnection(ctx context.Context, id string) error {
-	_, err := exec(ctx, d.Pool, psql.Delete("connection").Where(sq.Eq{"id": id}))
+	_, err := exec(ctx, d.Pool, psql.Delete("connections").Where(sq.Eq{"id": id}))
 	return err
 }
 
@@ -62,7 +62,7 @@ func (d *DB) DeleteConnection(ctx context.Context, id string) error {
 // config or fields that aren't objects, change nothing and aren't errors.
 func (d *DB) MergeConfig(ctx context.Context, id string, fields []byte) error {
 	f := string(fields)
-	_, err := exec(ctx, d.Pool, psql.Update("connection").Set("config", sq.Expr("config::jsonb || ?::jsonb", f)).
+	_, err := exec(ctx, d.Pool, psql.Update("connections").Set("config", sq.Expr("config::jsonb || ?::jsonb", f)).
 		Where(sq.Eq{"id": id}).
 		Where("jsonb_typeof(config::jsonb) = 'object'").
 		Where("jsonb_typeof(?::jsonb) = 'object'", f))
@@ -91,7 +91,7 @@ func (d *DB) EditConfig(ctx context.Context, id string, edit func(saved []byte) 
 	if err != nil {
 		return true, err
 	}
-	if _, err := exec(ctx, tx, psql.Update("connection").Set("config", config).Set("updated", sq.Expr("now()")).
+	if _, err := exec(ctx, tx, psql.Update("connections").Set("config", config).Set("updated", sq.Expr("now()")).
 		Where(sq.Eq{"id": id})); err != nil {
 		return true, err
 	}

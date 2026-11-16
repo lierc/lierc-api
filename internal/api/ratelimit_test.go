@@ -157,7 +157,7 @@ func TestResetLimitUnknownAddress(t *testing.T) {
 		e.reset("later@example.com")
 	}
 	id := testenv.AddUser(t, e.db, "later")
-	if _, err := e.db.Pool.Exec(context.Background(), `UPDATE "user" SET email = 'later@example.com' WHERE id = $1`, id); err != nil {
+	if _, err := e.db.Pool.Exec(context.Background(), `UPDATE users SET email = 'later@example.com' WHERE id = $1`, id); err != nil {
 		t.Fatal(err)
 	}
 	e.reset("later@example.com")

@@ -43,7 +43,7 @@ func TestConnectionChangedCreateUpdateDelete(t *testing.T) {
 		t.Errorf("create: %+v", ev)
 	}
 
-	if _, err := e.db.Pool.Exec(context.Background(), `UPDATE connection SET config = '{"Host":"irc.deux","Alias":"","Nick":"me2"}' WHERE id = 'c2'`); err != nil {
+	if _, err := e.db.Pool.Exec(context.Background(), `UPDATE connections SET config = '{"Host":"irc.deux","Alias":"","Nick":"me2"}' WHERE id = 'c2'`); err != nil {
 		t.Fatal(err)
 	}
 	changed(e, u, "c2", "update")
@@ -52,7 +52,7 @@ func TestConnectionChangedCreateUpdateDelete(t *testing.T) {
 	}
 
 	// the row is gone by the time a delete is announced
-	if _, err := e.db.Pool.Exec(context.Background(), `DELETE FROM connection WHERE id = 'c2'`); err != nil {
+	if _, err := e.db.Pool.Exec(context.Background(), `DELETE FROM connections WHERE id = 'c2'`); err != nil {
 		t.Fatal(err)
 	}
 	changed(e, u, "c2", "delete")

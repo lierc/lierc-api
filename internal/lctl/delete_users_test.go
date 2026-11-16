@@ -12,7 +12,7 @@ import (
 
 // addArchive adds an archive row for a connection.
 func addArchive(h *harness, user, conn string) {
-	h.exec(`INSERT INTO log_archive (connection, "user", channel, first_id, last_id, min_time, max_time, count, messages)
+	h.exec(`INSERT INTO log_archives (connection_id, user_id, channel, first_id, last_id, min_time, max_time, count, messages)
 	  VALUES ($1, $2, '#a', 1, 2, now(), now(), 2, '[]')`, conn, user)
 }
 
@@ -21,20 +21,20 @@ func seedUser(h *harness, name string) string {
 	u := h.user(name)
 	h.conn(name+"1", u, `{"Host":"ergo","Port":6667,"Nick":"x"}`)
 	h.conn(name+"2", u, `{"Host":"ergo","Port":6667,"Nick":"y"}`)
-	h.exec(`INSERT INTO seen ("user", connection, channel, message_id) VALUES ($1, 'gone', '#a', 1)`, u)
-	h.exec(`INSERT INTO pref ("user", name, value) VALUES ($1, 'theme', 'dark')`, u)
-	h.exec(`INSERT INTO web_push (endpoint, key, auth, "user") VALUES ('https://push/x', 'k', 'a', $1)`, u)
+	h.exec(`INSERT INTO seen_markers (user_id, connection_id, channel, message_id) VALUES ($1, 'gone', '#a', 1)`, u)
+	h.exec(`INSERT INTO prefs (user_id, name, value) VALUES ($1, 'theme', 'dark')`, u)
+	h.exec(`INSERT INTO web_push_subscriptions (endpoint, key, auth, user_id) VALUES ('https://push/x', 'k', 'a', $1)`, u)
 	return u
 }
 
 func (h *harness) userRows(u, c1, c2 string) int {
-	return h.count(`SELECT (SELECT count(*) FROM log WHERE connection IN ($2, $3))
-	  + (SELECT count(*) FROM seen WHERE "user" = $1 OR connection IN ($2, $3))
-	  + (SELECT count(*) FROM private WHERE connection IN ($2, $3))
-	  + (SELECT count(*) FROM pref WHERE "user" = $1)
-	  + (SELECT count(*) FROM web_push WHERE "user" = $1)
-	  + (SELECT count(*) FROM connection WHERE "user" = $1)
-	  + (SELECT count(*) FROM "user" WHERE id = $1)`, u, c1, c2)
+	return h.count(`SELECT (SELECT count(*) FROM logs WHERE connection_id IN ($2, $3))
+	  + (SELECT count(*) FROM seen_markers WHERE user_id = $1 OR connection_id IN ($2, $3))
+	  + (SELECT count(*) FROM private_chats WHERE connection_id IN ($2, $3))
+	  + (SELECT count(*) FROM prefs WHERE user_id = $1)
+	  + (SELECT count(*) FROM web_push_subscriptions WHERE user_id = $1)
+	  + (SELECT count(*) FROM connections WHERE user_id = $1)
+	  + (SELECT count(*) FROM users WHERE id = $1)`, u, c1, c2)
 }
 
 func TestDeleteUsersDryRun(t *testing.T) {
@@ -62,10 +62,10 @@ func TestDeleteUsersDelete(t *testing.T) {
 	if err := h.run("delete-users", "--delete", "--settle", "2", u); err != nil {
 		t.Fatal(err)
 	}
-	if n := h.count(`SELECT count(*) FROM log_archive WHERE connection IN ('ann1', 'ann2')`); n != 0 {
+	if n := h.count(`SELECT count(*) FROM log_archives WHERE connection_id IN ('ann1', 'ann2')`); n != 0 {
 		t.Errorf("%d archive rows left for the deleted user", n)
 	}
-	if n := h.count(`SELECT count(*) FROM log_archive WHERE connection = 'bob1'`); n != 1 {
+	if n := h.count(`SELECT count(*) FROM log_archives WHERE connection_id = 'bob1'`); n != 1 {
 		t.Errorf("other user has %d archive rows, want 1", n)
 	}
 	h.has(u+": deleted\n", "deleted 1 user(s), skipped 0\n")
@@ -157,15 +157,15 @@ func TestDeleteUsersSweepsLateLogRows(t *testing.T) {
 	// stands in for the logger: a log row for ann1 lands as ann's delete commits
 	h.exec(`CREATE FUNCTION late_quit() RETURNS trigger AS $$
 	  BEGIN
-	    INSERT INTO log (connection, "user", channel, time, message) VALUES ('ann1', OLD.id, 'status', now(), '{"Command":"QUIT"}');
+	    INSERT INTO logs (connection_id, user_id, channel, time, message) VALUES ('ann1', OLD.id, 'status', now(), '{"Command":"QUIT"}');
 	    RETURN OLD;
 	  END $$ LANGUAGE plpgsql`)
-	h.exec(`CREATE TRIGGER late_quit AFTER DELETE ON "user" FOR EACH ROW EXECUTE FUNCTION late_quit()`)
+	h.exec(`CREATE TRIGGER late_quit AFTER DELETE ON users FOR EACH ROW EXECUTE FUNCTION late_quit()`)
 	if err := h.run("delete-users", "--delete", "--settle", "0", u); err != nil {
 		t.Fatal(err)
 	}
 	h.has(u+": deleted\n", u+": removed 1 late log row(s)\n", "deleted 1 user(s), skipped 0\n")
-	if n := h.count(`SELECT count(*) FROM log WHERE connection IN ('ann1', 'ann2')`); n != 0 {
+	if n := h.count(`SELECT count(*) FROM logs WHERE connection_id IN ('ann1', 'ann2')`); n != 0 {
 		t.Errorf("%d log rows left", n)
 	}
 }
@@ -181,22 +181,22 @@ func TestDeleteUsersArchiveAfterLog(t *testing.T) {
 	  BEGIN
 	    IF NOT EXISTS (SELECT 1 FROM trace WHERE kind = 'moved') THEN
 	      INSERT INTO trace VALUES ('moved', txid_current());
-	      INSERT INTO log_archive (connection, "user", channel, first_id, last_id, min_time, max_time, count, messages)
+	      INSERT INTO log_archives (connection_id, user_id, channel, first_id, last_id, min_time, max_time, count, messages)
 	        VALUES ('ann1', '` + u + `', '#a', 1, 2, now(), now(), 2, '[]');
 	    END IF;
 	    RETURN NULL;
 	  END $$ LANGUAGE plpgsql`)
-	h.exec(`CREATE TRIGGER move_block AFTER DELETE ON log FOR EACH STATEMENT EXECUTE FUNCTION move_block()`)
+	h.exec(`CREATE TRIGGER move_block AFTER DELETE ON logs FOR EACH STATEMENT EXECUTE FUNCTION move_block()`)
 	h.exec(`CREATE FUNCTION note_delete() RETURNS trigger AS $$
 	  BEGIN
 	    INSERT INTO trace VALUES ('deleted', txid_current());
 	    RETURN OLD;
 	  END $$ LANGUAGE plpgsql`)
-	h.exec(`CREATE TRIGGER note_delete BEFORE DELETE ON log_archive FOR EACH ROW EXECUTE FUNCTION note_delete()`)
+	h.exec(`CREATE TRIGGER note_delete BEFORE DELETE ON log_archives FOR EACH ROW EXECUTE FUNCTION note_delete()`)
 	if err := h.run("delete-users", "--delete", "--settle", "0", u); err != nil {
 		t.Fatal(err)
 	}
-	if n := h.count(`SELECT count(*) FROM log_archive`); n != 0 {
+	if n := h.count(`SELECT count(*) FROM log_archives`); n != 0 {
 		t.Errorf("%d archive rows left", n)
 	}
 	// the block must be deleted by the same transaction that deleted the log
@@ -214,7 +214,7 @@ func TestDeleteUsersLogsOfGoneConnections(t *testing.T) {
 	u := seedUser(h, "ann")
 	other := seedUser(h, "bob")
 	for owner, gone := range map[string]string{u: "gone-ann", other: "gone-bob"} {
-		h.exec(`INSERT INTO log (connection, "user", channel, time, message) VALUES ($1, $2, '#a', now(), '{}')`, gone, owner)
+		h.exec(`INSERT INTO logs (connection_id, user_id, channel, time, message) VALUES ($1, $2, '#a', now(), '{}')`, gone, owner)
 		addArchive(h, owner, gone)
 	}
 	if err := h.run("delete-users", u); err != nil {
@@ -224,16 +224,16 @@ func TestDeleteUsersLogsOfGoneConnections(t *testing.T) {
 	if err := h.run("delete-users", "--delete", "--settle", "0", u); err != nil {
 		t.Fatal(err)
 	}
-	if n := h.count(`SELECT count(*) FROM log WHERE "user" = $1`, u); n != 0 {
+	if n := h.count(`SELECT count(*) FROM logs WHERE user_id = $1`, u); n != 0 {
 		t.Errorf("%d log rows left with the deleted user's id", n)
 	}
-	if n := h.count(`SELECT count(*) FROM log_archive WHERE "user" = $1`, u); n != 0 {
+	if n := h.count(`SELECT count(*) FROM log_archives WHERE user_id = $1`, u); n != 0 {
 		t.Errorf("%d archive rows left with the deleted user's id", n)
 	}
-	if n := h.count(`SELECT count(*) FROM log WHERE "user" = $1`, other); n != 3 {
+	if n := h.count(`SELECT count(*) FROM logs WHERE user_id = $1`, other); n != 3 {
 		t.Errorf("other user has %d log rows, want 3", n)
 	}
-	if n := h.count(`SELECT count(*) FROM log_archive WHERE "user" = $1`, other); n != 1 {
+	if n := h.count(`SELECT count(*) FROM log_archives WHERE user_id = $1`, other); n != 1 {
 		t.Errorf("other user has %d archive rows, want 1", n)
 	}
 }
@@ -244,15 +244,15 @@ func TestDeleteUsersSweepsLateRowsByUser(t *testing.T) {
 	u := seedUser(h, "ann")
 	h.exec(`CREATE FUNCTION late_row() RETURNS trigger AS $$
 	  BEGIN
-	    INSERT INTO log (connection, "user", channel, time, message) VALUES ('gone', OLD.id, 'status', now(), '{}');
+	    INSERT INTO logs (connection_id, user_id, channel, time, message) VALUES ('gone', OLD.id, 'status', now(), '{}');
 	    RETURN OLD;
 	  END $$ LANGUAGE plpgsql`)
-	h.exec(`CREATE TRIGGER late_row AFTER DELETE ON "user" FOR EACH ROW EXECUTE FUNCTION late_row()`)
+	h.exec(`CREATE TRIGGER late_row AFTER DELETE ON users FOR EACH ROW EXECUTE FUNCTION late_row()`)
 	if err := h.run("delete-users", "--delete", "--settle", "0", u); err != nil {
 		t.Fatal(err)
 	}
 	h.has(u + ": removed 1 late log row(s)\n")
-	if n := h.count(`SELECT count(*) FROM log WHERE "user" = $1`, u); n != 0 {
+	if n := h.count(`SELECT count(*) FROM logs WHERE user_id = $1`, u); n != 0 {
 		t.Errorf("%d log rows left", n)
 	}
 }
@@ -369,8 +369,8 @@ func TestDeleteUsersAlreadyGone(t *testing.T) {
 	h := newHarness(t)
 	u := seedUser(h, "ann")
 	h.beforeSleep = func() {
-		h.exec(`DELETE FROM connection WHERE "user" = $1`, u)
-		h.exec(`DELETE FROM "user" WHERE id = $1`, u)
+		h.exec(`DELETE FROM connections WHERE user_id = $1`, u)
+		h.exec(`DELETE FROM users WHERE id = $1`, u)
 	}
 	if err := h.run("delete-users", "--delete", u); err != nil {
 		t.Fatalf("got %v, want no error", err)

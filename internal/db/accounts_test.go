@@ -21,7 +21,7 @@ func TestAccountLookups(t *testing.T) {
 	if err != nil || !ok || a.Username != "Alice" || a.Email != "a@x.test" || a.Verified == nil || *a.Verified {
 		t.Fatalf("by id = %+v %v %v", a, ok, err)
 	}
-	if got := one[bool](t, d, `SELECT verify_sent IS NOT NULL AND registered IS NOT NULL FROM "user"`); !got {
+	if got := one[bool](t, d, `SELECT verify_sent IS NOT NULL AND registered IS NOT NULL FROM users`); !got {
 		t.Error("verify_sent and registered not set")
 	}
 	if _, ok, err := d.AccountByID(ctx, "nope"); ok || err != nil {
@@ -77,14 +77,14 @@ func TestClaimVerifyResend(t *testing.T) {
 	if ok, err := d.ClaimVerifyResend(ctx, "u1", 60); ok || err != nil {
 		t.Errorf("claimed right after signup: %v %v", ok, err)
 	}
-	exec(t, d, `UPDATE "user" SET verify_sent = now() - interval '2 minutes'`)
+	exec(t, d, `UPDATE users SET verify_sent = now() - interval '2 minutes'`)
 	if ok, err := d.ClaimVerifyResend(ctx, "u1", 60); !ok || err != nil {
 		t.Errorf("claim: %v %v", ok, err)
 	}
 	if ok, _ := d.ClaimVerifyResend(ctx, "u1", 60); ok {
 		t.Error("claimed twice")
 	}
-	exec(t, d, `UPDATE "user" SET verify_sent = NULL, verified = true`)
+	exec(t, d, `UPDATE users SET verify_sent = NULL, verified = true`)
 	if ok, _ := d.ClaimVerifyResend(ctx, "u1", 60); ok {
 		t.Error("claimed for a verified user")
 	}
@@ -93,7 +93,7 @@ func TestClaimVerifyResend(t *testing.T) {
 func TestReplacePasswordHashAndMarkVerified(t *testing.T) {
 	d := testenv.Postgres(t)
 	ctx := context.Background()
-	exec(t, d, `INSERT INTO "user" (id, username, email, password_hash, verified) VALUES ('u1','alice','a@x.test','h1',NULL), ('u3','carol','c@x.test',NULL,true)`)
+	exec(t, d, `INSERT INTO users (id, username, email, password_hash, verified) VALUES ('u1','alice','a@x.test','h1',NULL), ('u3','carol','c@x.test',NULL,true)`)
 	if ok, err := d.ReplacePasswordHash(ctx, "u1", "h2", sp("stale")); ok || err != nil {
 		t.Errorf("stale replace: %v %v", ok, err)
 	}
@@ -110,17 +110,17 @@ func TestReplacePasswordHashAndMarkVerified(t *testing.T) {
 	if ok, err := d.ReplacePasswordHash(ctx, "u3", "h9", nil); !ok || err != nil {
 		t.Errorf("no-password replace: %v %v", ok, err)
 	}
-	if got := one[string](t, d, `SELECT password_hash FROM "user" WHERE id='u1'`); got != "h2" {
+	if got := one[string](t, d, `SELECT password_hash FROM users WHERE id='u1'`); got != "h2" {
 		t.Errorf("stored %s", got)
 	}
 	// NULL verified becomes true but is not a first verification
 	if first, err := d.MarkVerified(ctx, "u1"); first || err != nil {
 		t.Errorf("null verify: %v %v", first, err)
 	}
-	if got := one[bool](t, d, `SELECT verified FROM "user"`); !got {
+	if got := one[bool](t, d, `SELECT verified FROM users`); !got {
 		t.Error("null not verified")
 	}
-	exec(t, d, `UPDATE "user" SET verified=false`)
+	exec(t, d, `UPDATE users SET verified=false`)
 	if first, err := d.MarkVerified(ctx, "u1"); !first || err != nil {
 		t.Errorf("first verify: %v %v", first, err)
 	}
@@ -132,7 +132,7 @@ func TestReplacePasswordHashAndMarkVerified(t *testing.T) {
 func TestReplacePasswordAndVerify(t *testing.T) {
 	d := testenv.Postgres(t)
 	ctx := context.Background()
-	exec(t, d, `INSERT INTO "user" (id, username, email, password_hash, verified) VALUES ('u1','alice','a@x.test','h1',false), ('u2','bob','b@x.test','h',true)`)
+	exec(t, d, `INSERT INTO users (id, username, email, password_hash, verified) VALUES ('u1','alice','a@x.test','h1',false), ('u2','bob','b@x.test','h',true)`)
 	for i, u := range []string{"u1", "u1", "u2"} {
 		if err := d.InsertLogin(ctx, []byte{byte(i)}, u, "", ""); err != nil {
 			t.Fatal(err)
@@ -144,7 +144,7 @@ func TestReplacePasswordAndVerify(t *testing.T) {
 	if changed || first || err != nil {
 		t.Fatalf("stale = %v %v %v", changed, first, err)
 	}
-	if got := one[string](t, d, `SELECT password_hash || ' ' || verified::text || ' ' || (SELECT count(*) FROM login) FROM "user" WHERE id='u1'`); got != "h1 false 3" {
+	if got := one[string](t, d, `SELECT password_hash || ' ' || verified::text || ' ' || (SELECT count(*) FROM logins) FROM users WHERE id='u1'`); got != "h1 false 3" {
 		t.Errorf("after stale: %s", got)
 	}
 
@@ -152,10 +152,10 @@ func TestReplacePasswordAndVerify(t *testing.T) {
 	if !changed || !first || err != nil {
 		t.Fatalf("replace = %v %v %v", changed, first, err)
 	}
-	if got := one[string](t, d, `SELECT password_hash || ' ' || verified::text FROM "user" WHERE id='u1'`); got != "h2 true" {
+	if got := one[string](t, d, `SELECT password_hash || ' ' || verified::text FROM users WHERE id='u1'`); got != "h2 true" {
 		t.Errorf("after replace: %s", got)
 	}
-	if got := one[string](t, d, `SELECT count(*) FILTER (WHERE "user"='u1') || ' ' || count(*) FILTER (WHERE "user"='u2') FROM login`); got != "0 1" {
+	if got := one[string](t, d, `SELECT count(*) FILTER (WHERE user_id='u1') || ' ' || count(*) FILTER (WHERE user_id='u2') FROM logins`); got != "0 1" {
 		t.Errorf("logins left (u1 u2) = %s", got)
 	}
 
@@ -184,8 +184,8 @@ func TestNoLegacyPasswordColumn(t *testing.T) {
 // usernames were restricted): a login by that name finds both.
 func TestAccountsByLoginEmailIsAnothersUsername(t *testing.T) {
 	d := testenv.Postgres(t)
-	exec(t, d, `ALTER TABLE "user" DROP CONSTRAINT user_username_valid`)
-	exec(t, d, `INSERT INTO "user" (id, username, email, password_hash, verified) VALUES
+	exec(t, d, `ALTER TABLE users DROP CONSTRAINT users_username_valid`)
+	exec(t, d, `INSERT INTO users (id, username, email, password_hash, verified) VALUES
 		('u1','alice','shared@x.test','h1',true), ('u2','Shared@X.test','bob@x.test','h2',true), ('u3','carol','c@x.test','h3',true)`)
 	rs, err := d.AccountsByLogin(context.Background(), "SHARED@x.test")
 	if err != nil {

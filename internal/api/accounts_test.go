@@ -79,7 +79,7 @@ func (e *env) setPassword(id, pass string) {
 	if err != nil {
 		e.t.Fatal(err)
 	}
-	if _, err := e.db.Pool.Exec(context.Background(), `UPDATE "user" SET password_hash=$2 WHERE id=$1`, id, h); err != nil {
+	if _, err := e.db.Pool.Exec(context.Background(), `UPDATE users SET password_hash=$2 WHERE id=$1`, id, h); err != nil {
 		e.t.Fatal(err)
 	}
 }
@@ -110,11 +110,11 @@ func TestShowRoute(t *testing.T) {
 	if c != 200 || strings.TrimSpace(b) != want {
 		t.Errorf("verified: %d %s, want %s", c, b, want)
 	}
-	e.db.Pool.Exec(context.Background(), `UPDATE "user" SET verified=false WHERE id=$1`, id)
+	e.db.Pool.Exec(context.Background(), `UPDATE users SET verified=false WHERE id=$1`, id)
 	if c, b := get(); c != 200 || !strings.Contains(b, `"verified":false`) {
 		t.Errorf("unverified: %d %s", c, b)
 	}
-	e.db.Pool.Exec(context.Background(), `UPDATE "user" SET verified=NULL WHERE id=$1`, id)
+	e.db.Pool.Exec(context.Background(), `UPDATE users SET verified=NULL WHERE id=$1`, id)
 	if c, b := get(); c != 200 || !strings.Contains(b, `"verified":null`) {
 		t.Errorf("null verified: %d %s", c, b)
 	}
@@ -219,7 +219,7 @@ func TestVerifyResendResetRoutes(t *testing.T) {
 	if res.StatusCode != 200 || strings.TrimSpace(body) != `{"status":"ok"}` {
 		t.Errorf("resend: %d %s", res.StatusCode, body)
 	}
-	e.db.Pool.Exec(context.Background(), `UPDATE "user" SET verify_sent = now() - interval '1 hour' WHERE id=$1`, u.ID)
+	e.db.Pool.Exec(context.Background(), `UPDATE users SET verify_sent = now() - interval '1 hour' WHERE id=$1`, u.ID)
 	if res, _ := e.form("POST", "/verify/resend", u.ID, url.Values{}); res.StatusCode != 200 {
 		t.Errorf("resend again: %d", res.StatusCode)
 	}
@@ -256,7 +256,7 @@ func TestVerifyResendResetRoutes(t *testing.T) {
 func (e *env) logins(user string) int {
 	e.t.Helper()
 	var n int
-	if err := e.db.Pool.QueryRow(context.Background(), `SELECT count(*) FROM login WHERE "user"=$1`, user).Scan(&n); err != nil {
+	if err := e.db.Pool.QueryRow(context.Background(), `SELECT count(*) FROM logins WHERE user_id=$1`, user).Scan(&n); err != nil {
 		e.t.Fatal(err)
 	}
 	return n
@@ -299,7 +299,7 @@ func TestLoginCreatesLogin(t *testing.T) {
 	}
 	var n int
 	var ua string
-	if err := e.db.Pool.QueryRow(context.Background(), `SELECT count(*), min(user_agent) FROM login WHERE "user"=$1`, id).Scan(&n, &ua); err != nil {
+	if err := e.db.Pool.QueryRow(context.Background(), `SELECT count(*), min(user_agent) FROM logins WHERE user_id=$1`, id).Scan(&n, &ua); err != nil {
 		t.Fatal(err)
 	}
 	if n != 1 || ua != "TestAgent/1" {
@@ -368,7 +368,7 @@ func TestLogoutRace(t *testing.T) {
 	id := testenv.AddUser(t, e.db, "alice")
 	e.setPassword(id, "hunter2")
 	a := e.logIn("alice", "hunter2", "")
-	if _, err := e.db.Pool.Exec(context.Background(), `UPDATE login SET last_used = now() - interval '2 hours' WHERE "user" = $1`, id); err != nil {
+	if _, err := e.db.Pool.Exec(context.Background(), `UPDATE logins SET last_used = now() - interval '2 hours' WHERE user_id = $1`, id); err != nil {
 		t.Fatal(err)
 	}
 	res := e.withToken("GET", "/preference", a)
@@ -407,7 +407,7 @@ func TestResetConfirmEndsAllLogins(t *testing.T) {
 	a := e.logIn("alice", "hunter2", "")
 	b := e.logIn("alice", "hunter2", "")
 	var hash string
-	if err := e.db.Pool.QueryRow(context.Background(), `SELECT password_hash FROM "user" WHERE id=$1`, id).Scan(&hash); err != nil {
+	if err := e.db.Pool.QueryRow(context.Background(), `SELECT password_hash FROM users WHERE id=$1`, id).Scan(&hash); err != nil {
 		t.Fatal(err)
 	}
 	token := accounts.MakeToken(testSecret, "reset", id, hash, time.Now().Unix()+accounts.ResetLifetime)

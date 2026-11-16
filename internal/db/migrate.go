@@ -37,6 +37,7 @@ const schemaMigrationsDDL = `CREATE TABLE IF NOT EXISTS schema_migrations (
 
 const (
 	defaultMigrateWait = 60 * time.Second
+	defaultLockTimeout = 5 * time.Second
 	firstRetryDelay    = 250 * time.Millisecond
 	maxRetryDelay      = 5 * time.Second
 )
@@ -46,9 +47,13 @@ type MigrateOptions struct {
 	FS fs.FS
 	// Rewrite, if set, is applied to each migration's SQL before it runs.
 	Rewrite func(sql string) string
-	// Wait is how long to keep retrying a database that isn't reachable
-	// yet; 0 means a minute.
+	// Wait is how long to keep retrying, from the start of Migrate: a
+	// database that isn't reachable yet, and migrations that couldn't get
+	// a lock; 0 means a minute.
 	Wait time.Duration
+	// LockTimeout is how long a migration waits for a lock before it is
+	// rolled back and retried; 0 means 5s.
+	LockTimeout time.Duration
 	// Logf gets a line per retry, per applied migration and per recorded
 	// migration this binary doesn't have; nil discards them.
 	Logf func(format string, args ...any)
@@ -71,7 +76,10 @@ var (
 // transaction together with its schema_migrations row, in version order. It
 // waits up to opts.Wait for a database that isn't reachable yet, and holds
 // an advisory lock throughout so concurrent runs apply each migration once.
-// Recorded versions it doesn't have are logged and otherwise ignored.
+// A migration that waits longer than opts.LockTimeout for a lock, or is
+// chosen as a deadlock victim, is rolled back and retried within the same
+// opts.Wait. Recorded versions it doesn't have are logged and otherwise
+// ignored; a recorded version it has under another name is an error.
 func (d *DB) Migrate(ctx context.Context, opts MigrateOptions) error {
 	logf := opts.Logf
 	if logf == nil {
@@ -93,7 +101,12 @@ func (d *DB) Migrate(ctx context.Context, opts MigrateOptions) error {
 	if wait <= 0 {
 		wait = defaultMigrateWait
 	}
-	c, err := d.waitForConn(ctx, wait, logf)
+	lockTimeout := opts.LockTimeout
+	if lockTimeout <= 0 {
+		lockTimeout = defaultLockTimeout
+	}
+	deadline := time.Now().Add(wait)
+	c, err := d.waitForConn(ctx, deadline, logf)
 	if err != nil {
 		return err
 	}
@@ -116,14 +129,14 @@ func (d *DB) Migrate(ctx context.Context, opts MigrateOptions) error {
 	if _, err := c.Exec(ctx, schemaMigrationsDDL); err != nil {
 		return wrap(fmt.Errorf("creating schema_migrations: %w", err))
 	}
-	done := map[int]bool{}
+	done := map[int]string{}
 	rows, err := c.Query(ctx, "SELECT version, name FROM schema_migrations ORDER BY version")
 	if err != nil {
 		return wrap(err)
 	}
-	known := map[int]bool{}
+	known := map[int]string{}
 	for _, m := range ms {
-		known[m.version] = true
+		known[m.version] = m.name
 	}
 	for rows.Next() {
 		var v int
@@ -132,9 +145,12 @@ func (d *DB) Migrate(ctx context.Context, opts MigrateOptions) error {
 			rows.Close()
 			return wrap(err)
 		}
-		done[v] = true
-		if !known[v] {
+		done[v] = name
+		if mine, ok := known[v]; !ok {
 			logf("the database has migration %d (%s), which this lierc-api doesn't; carrying on", v, name)
+		} else if mine != name {
+			rows.Close()
+			return fmt.Errorf("migration %d is recorded as %q but this lierc-api has %q", v, name, mine)
 		}
 	}
 	if err := rows.Err(); err != nil {
@@ -142,7 +158,7 @@ func (d *DB) Migrate(ctx context.Context, opts MigrateOptions) error {
 	}
 
 	for _, m := range ms {
-		if done[m.version] {
+		if _, ok := done[m.version]; ok {
 			continue
 		}
 		sql := m.sql
@@ -151,21 +167,41 @@ func (d *DB) Migrate(ctx context.Context, opts MigrateOptions) error {
 		}
 		logf("applying migration %s", m.file)
 		start := time.Now()
-		if err := apply(ctx, c, m, sql); err != nil {
-			return wrap(fmt.Errorf("migration %s: %w", m.file, err))
+		delay := firstRetryDelay
+		for {
+			err := apply(ctx, c, m, sql, lockTimeout)
+			if err == nil {
+				break
+			}
+			left := time.Until(deadline)
+			if !lockConflict(err) || left <= 0 || ctx.Err() != nil {
+				return wrap(fmt.Errorf("migration %s: %w", m.file, err))
+			}
+			pause := min(delay, left)
+			logf("migration %s couldn't get a lock (%v); retrying in %v", m.file, err, pause.Round(time.Millisecond))
+			select {
+			case <-ctx.Done():
+				return fmt.Errorf("migration %s: %w", m.file, ctx.Err())
+			case <-time.After(pause):
+			}
+			delay = min(delay*2, maxRetryDelay)
 		}
 		logf("applied migration %s in %v", m.file, time.Since(start).Round(time.Millisecond))
 	}
 	return nil
 }
 
-// apply runs one migration and records it, in one transaction.
-func apply(ctx context.Context, c *pgxpool.Conn, m migration, sql string) error {
+// apply runs one migration and records it, in one transaction that waits
+// at most lockTimeout for each lock.
+func apply(ctx context.Context, c *pgxpool.Conn, m migration, sql string, lockTimeout time.Duration) error {
 	tx, err := c.Begin(ctx)
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback(context.Background())
+	if _, err := tx.Exec(ctx, fmt.Sprintf("SET LOCAL lock_timeout = '%dms'", lockTimeout.Milliseconds())); err != nil {
+		return err
+	}
 	// No arguments: the simple protocol, so the file may hold many statements.
 	if _, err := tx.Exec(ctx, sql); err != nil {
 		return err
@@ -237,11 +273,10 @@ func withoutDollarQuotes(s string) string {
 	}
 }
 
-// waitForConn acquires a connection, retrying for up to wait while the
+// waitForConn acquires a connection, retrying until deadline while the
 // database isn't reachable yet. Other errors (a wrong password, a missing
 // database) return at once.
-func (d *DB) waitForConn(ctx context.Context, wait time.Duration, logf func(string, ...any)) (*pgxpool.Conn, error) {
-	deadline := time.Now().Add(wait)
+func (d *DB) waitForConn(ctx context.Context, deadline time.Time, logf func(string, ...any)) (*pgxpool.Conn, error) {
 	delay := firstRetryDelay
 	for {
 		c, err := d.Pool.Acquire(ctx)
@@ -279,4 +314,11 @@ func retryable(err error) bool {
 	}
 	var netErr net.Error
 	return errors.As(err, &netErr)
+}
+
+// lockConflict reports whether err means the migration lost out on a lock:
+// it waited longer than lock_timeout, or was a deadlock's victim.
+func lockConflict(err error) bool {
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr) && (pgErr.Code == "55P03" || pgErr.Code == "40P01") // lock_not_available, deadlock_detected
 }

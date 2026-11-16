@@ -41,7 +41,7 @@ func TestStreamEndsWhenLoginDeleted(t *testing.T) {
 	tok2 := testenv.Login(t, e.db, user)
 	c1 := e.openToken(tok1)
 	c2 := e.openToken(tok2)
-	e.exec(`DELETE FROM login WHERE id = (SELECT min(id) FROM login WHERE "user" = $1)`, user)
+	e.exec(`DELETE FROM logins WHERE id = (SELECT min(id) FROM logins WHERE user_id = $1)`, user)
 	if !c1.ended(2 * time.Second) {
 		t.Fatal("stream of the deleted login stayed open")
 	}
@@ -55,7 +55,7 @@ func TestStreamEndsWhenUserDeleted(t *testing.T) {
 	e.s.LoginCheck = 100 * time.Millisecond
 	user := e.addUser("bob")
 	c := e.openToken(testenv.Login(t, e.db, user))
-	e.exec(`DELETE FROM "user" WHERE id = $1`, user)
+	e.exec(`DELETE FROM users WHERE id = $1`, user)
 	if !c.ended(2 * time.Second) {
 		t.Fatal("stream stayed open after its user was deleted")
 	}
@@ -66,11 +66,11 @@ func TestStreamCheckIsReadOnly(t *testing.T) {
 	e.s.LoginCheck = 50 * time.Millisecond
 	user := e.addUser("carol")
 	c := e.openToken(testenv.Login(t, e.db, user))
-	e.exec(`UPDATE login SET last_used = now() - interval '2 days' WHERE "user" = $1`, user)
+	e.exec(`UPDATE logins SET last_used = now() - interval '2 days' WHERE user_id = $1`, user)
 	var before time.Time
 	row := func() time.Time {
 		var ts time.Time
-		if err := e.db.Pool.QueryRow(context.Background(), `SELECT last_used FROM login WHERE "user" = $1`, user).Scan(&ts); err != nil {
+		if err := e.db.Pool.QueryRow(context.Background(), `SELECT last_used FROM logins WHERE user_id = $1`, user).Scan(&ts); err != nil {
 			t.Fatal(err)
 		}
 		return ts

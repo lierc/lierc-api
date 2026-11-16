@@ -19,7 +19,7 @@ func exec(t *testing.T, d *db.DB, sql string, args ...any) {
 // logRow inserts a log row on conn (owned by user) in channel.
 func logRow(t *testing.T, d *db.DB, id int64, conn, user, channel string, command any, highlight bool) {
 	t.Helper()
-	exec(t, d, `INSERT INTO log (id, connection, "user", channel, command, highlight, time, message) VALUES ($1,$2,$3,$4,$5,$6,now(),'{}')`,
+	exec(t, d, `INSERT INTO logs (id, connection_id, user_id, channel, command, highlight, time, message) VALUES ($1,$2,$3,$4,$5,$6,now(),'{}')`,
 		id, conn, user, channel, command, highlight)
 }
 
@@ -27,7 +27,7 @@ func TestPrefs(t *testing.T) {
 	d := testenv.Postgres(t)
 	ctx := context.Background()
 	a, b, c := testenv.AddUser(t, d, "alice"), testenv.AddUser(t, d, "bob"), testenv.AddUser(t, d, "carol")
-	exec(t, d, `INSERT INTO pref ("user", name, value) VALUES ($1,'theme','"dark"'), ($1,'email','true'), ($2,'theme','"x"')`, a, b)
+	exec(t, d, `INSERT INTO prefs (user_id, name, value) VALUES ($1,'theme','"dark"'), ($1,'email','true'), ($2,'theme','"x"')`, a, b)
 	got, err := d.Prefs(ctx, a)
 	if err != nil {
 		t.Fatal(err)
@@ -47,7 +47,7 @@ func TestPrivates(t *testing.T) {
 	a, b, c := testenv.AddUser(t, d, "alice"), testenv.AddUser(t, d, "bob"), testenv.AddUser(t, d, "carol")
 	testenv.AddConnection(t, d, "c1", a, "{}")
 	testenv.AddConnection(t, d, "c2", b, "{}")
-	exec(t, d, `INSERT INTO private (connection, nick, time) VALUES
+	exec(t, d, `INSERT INTO private_chats (connection_id, nick, time) VALUES
 		('c1','newer','2026-10-30 01:00:00'), ('c1','bob','2026-10-29 12:34:56.789'), ('c2','alice','2026-10-29 00:00:00')`)
 	got, err := d.Privates(ctx, a)
 	want := []db.Private{{Nick: "bob", Connection: "c1", Time: "2026-10-29 12:34:56.789"}, {Nick: "newer", Connection: "c1", Time: "2026-10-30 01:00:00"}}
@@ -64,7 +64,7 @@ func TestSeen(t *testing.T) {
 	ctx := context.Background()
 	a, c := testenv.AddUser(t, d, "alice"), testenv.AddUser(t, d, "carol")
 	testenv.AddConnection(t, d, "c1", a, "{}")
-	exec(t, d, `INSERT INTO seen ("user", connection, channel, message_id) VALUES ($1,'c1','#a',7), ($1,'gone','#a',9)`, a)
+	exec(t, d, `INSERT INTO seen_markers (user_id, connection_id, channel, message_id) VALUES ($1,'c1','#a',7), ($1,'gone','#a',9)`, a)
 	got, err := d.Seen(ctx, a)
 	if err != nil || !reflect.DeepEqual(got, []db.SeenRow{{Connection: "c1", Channel: "#a", MessageID: 7}}) {
 		t.Errorf("alice seen = %v, %v", got, err)

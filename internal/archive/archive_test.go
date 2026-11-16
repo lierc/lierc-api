@@ -54,7 +54,7 @@ func (d *tdb) count(sql string, args ...any) int {
 func (d *tdb) insert(id int, conn, channel string, at time.Time) {
 	d.t.Helper()
 	msg := fmt.Sprintf(`{"Command":"PRIVMSG","Params":[%q,"message %d"],"Prefix":{"Name":"nick"}}`, channel, id)
-	d.exec(`INSERT INTO log (id, connection, "user", channel, command, highlight, time, message)
+	d.exec(`INSERT INTO logs (id, connection_id, user_id, channel, command, highlight, time, message)
 		VALUES ($1, $2, $3, $4, 'PRIVMSG', $5, $6::timestamp, $7)`,
 		id, conn, "u-"+conn, channel, id%3 == 0, at.Format("2006-01-02 15:04:05.999999"), msg)
 }
@@ -62,7 +62,7 @@ func (d *tdb) insert(id int, conn, channel string, at time.Time) {
 func (d *tdb) logIDs(conn, channel string) []int {
 	d.t.Helper()
 	rows, err := d.pool.Query(context.Background(),
-		`SELECT id FROM log WHERE connection = $1 AND channel = $2 ORDER BY id`, conn, channel)
+		`SELECT id FROM logs WHERE connection_id = $1 AND channel = $2 ORDER BY id`, conn, channel)
 	if err != nil {
 		d.t.Fatal(err)
 	}
@@ -86,7 +86,7 @@ type blk struct{ first, last, count int }
 func (d *tdb) archiveBlocks(conn, channel string) []blk {
 	d.t.Helper()
 	rows, err := d.pool.Query(context.Background(),
-		`SELECT first_id, last_id, count FROM log_archive WHERE connection = $1 AND channel = $2 ORDER BY first_id`, conn, channel)
+		`SELECT first_id, last_id, count FROM log_archives WHERE connection_id = $1 AND channel = $2 ORDER BY first_id`, conn, channel)
 	if err != nil {
 		d.t.Fatal(err)
 	}
@@ -246,7 +246,7 @@ func TestMovePerConnection(t *testing.T) {
 	if got := d.logIDs("c1", "#chan"); !reflect.DeepEqual(got, c1[2:]) {
 		t.Fatalf("c1 log ids %v, want %v", got, c1[2:])
 	}
-	if n := d.count(`SELECT count(*) FROM log_archive WHERE connection = 'c2'`); n != 0 {
+	if n := d.count(`SELECT count(*) FROM log_archives WHERE connection_id = 'c2'`); n != 0 {
 		t.Fatalf("c2 has %d archive rows", n)
 	}
 
@@ -271,7 +271,7 @@ func TestMoveElements(t *testing.T) {
 		"2026-09-01 23:59:59.999999",
 	}
 	for i, ts := range times {
-		d.exec(`INSERT INTO log (id, connection, "user", channel, command, highlight, time, message)
+		d.exec(`INSERT INTO logs (id, connection_id, user_id, channel, command, highlight, time, message)
 			VALUES ($1, 'c1', 'u1', '#chan', 'PRIVMSG', $2, $3::timestamp, $4)`,
 			i+1, i%2 == 0, ts,
 			fmt.Sprintf(`{"Command":"PRIVMSG","Params":["#chan","héllo \"%d\" ☃"],"Prefix":{"Name":"nick","Self":true},"Tags":{"msgid":"m%d"}}`, i, i))
@@ -280,7 +280,7 @@ func TestMoveElements(t *testing.T) {
 		d.insert(i, "c1", "#chan", fresh)
 	}
 	// Snapshot the rows before they move.
-	d.exec(`CREATE TABLE before AS SELECT * FROM log WHERE id <= 4`)
+	d.exec(`CREATE TABLE before AS SELECT * FROM logs WHERE id <= 4`)
 
 	o := opts()
 	o.Block = 4
@@ -292,28 +292,28 @@ func TestMoveElements(t *testing.T) {
 		t.Fatalf("block %+v", b)
 	}
 
-	if n := d.count(`SELECT count(*) FROM log_archive`); n != 1 {
+	if n := d.count(`SELECT count(*) FROM log_archives`); n != 1 {
 		t.Fatalf("%d archive rows", n)
 	}
-	if n := d.count(`SELECT json_array_length(messages) FROM log_archive`); n != 4 {
+	if n := d.count(`SELECT json_array_length(messages) FROM log_archives`); n != 4 {
 		t.Fatalf("%d elements", n)
 	}
 	// Keys exactly id,time,message,highlight on every element.
-	if n := d.count(`SELECT count(*) FROM log_archive a, json_array_elements(a.messages) e
+	if n := d.count(`SELECT count(*) FROM log_archives a, json_array_elements(a.messages) e
 		WHERE (SELECT array_agg(k ORDER BY k) FROM json_object_keys(e) k) <> ARRAY['highlight','id','message','time']`); n != 0 {
 		t.Fatalf("%d elements with other keys", n)
 	}
-	if n := d.count(`SELECT count(*) FROM log_archive a, json_array_elements(a.messages) e
+	if n := d.count(`SELECT count(*) FROM log_archives a, json_array_elements(a.messages) e
 		WHERE json_typeof(e->'time') <> 'number' OR json_typeof(e->'id') <> 'number' OR json_typeof(e->'highlight') <> 'boolean'`); n != 0 {
 		t.Fatalf("%d elements with wrong types", n)
 	}
 	// Elements in id order.
-	if n := d.count(`SELECT count(*) FROM log_archive a, json_array_elements(a.messages) WITH ORDINALITY e(v, n)
+	if n := d.count(`SELECT count(*) FROM log_archives a, json_array_elements(a.messages) WITH ORDINALITY e(v, n)
 		WHERE (v->>'id')::int <> n`); n != 0 {
 		t.Fatalf("%d elements out of order", n)
 	}
 	// Each element matches its original row.
-	if n := d.count(`SELECT count(*) FROM log_archive a, json_array_elements(a.messages) e
+	if n := d.count(`SELECT count(*) FROM log_archives a, json_array_elements(a.messages) e
 		JOIN before b ON b.id = (e->>'id')::int
 		WHERE to_timestamp((e->>'time')::bigint) AT TIME ZONE 'UTC' = date_trunc('second', b.time)
 		  AND (e->'message')::jsonb = b.message
@@ -321,13 +321,13 @@ func TestMoveElements(t *testing.T) {
 		t.Fatalf("%d of 4 elements match their rows", n)
 	}
 	// The same must hold whatever the session time zone.
-	if n := d.count(`SELECT count(*) FROM log_archive a, json_array_elements(a.messages) e
+	if n := d.count(`SELECT count(*) FROM log_archives a, json_array_elements(a.messages) e
 		JOIN before b ON b.id = (e->>'id')::int
 		WHERE (e->>'time')::bigint = floor(extract(epoch from b.time))::bigint`); n != 4 {
 		t.Fatalf("%d of 4 element times equal the epoch seconds", n)
 	}
-	if n := d.count(`SELECT count(*) FROM log_archive a
-		WHERE a."user" = 'u1'
+	if n := d.count(`SELECT count(*) FROM log_archives a
+		WHERE a.user_id = 'u1'
 		  AND a.min_time = (SELECT min(time) FROM before)
 		  AND a.max_time = (SELECT max(time) FROM before)
 		  AND a.first_id = 1 AND a.last_id = 4 AND a.count = 4`); n != 1 {
@@ -428,7 +428,7 @@ func TestDropStatus(t *testing.T) {
 	if ids := d.logIDs("c1", "status"); !reflect.DeepEqual(ids, []int{8, 9, 10}) {
 		t.Fatalf("log ids %v", ids)
 	}
-	if n := d.count(`SELECT count(*) FROM log_archive`); n != 0 {
+	if n := d.count(`SELECT count(*) FROM log_archives`); n != 0 {
 		t.Fatalf("%d archive rows", n)
 	}
 }
@@ -495,7 +495,7 @@ func TestMoveConcurrentInsert(t *testing.T) {
 	var all []int
 	all = append(all, d.logIDs("c1", "#chan")...)
 	rows, err := d.pool.Query(context.Background(),
-		`SELECT (e->>'id')::int FROM log_archive a, json_array_elements(a.messages) e`)
+		`SELECT (e->>'id')::int FROM log_archives a, json_array_elements(a.messages) e`)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -547,10 +547,10 @@ func TestStarNamesAreStatus(t *testing.T) {
 			}
 		}
 	}
-	if n := d.count(`SELECT count(*) FROM log_archive`); n != 0 {
+	if n := d.count(`SELECT count(*) FROM log_archives`); n != 0 {
 		t.Fatalf("%d archive rows", n)
 	}
-	if n := d.count(`SELECT count(*) FROM log`); n != 6 {
+	if n := d.count(`SELECT count(*) FROM logs`); n != 6 {
 		t.Fatalf("%d log rows left, want 3 per name", n)
 	}
 }

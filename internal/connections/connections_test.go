@@ -95,7 +95,7 @@ func TestCreate(t *testing.T) {
 		t.Errorf("row = %v %v", cfg, ok)
 	}
 	var created bool
-	h.d.Pool.QueryRow(context.Background(), `SELECT created IS NOT NULL FROM connection WHERE id=$1`, id).Scan(&created)
+	h.d.Pool.QueryRow(context.Background(), `SELECT created IS NOT NULL FROM connections WHERE id=$1`, id).Scan(&created)
 	if !created || fmt.Sprint(h.said) != "[create "+id+"]" || fmt.Sprint(h.calls()) != "[POST /"+id+"/create]" || h.notes != 1 {
 		t.Errorf("created %v said %v calls %v notes %d", created, h.said, h.calls(), h.notes)
 	}
@@ -449,7 +449,7 @@ func TestCreateDefault(t *testing.T) {
 		t.Errorf("row = %v %v", row, ok)
 	}
 	var created bool
-	h.d.Pool.QueryRow(context.Background(), `SELECT created IS NOT NULL AND updated IS NOT NULL FROM connection WHERE id=$1`, id).Scan(&created)
+	h.d.Pool.QueryRow(context.Background(), `SELECT created IS NOT NULL AND updated IS NOT NULL FROM connections WHERE id=$1`, id).Scan(&created)
 	if !created || len(h.said) != 0 || fmt.Sprint(h.calls()) != "[POST /"+id+"/create]" || h.notes != 1 {
 		t.Errorf("created %v said %v calls %v notes %d", created, h.said, h.calls(), h.notes)
 	}

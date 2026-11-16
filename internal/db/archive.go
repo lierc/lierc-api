@@ -26,16 +26,16 @@ type ArchivedBlock struct {
 // (oldest first, at most $5).
 const below = `
 keep_id AS (
-	SELECT id FROM log WHERE connection = $1 AND channel = $2
+	SELECT id FROM logs WHERE connection_id = $1 AND channel = $2
 	ORDER BY id DESC OFFSET $3::int - 1 LIMIT 1
 ),
 age_id AS (
-	SELECT id FROM log WHERE connection = $1 AND channel = $2 AND time < $4::timestamp
+	SELECT id FROM logs WHERE connection_id = $1 AND channel = $2 AND time < $4::timestamp
 	ORDER BY id DESC LIMIT 1
 ),
 below AS (
-	SELECT id FROM log
-	WHERE connection = $1 AND channel = $2
+	SELECT id FROM logs
+	WHERE connection_id = $1 AND channel = $2
 	  AND id < (SELECT id FROM keep_id) AND id <= (SELECT id FROM age_id)
 	ORDER BY id LIMIT $5::int
 )`
@@ -44,29 +44,29 @@ below AS (
 // loose index scan over log (connection, channel, id DESC).
 const pairsAll = `
 pairs AS (
-	(SELECT connection, channel FROM log ORDER BY connection, channel LIMIT 1)
+	(SELECT connection_id, channel FROM logs ORDER BY connection_id, channel LIMIT 1)
 	UNION ALL
-	SELECT n.connection, n.channel FROM pairs p
+	SELECT n.connection_id, n.channel FROM pairs p
 	CROSS JOIN LATERAL (
-		SELECT connection, channel FROM log
-		WHERE (connection, channel) > (p.connection, p.channel)
-		ORDER BY connection, channel LIMIT 1
+		SELECT connection_id, channel FROM logs
+		WHERE (connection_id, channel) > (p.connection_id, p.channel)
+		ORDER BY connection_id, channel LIMIT 1
 	) n
 )`
 
 // pairsSome walks the channels of the connections in $4 the same way.
 const pairsSome = `
 pairs AS (
-	SELECT f.connection, f.channel FROM unnest($4::text[]) c(id)
+	SELECT f.connection_id, f.channel FROM unnest($4::text[]) c(id)
 	CROSS JOIN LATERAL (
-		SELECT connection, channel FROM log WHERE connection = c.id
+		SELECT connection_id, channel FROM logs WHERE connection_id = c.id
 		ORDER BY channel LIMIT 1
 	) f
 	UNION ALL
-	SELECT n.connection, n.channel FROM pairs p
+	SELECT n.connection_id, n.channel FROM pairs p
 	CROSS JOIN LATERAL (
-		SELECT connection, channel FROM log
-		WHERE connection = p.connection AND channel > p.channel
+		SELECT connection_id, channel FROM logs
+		WHERE connection_id = p.connection_id AND channel > p.channel
 		ORDER BY channel LIMIT 1
 	) n
 )`
@@ -76,25 +76,25 @@ pairs AS (
 // them would read every archivable row, which on a large backlog takes
 // minutes; a block is all a caller needs to know.
 const candidates = `
-SELECT p.connection, p.channel, m.n
+SELECT p.connection_id, p.channel, m.n
 FROM pairs p
 LEFT JOIN LATERAL (
-	SELECT id FROM log WHERE connection = p.connection AND channel = p.channel
+	SELECT id FROM logs WHERE connection_id = p.connection_id AND channel = p.channel
 	ORDER BY id DESC OFFSET $1::int - 1 LIMIT 1
 ) k ON true
 LEFT JOIN LATERAL (
-	SELECT id FROM log WHERE connection = p.connection AND channel = p.channel AND time < $2::timestamp
+	SELECT id FROM logs WHERE connection_id = p.connection_id AND channel = p.channel AND time < $2::timestamp
 	ORDER BY id DESC LIMIT 1
 ) a ON true
 CROSS JOIN LATERAL (
 	SELECT count(*)::int AS n FROM (
-		SELECT 1 FROM log
-		WHERE connection = p.connection AND channel = p.channel AND id < k.id AND id <= a.id
+		SELECT 1 FROM logs
+		WHERE connection_id = p.connection_id AND channel = p.channel AND id < k.id AND id <= a.id
 		LIMIT $3::int
 	) b
 ) m
 WHERE m.n > 0
-ORDER BY p.connection, p.channel`
+ORDER BY p.connection_id, p.channel`
 
 // ArchiveCandidates counts, for each (connection, channel) of log (of conns,
 // when not empty), the messages below the cutoff, up to block: all but the
@@ -123,18 +123,18 @@ func (d *DB) ArchiveCandidates(ctx context.Context, keep int, cutoff time.Time, 
 }
 
 // ArchiveBlock moves the oldest block archivable messages of a channel into
-// one log_archive row, in one statement. It returns false, changing nothing,
+// one log_archives row, in one statement. It returns false, changing nothing,
 // when fewer than block messages are archivable.
 func (d *DB) ArchiveBlock(ctx context.Context, conn, channel string, keep int, cutoff time.Time, block int) (ArchivedBlock, bool, error) {
 	var b ArchivedBlock
 	err := d.Pool.QueryRow(ctx, `WITH `+below+`,
 moved AS (
-	DELETE FROM log
+	DELETE FROM logs
 	WHERE id IN (SELECT id FROM below) AND (SELECT count(*) FROM below) = $5::int
-	RETURNING id, "user", time, message, highlight
+	RETURNING id, user_id, time, message, highlight
 )
-INSERT INTO log_archive (connection, "user", channel, first_id, last_id, min_time, max_time, count, messages)
-SELECT $1, min("user"), $2, min(id), max(id), min(time), max(time), count(*),
+INSERT INTO log_archives (connection_id, user_id, channel, first_id, last_id, min_time, max_time, count, messages)
+SELECT $1, min(user_id), $2, min(id), max(id), min(time), max(time), count(*),
 	json_agg(json_build_object(
 		'id', id,
 		'time', floor(extract(epoch from time))::bigint,
@@ -162,7 +162,7 @@ func (d *DB) DropStatusBlock(ctx context.Context, conn, channel string, keep int
 	var b ArchivedBlock
 	err := d.Pool.QueryRow(ctx, `WITH `+below+`,
 dropped AS (
-	DELETE FROM log WHERE id IN (SELECT id FROM below) RETURNING id
+	DELETE FROM logs WHERE id IN (SELECT id FROM below) RETURNING id
 )
 SELECT coalesce(min(id), 0), coalesce(max(id), 0), count(*)::int FROM dropped`,
 		conn, channel, keep, cutoff, block,

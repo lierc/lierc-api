@@ -17,7 +17,7 @@ import (
 func msgRow(t *testing.T, d *db.DB, id int64, conn, user, channel, text string, self, highlight bool, when string) {
 	t.Helper()
 	msg := fmt.Sprintf(`{"Command":"PRIVMSG","Params":[%q,%q],"Prefix":{"Name":"bob"}}`, channel, text)
-	exec(t, d, `INSERT INTO log (id, connection, "user", channel, command, self, highlight, time, message) VALUES ($1,$2,$3,$4,'PRIVMSG',$5,$6,$7::timestamp,$8)`,
+	exec(t, d, `INSERT INTO logs (id, connection_id, user_id, channel, command, self, highlight, time, message) VALUES ($1,$2,$3,$4,'PRIVMSG',$5,$6,$7::timestamp,$8)`,
 		id, conn, user, channel, self, highlight, when, msg)
 }
 
@@ -105,7 +105,7 @@ func TestChannelLogsAndBefore(t *testing.T) {
 		}
 	}
 	var left int
-	d.Pool.QueryRow(ctx, `SELECT count(*) FROM log`).Scan(&left)
+	d.Pool.QueryRow(ctx, `SELECT count(*) FROM logs`).Scan(&left)
 	if left != 2 {
 		t.Fatalf("%d rows left in log, want 2 (archive didn't run)", left)
 	}
@@ -128,7 +128,7 @@ func TestChannelLast(t *testing.T) {
 	ctx := context.Background()
 	a := testenv.AddUser(t, d, "alice")
 	testenv.AddConnection(t, d, "c1", a, "{}")
-	exec(t, d, `INSERT INTO log (connection, "user", channel, command, time, message) VALUES ('c1',$1,'#a','PRIVMSG',now(),'{"Params":["#a","foo and bar"]}')`, a)
+	exec(t, d, `INSERT INTO logs (connection_id, user_id, channel, command, time, message) VALUES ('c1',$1,'#a','PRIVMSG',now(),'{"Params":["#a","foo and bar"]}')`, a)
 	if got, err := d.ChannelLast(ctx, "c1", "#a", nil, 5); err != nil || got == nil || len(got) != 0 {
 		t.Errorf("nil query = %v, %v", got, err)
 	}

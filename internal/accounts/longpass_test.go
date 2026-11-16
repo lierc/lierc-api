@@ -12,7 +12,7 @@ func TestRegisterLongPassword(t *testing.T) {
 	h := setup(t)
 	wantError(t, nil2(h.s.Register(ctx, "long", "long@example.com", strings.Repeat("a", 73))), 400, msgPassLong)
 	var n int
-	h.d.Pool.QueryRow(ctx, `SELECT count(*) FROM "user" WHERE username='long'`).Scan(&n)
+	h.d.Pool.QueryRow(ctx, `SELECT count(*) FROM users WHERE username='long'`).Scan(&n)
 	if n != 0 {
 		t.Errorf("refused registration left %d rows", n)
 	}
@@ -25,12 +25,12 @@ func TestResetConfirmLongPassword(t *testing.T) {
 	h := setup(t)
 	id := h.addUser("forgot", "forgot@example.com", "old pw", ptr(true))
 	var hash string
-	h.d.Pool.QueryRow(ctx, `SELECT password_hash FROM "user" WHERE id=$1`, id).Scan(&hash)
+	h.d.Pool.QueryRow(ctx, `SELECT password_hash FROM users WHERE id=$1`, id).Scan(&hash)
 	token := MakeToken(secret, "reset", id, hash, time.Now().Unix()+ResetLifetime)
 
 	wantError(t, nil2(h.s.ResetConfirm(ctx, token, strings.Repeat("é", 37))), 400, msgPassLong)
 	var after string
-	h.d.Pool.QueryRow(ctx, `SELECT password_hash FROM "user" WHERE id=$1`, id).Scan(&after)
+	h.d.Pool.QueryRow(ctx, `SELECT password_hash FROM users WHERE id=$1`, id).Scan(&after)
 	if after != hash {
 		t.Error("refused reset changed the password")
 	}
@@ -60,7 +60,7 @@ func TestLoginRehashLongPassword(t *testing.T) {
 		t.Fatalf("Login = %+v, %v", u, err)
 	}
 	var hash string
-	h.d.Pool.QueryRow(ctx, `SELECT password_hash FROM "user" WHERE id=$1`, id).Scan(&hash)
+	h.d.Pool.QueryRow(ctx, `SELECT password_hash FROM users WHERE id=$1`, id).Scan(&hash)
 	if c, err := bcrypt.Cost([]byte(hash)); err != nil || c != 12 {
 		t.Errorf("after login: cost %d, %v", c, err)
 	}

@@ -27,15 +27,15 @@ func readSQL(t *testing.T, name string) string {
 
 // The queries Channel.pm runs on log alone, before the archive existed.
 const (
-	perlLogs = `SELECT id, message, connection, highlight FROM log
-      WHERE channel=$1 AND connection=$2
+	perlLogs = `SELECT id, message, connection_id, highlight FROM logs
+      WHERE channel=$1 AND connection_id=$2
       ORDER BY id DESC LIMIT $3`
-	perlLogsID = `SELECT id, message, connection, highlight FROM log
-      WHERE channel=$1 AND connection=$2 AND id < $3
+	perlLogsID = `SELECT id, message, connection_id, highlight FROM logs
+      WHERE channel=$1 AND connection_id=$2 AND id < $3
       ORDER BY id DESC LIMIT $4`
-	perlDate = `SELECT id, message, connection, highlight
-        FROM log
-        WHERE connection=$1
+	perlDate = `SELECT id, message, connection_id, highlight
+        FROM logs
+        WHERE connection_id=$1
           AND channel=$2
           AND time >= date($3)
           AND time < (date($4) + '1 day'::interval)`
@@ -133,7 +133,7 @@ func readFixture(d *tdb) []int {
 		if err != nil {
 			d.t.Fatal(err)
 		}
-		d.exec(`INSERT INTO log (id, connection, "user", channel, command, highlight, self, time, message)
+		d.exec(`INSERT INTO logs (id, connection_id, user_id, channel, command, highlight, self, time, message)
 			VALUES ($1, $2::text, 'u-' || $2::text, $3, 'PRIVMSG', $4, $5, $6::timestamp, $7)`,
 			id, m.conn, m.channel, id%3 == 0, i%5 == 0, m.at.Format("2006-01-02 15:04:05.999999"), string(msg))
 		idList = append(idList, id)
@@ -322,11 +322,11 @@ func TestReadsSameAfterArchiving(t *testing.T) {
 		}
 	}
 	for _, q := range []string{"run", "cat", "late & run", "héllo"} {
-		if d.count(`SELECT count(*) FROM log WHERE to_tsvector('english', message->'Params'->1) @@ to_tsquery($1)`, q) == 0 {
+		if d.count(`SELECT count(*) FROM logs WHERE to_tsvector('english', message->'Params'->1) @@ to_tsquery($1)`, q) == 0 {
 			t.Fatalf("no message matches %q", q)
 		}
 	}
-	if d.count(`SELECT count(*) FROM log WHERE message->'Params'->>1 ILIKE 'running%' AND to_tsvector('english', message->'Params'->1) @@ to_tsquery('run')`) == 0 {
+	if d.count(`SELECT count(*) FROM logs WHERE message->'Params'->>1 ILIKE 'running%' AND to_tsvector('english', message->'Params'->1) @@ to_tsquery('run')`) == 0 {
 		t.Fatal("run does not match running")
 	}
 
@@ -339,11 +339,11 @@ func TestReadsSameAfterArchiving(t *testing.T) {
 	if got := d.archiveBlocks("c1", "#b"); len(got) != 4 {
 		t.Fatalf("c1 #b blocks %v", got)
 	}
-	if n := d.count(`SELECT count(*) FROM log WHERE connection = 'c1'`); n != 7 {
+	if n := d.count(`SELECT count(*) FROM logs WHERE connection_id = 'c1'`); n != 7 {
 		t.Fatalf("%d c1 rows left in log", n)
 	}
 	// Blocks that span midnight, so day ranges end inside them.
-	if n := d.count(`SELECT count(*) FROM log_archive WHERE min_time::date <> max_time::date`); n < 2 {
+	if n := d.count(`SELECT count(*) FROM log_archives WHERE min_time::date <> max_time::date`); n < 2 {
 		t.Fatalf("%d blocks span a midnight", n)
 	}
 

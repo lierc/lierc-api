@@ -108,8 +108,8 @@ func TestReconnectUsage(t *testing.T) {
 
 func seedRevive(h *harness) {
 	recent, old := h.user("recent"), h.user("old")
-	h.exec(`UPDATE "user" SET last_login = now() - interval '1 hour' WHERE id = $1`, recent)
-	h.exec(`UPDATE "user" SET last_login = now() - interval '3 days' WHERE id = $1`, old)
+	h.exec(`UPDATE users SET last_login = now() - interval '1 hour' WHERE id = $1`, recent)
+	h.exec(`UPDATE users SET last_login = now() - interval '3 days' WHERE id = $1`, old)
 	insertConn(h, "running", recent, cfg)
 	insertConn(h, "stopped", recent, cfg)
 	insertConn(h, "stale", old, cfg)
@@ -184,8 +184,8 @@ func TestReviveInstance(t *testing.T) {
 	for _, id := range []string{"a", "b", "n"} {
 		m.conn(id, u, cfg)
 	}
-	m.exec(`UPDATE connection SET liercd = 'next' WHERE id = 'n'`)
-	m.exec(`UPDATE connection SET liercd = '' WHERE id = 'b'`)
+	m.exec(`UPDATE connections SET liercd = 'next' WHERE id = 'n'`)
+	m.exec(`UPDATE connections SET liercd = '' WHERE id = 'b'`)
 	if err := m.run("revive", "--instance", "next"); err != nil {
 		t.Fatal(err)
 	}

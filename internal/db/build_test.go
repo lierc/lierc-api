@@ -9,11 +9,11 @@ import (
 )
 
 func TestBuilderUsesDollarPlaceholders(t *testing.T) {
-	sql, args, err := psql.Select("id").From(`"user"`).Where(sq.Eq{"id": "a"}).Where("x < ?", 2).ToSql()
+	sql, args, err := psql.Select("id").From("users").Where(sq.Eq{"id": "a"}).Where("x < ?", 2).ToSql()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if want := `SELECT id FROM "user" WHERE id = $1 AND x < $2`; sql != want {
+	if want := `SELECT id FROM users WHERE id = $1 AND x < $2`; sql != want {
 		t.Errorf("sql = %q, want %q", sql, want)
 	}
 	if len(args) != 2 {
@@ -43,13 +43,13 @@ func TestBuildErrorIsWrapped(t *testing.T) {
 
 // A subquery built with sub is numbered with the query it's in.
 func TestSubqueryPlaceholders(t *testing.T) {
-	inner := sub.Select("id").From("connection").Where(sq.Eq{"owner": "u"}).Suffix("LIMIT ?", 5)
-	sql, args, err := psql.Select("count(*)").From("log").
-		Where(sq.Or{sq.Eq{"owner": "u"}, sq.Expr("connection IN (?)", inner)}).ToSql()
+	inner := sub.Select("id").From("connections").Where(sq.Eq{"owner": "u"}).Suffix("LIMIT ?", 5)
+	sql, args, err := psql.Select("count(*)").From("logs").
+		Where(sq.Or{sq.Eq{"owner": "u"}, sq.Expr("connection_id IN (?)", inner)}).ToSql()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if want := `SELECT count(*) FROM log WHERE (owner = $1 OR connection IN (SELECT id FROM connection WHERE owner = $2 LIMIT $3))`; sql != want {
+	if want := `SELECT count(*) FROM logs WHERE (owner = $1 OR connection_id IN (SELECT id FROM connections WHERE owner = $2 LIMIT $3))`; sql != want {
 		t.Errorf("sql = %q, want %q", sql, want)
 	}
 	if len(args) != 3 {

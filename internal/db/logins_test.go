@@ -15,7 +15,7 @@ func TestLoginInsertLookupTouch(t *testing.T) {
 	if err := d.InsertLogin(ctx, h, a, "agent", ""); err != nil {
 		t.Fatal(err)
 	}
-	if got := one[bool](t, d, `SELECT ip IS NULL FROM login`); !got {
+	if got := one[bool](t, d, `SELECT ip IS NULL FROM logins`); !got {
 		t.Error("empty ip not stored as NULL")
 	}
 	l, ok, err := d.LoginByHash(ctx, h)
@@ -25,11 +25,11 @@ func TestLoginInsertLookupTouch(t *testing.T) {
 	if _, ok, err := d.LoginByHash(ctx, []byte("other")); ok || err != nil {
 		t.Errorf("unknown hash: %v %v", ok, err)
 	}
-	exec(t, d, `UPDATE "user" SET verified=false`)
+	exec(t, d, `UPDATE users SET verified=false`)
 	if l, _, _ := d.LoginByHash(ctx, h); !l.Unverified {
 		t.Error("unverified user not shown")
 	}
-	exec(t, d, `UPDATE login SET last_used='2000-01-01'`)
+	exec(t, d, `UPDATE logins SET last_used='2000-01-01'`)
 	if _, ok, _ := d.LoginByHash(ctx, h); ok {
 		t.Error("expired login found")
 	}
@@ -68,7 +68,7 @@ func TestLoginDeleteListPrune(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	exec(t, d, `UPDATE login SET last_used='2000-01-01' WHERE "user"=$1`, b)
+	exec(t, d, `UPDATE logins SET last_used='2000-01-01' WHERE user_id=$1`, b)
 	if n, err := d.PruneLogins(ctx); n != 1 || err != nil {
 		t.Errorf("pruned %d %v", n, err)
 	}
@@ -89,11 +89,11 @@ func TestLoginsOrderExpiryAndDeleteByHash(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	exec(t, d, `UPDATE login SET last_used = now() - interval '1 hour' WHERE token_hash = '\x01'`)
-	exec(t, d, `UPDATE login SET last_used = now() - interval '10 minutes' WHERE token_hash IN ('\x02', '\x03')`)
-	exec(t, d, `UPDATE login SET last_used = now() - interval '8 days' WHERE token_hash = '\x04'`)
+	exec(t, d, `UPDATE logins SET last_used = now() - interval '1 hour' WHERE token_hash = '\x01'`)
+	exec(t, d, `UPDATE logins SET last_used = now() - interval '10 minutes' WHERE token_hash IN ('\x02', '\x03')`)
+	exec(t, d, `UPDATE logins SET last_used = now() - interval '8 days' WHERE token_hash = '\x04'`)
 	idOf := func(h byte) int64 {
-		return one[int64](t, d, `SELECT id FROM login WHERE token_hash = $1`, []byte{h})
+		return one[int64](t, d, `SELECT id FROM logins WHERE token_hash = $1`, []byte{h})
 	}
 	infos, err := d.Logins(ctx, a)
 	if err != nil {

@@ -48,7 +48,7 @@ func TestSetPreference(t *testing.T) {
 	e := setup(t)
 	a := testenv.AddUser(t, e.db, "alice")
 	e.sendWant("POST", "/preference/theme", a, `"dark"`, 204, "")
-	if v := e.row(`SELECT value FROM pref WHERE "user"=$1 AND name='theme'`, a); v != `"dark"` {
+	if v := e.row(`SELECT value FROM prefs WHERE user_id=$1 AND name='theme'`, a); v != `"dark"` {
 		t.Errorf("theme = %s", v)
 	}
 	e.sendWant("POST", "/preference/"+strings.Repeat("a", 129), a, "1", 400, `{"status":"error","error":"preference name is too long"}`)
@@ -63,7 +63,7 @@ func TestSetSeenRoute(t *testing.T) {
 	a, b := testenv.AddUser(t, e.db, "alice"), testenv.AddUser(t, e.db, "bob")
 	testenv.AddConnection(t, e.db, "c1", a, "{}")
 	e.sendWant("POST", "/connection/c1/channel/%23Foo/seen", a, " 42 ", 204, "")
-	if v := e.row(`SELECT channel || ' ' || message_id FROM seen WHERE "user"=$1`, a); v != "#foo 42" {
+	if v := e.row(`SELECT channel || ' ' || message_id FROM seen_markers WHERE user_id=$1`, a); v != "#foo 42" {
 		t.Errorf("seen = %s", v)
 	}
 	e.sendWant("POST", "/connection/c1/channel/%23Foo/seen", a, "-1", 204, "")
@@ -79,11 +79,11 @@ func TestPrivateRoutes(t *testing.T) {
 	a := testenv.AddUser(t, e.db, "alice")
 	testenv.AddConnection(t, e.db, "c1", a, "{}")
 	e.sendWant("POST", "/connection/c1/nick/%C3%A9Bob", a, "", 204, "")
-	if v := e.row(`SELECT nick FROM private WHERE connection='c1'`); v != "éBob" {
+	if v := e.row(`SELECT nick FROM private_chats WHERE connection_id='c1'`); v != "éBob" {
 		t.Errorf("nick = %q", v)
 	}
 	e.sendWant("DELETE", "/connection/c1/nick/%C3%A9Bob", a, "", 200, `{"status":"ok"}`)
-	if v := e.row(`SELECT count(*)::text FROM private`); v != "0" {
+	if v := e.row(`SELECT count(*)::text FROM private_chats`); v != "0" {
 		t.Errorf("%s rows left", v)
 	}
 	e.sendWant("DELETE", "/connection/c1/nick/%C3%A9Bob", a, "", 200, `{"status":"ok"}`)
@@ -97,7 +97,7 @@ func TestWritesCrossSite(t *testing.T) {
 	if c, _ := e.send("POST", "/preference/theme", a, `"x"`, "Sec-Fetch-Site", "cross-site"); c != 403 {
 		t.Errorf("cross-site: %d, want 403", c)
 	}
-	if v := e.row(`SELECT count(*)::text FROM pref`); v != "0" {
+	if v := e.row(`SELECT count(*)::text FROM prefs`); v != "0" {
 		t.Errorf("%s prefs written", v)
 	}
 }

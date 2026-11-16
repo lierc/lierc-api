@@ -70,7 +70,7 @@ func TestListLogins(t *testing.T) {
 		t.Fatal(err)
 	}
 	testenv.Login(t, e.db, bob)
-	e.exec(`UPDATE login SET last_used = now() - interval '30 minutes' WHERE id = $1`, e.loginID(a))
+	e.exec(`UPDATE logins SET last_used = now() - interval '30 minutes' WHERE id = $1`, e.loginID(a))
 	list := e.listLogins(a)
 	if len(list) != 2 {
 		t.Fatalf("%d logins, want 2", len(list))
@@ -136,7 +136,7 @@ func TestDeleteLoginBadID(t *testing.T) {
 	alice := testenv.AddUser(t, e.db, "alice")
 	a, gone := testenv.Login(t, e.db, alice), testenv.Login(t, e.db, alice)
 	goneID := strconv.FormatInt(e.loginID(gone), 10)
-	e.exec(`DELETE FROM login WHERE id = $1`, goneID)
+	e.exec(`DELETE FROM logins WHERE id = $1`, goneID)
 	for _, id := range []string{"abc", "999999", goneID, "-1", "1.5"} {
 		if code, body := e.tokenReq("DELETE", "/login/"+id, a); code != 404 || body != noSuchLogin {
 			t.Errorf("delete %s: %d %s", id, code, body)
@@ -165,7 +165,7 @@ func TestLoginsNeedLogin(t *testing.T) {
 		}
 	}
 	u := testenv.AddUser(t, e.db, "newbie")
-	e.exec(`UPDATE "user" SET verified = false WHERE id = $1`, u)
+	e.exec(`UPDATE users SET verified = false WHERE id = $1`, u)
 	tok := testenv.Login(t, e.db, u)
 	for _, rq := range [][2]string{{"GET", "/logins"}, {"DELETE", "/login/1"}} {
 		if code, _ := e.tokenReq(rq[0], rq[1], tok); code != 403 {

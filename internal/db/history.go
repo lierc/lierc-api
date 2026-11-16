@@ -35,8 +35,8 @@ const LogMax = 251
 // LogSince is user's messages with ids above after, oldest first, at most
 // LogMax of them.
 func (d *DB) LogSince(ctx context.Context, user string, after int32) ([]UserMessage, error) {
-	newest := userMessages(sub).Join("connection AS c ON c.id = l.connection").
-		Where(sq.Eq{`c."user"`: user}).Where(sq.Gt{"l.id": after}).
+	newest := userMessages(sub).Join("connections AS c ON c.id = l.connection_id").
+		Where(sq.Eq{"c.user_id": user}).Where(sq.Gt{"l.id": after}).
 		OrderBy("l.id DESC").Limit(LogMax)
 	rows, err := query(ctx, d.Pool, psql.Select("*").FromSelect(newest, "newest").OrderBy("id ASC"))
 	if err != nil {
@@ -48,7 +48,7 @@ func (d *DB) LogSince(ctx context.Context, user string, after int32) ([]UserMess
 // Highlights is user's highlighted messages, newest first, below before
 // when it is set.
 func (d *DB) Highlights(ctx context.Context, user string, before *int32, limit int) ([]UserMessage, error) {
-	q := userMessages(psql).Where(sq.Eq{`l."user"`: user, "l.highlight": true})
+	q := userMessages(psql).Where(sq.Eq{"l.user_id": user, "l.highlight": true})
 	if before != nil {
 		q = q.Where(sq.Lt{"l.id": *before})
 	}
@@ -60,7 +60,7 @@ func (d *DB) Highlights(ctx context.Context, user string, before *int32, limit i
 }
 
 // ChannelLogs is the newest limit messages of channel on conn, from log
-// and log_archive, newest first.
+// and log_archives, newest first.
 func (d *DB) ChannelLogs(ctx context.Context, conn, channel string, limit int) ([]Message, error) {
 	return d.messages(ctx, Query("channel_logs"), channel, conn, limit)
 }
@@ -108,7 +108,7 @@ func (d *DB) messages(ctx context.Context, sql string, args ...any) ([]Message, 
 // userMessages selects a UserMessage's columns from log AS l, with b (psql,
 // or sub for a subquery).
 func userMessages(b sq.StatementBuilderType) sq.SelectBuilder {
-	return b.Select("l.id", "l.message::text", "l.connection", "l.self", "l.highlight").From("log AS l")
+	return b.Select("l.id", "l.message::text", "l.connection_id", "l.self", "l.highlight").From("logs AS l")
 }
 
 func scanMessage(row pgx.CollectableRow) (Message, error) {

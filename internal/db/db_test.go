@@ -30,7 +30,7 @@ func TestUsers(t *testing.T) {
 		{false, true},
 		{true, false},
 	} {
-		if _, err := d.Pool.Exec(ctx, `UPDATE "user" SET verified=$2 WHERE id=$1`, id, c.verified); err != nil {
+		if _, err := d.Pool.Exec(ctx, `UPDATE users SET verified=$2 WHERE id=$1`, id, c.verified); err != nil {
 			t.Fatal(err)
 		}
 		exists, unverified, err := d.UserState(ctx, id)
@@ -41,14 +41,14 @@ func TestUsers(t *testing.T) {
 	if exists, unverified, err := d.UserState(ctx, "nope"); err != nil || exists || unverified {
 		t.Fatalf("missing user: UserState = %v %v %v", exists, unverified, err)
 	}
-	if _, err := d.Pool.Exec(ctx, `UPDATE "user" SET last_login='2000-01-01' WHERE id=$1`, id); err != nil {
+	if _, err := d.Pool.Exec(ctx, `UPDATE users SET last_login='2000-01-01' WHERE id=$1`, id); err != nil {
 		t.Fatal(err)
 	}
 	if err := d.SaveLastLogin(ctx, id); err != nil {
 		t.Fatal(err)
 	}
 	var recent bool
-	if err := d.Pool.QueryRow(ctx, `SELECT last_login > NOW() - interval '1 minute' FROM "user" WHERE id=$1`, id).Scan(&recent); err != nil || !recent {
+	if err := d.Pool.QueryRow(ctx, `SELECT last_login > NOW() - interval '1 minute' FROM users WHERE id=$1`, id).Scan(&recent); err != nil || !recent {
 		t.Fatalf("last_login updated = %v %v", recent, err)
 	}
 }
@@ -105,7 +105,7 @@ func TestEditConfigTouchesUpdated(t *testing.T) {
 	// Compared in SQL: the columns are timestamp without time zone.
 	var createdNull, updatedNow bool
 	if err := d.Pool.QueryRow(ctx, `SELECT created IS NULL, updated > NOW() - interval '1 minute'
-		FROM connection WHERE id='c1'`).Scan(&createdNull, &updatedNow); err != nil {
+		FROM connections WHERE id='c1'`).Scan(&createdNull, &updatedNow); err != nil {
 		t.Fatal(err)
 	}
 	if !createdNull {
@@ -187,7 +187,7 @@ func TestLatestMessageID(t *testing.T) {
 	testenv.AddLog(t, d, 15, "cc", "carol")
 	testenv.AddLog(t, d, 20, "cc", "carol")
 	// carol's newest is a highlight, alice's highlight is older than her newest.
-	if _, err := d.Pool.Exec(ctx, `UPDATE log SET highlight = true WHERE id IN (5, 20)`); err != nil {
+	if _, err := d.Pool.Exec(ctx, `UPDATE logs SET highlight = true WHERE id IN (5, 20)`); err != nil {
 		t.Fatal(err)
 	}
 	for user, want := range map[string]int64{"alice": 9, "bob": 12, "carol": 20, "nobody": 0} {
@@ -201,7 +201,7 @@ func TestLookupLiercd(t *testing.T) {
 	d := testenv.Postgres(t)
 	testenv.AddConnection(t, d, "c1", "u1", `{}`)
 	testenv.AddConnection(t, d, "c2", "u1", `{}`)
-	if _, err := d.Pool.Exec(ctx, `UPDATE connection SET liercd='next' WHERE id='c2'`); err != nil {
+	if _, err := d.Pool.Exec(ctx, `UPDATE connections SET liercd='next' WHERE id='c2'`); err != nil {
 		t.Fatal(err)
 	}
 	for id, want := range map[string]string{"c1": "", "c2": "next", "nope": ""} {
@@ -221,7 +221,7 @@ func TestSetLiercd(t *testing.T) {
 		}
 		var isNull bool
 		var got string
-		if err := d.Pool.QueryRow(ctx, `SELECT liercd IS NULL, coalesce(liercd, '') FROM connection WHERE id='c1'`).Scan(&isNull, &got); err != nil {
+		if err := d.Pool.QueryRow(ctx, `SELECT liercd IS NULL, coalesce(liercd, '') FROM connections WHERE id='c1'`).Scan(&isNull, &got); err != nil {
 			t.Fatal(err)
 		}
 		if got != inst || isNull != (inst == "") {
@@ -324,7 +324,7 @@ func TestEditConfig(t *testing.T) {
 		t.Errorf("saved %s", got)
 	}
 	var updatedNow bool
-	if err := d.Pool.QueryRow(ctx, `SELECT updated > NOW() - interval '1 minute' FROM connection WHERE id='c1'`).Scan(&updatedNow); err != nil || !updatedNow {
+	if err := d.Pool.QueryRow(ctx, `SELECT updated > NOW() - interval '1 minute' FROM connections WHERE id='c1'`).Scan(&updatedNow); err != nil || !updatedNow {
 		t.Errorf("updated is not now (%v)", err)
 	}
 

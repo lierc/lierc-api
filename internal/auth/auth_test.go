@@ -62,7 +62,7 @@ func setLastUsed(t *testing.T, d *db.DB, token string, ago time.Duration) {
 	if err != nil || !ok {
 		t.Fatalf("lookup: %v %v", ok, err)
 	}
-	if _, err := d.Pool.Exec(context.Background(), `UPDATE login SET last_used = now() - $2::interval WHERE id=$1`, l.ID, ago.String()); err != nil {
+	if _, err := d.Pool.Exec(context.Background(), `UPDATE logins SET last_used = now() - $2::interval WHERE id=$1`, l.ID, ago.String()); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -151,7 +151,7 @@ func TestRequireUnverified(t *testing.T) {
 	u := testenv.AddUser(t, d, "newbie")
 	token := testenv.Login(t, d, u)
 	set := func(v any) {
-		if _, err := d.Pool.Exec(context.Background(), `UPDATE "user" SET verified=$2 WHERE id=$1`, u, v); err != nil {
+		if _, err := d.Pool.Exec(context.Background(), `UPDATE users SET verified=$2 WHERE id=$1`, u, v); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -227,7 +227,7 @@ func TestClient(t *testing.T) {
 func TestPerlCookieRefused(t *testing.T) {
 	d := testenv.Postgres(t)
 	if _, err := d.Pool.Exec(context.Background(),
-		`INSERT INTO "user" (id, username, email, verified) VALUES ('perlvictim0000000000aa', 'perlvictim', 'p@example.com', true)`); err != nil {
+		`INSERT INTO users (id, username, email, verified) VALUES ('perlvictim0000000000aa', 'perlvictim', 'p@example.com', true)`); err != nil {
 		t.Fatal(err)
 	}
 	w := serve(t, d, perl)
@@ -238,7 +238,7 @@ func TestPerlCookieRefused(t *testing.T) {
 		t.Errorf("cookie not cleared: %v", cs)
 	}
 	var n int
-	d.Pool.QueryRow(context.Background(), `SELECT count(*) FROM login`).Scan(&n)
+	d.Pool.QueryRow(context.Background(), `SELECT count(*) FROM logins`).Scan(&n)
 	if n != 0 {
 		t.Errorf("%d login(s) made for a Perl cookie", n)
 	}

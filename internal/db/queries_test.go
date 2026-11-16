@@ -35,7 +35,7 @@ func TestSearchQueriesTakePlainText(t *testing.T) {
 	ctx := context.Background()
 	a := testenv.AddUser(t, d, "alice")
 	testenv.AddConnection(t, d, "c1", a, "{}")
-	exec(t, d, `INSERT INTO log (connection, "user", channel, command, time, message) VALUES
+	exec(t, d, `INSERT INTO logs (connection_id, user_id, channel, command, time, message) VALUES
 		('c1', $1, '#a', 'PRIVMSG', now(), '{"Command":"PRIVMSG","Params":["#a","running late again"],"Prefix":{"Name":"bob"}}')`, a)
 	// the database's own date: log.time is a timestamp in its time zone
 	var today string

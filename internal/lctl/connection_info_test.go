@@ -53,7 +53,7 @@ func TestConnectionInfoNotRunning(t *testing.T) {
 	h := newHarness(t)
 	u := h.user("bob")
 	h.conn("c2", u, `{"Host":"127.0.0.1","Port":5005,"Nick":"bob","Pass":"pw"}`)
-	h.exec(`UPDATE connection SET liercd='next' WHERE id='c2'`)
+	h.exec(`UPDATE connections SET liercd='next' WHERE id='c2'`)
 	if err := h.run("connection-info", "c2"); err != nil {
 		t.Fatal(err)
 	}

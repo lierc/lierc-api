@@ -66,7 +66,7 @@ func searchSetup(t *testing.T) (*env, string) {
 		if i == 1 {
 			sender = "bob"
 		}
-		e.exec(`INSERT INTO log (id, connection, "user", channel, command, time, message) VALUES ($1,'c1',$2,'#a','PRIVMSG','2026-01-02 10:00',
+		e.exec(`INSERT INTO logs (id, connection_id, user_id, channel, command, time, message) VALUES ($1,'c1',$2,'#a','PRIVMSG','2026-01-02 10:00',
 			jsonb_build_object('Command','PRIVMSG','Params',jsonb_build_array('#a',$3::text),'Prefix',jsonb_build_object('Name',$4::text)))`, i+1, a, text, sender)
 	}
 	return e, a

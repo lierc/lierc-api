@@ -28,7 +28,7 @@ type AccountAuth struct {
 // AccountByID finds the user with id.
 func (d *DB) AccountByID(ctx context.Context, id string) (Account, bool, error) {
 	var a Account
-	err := queryRow(ctx, d.Pool, psql.Select("id", "username", "email", "verified").From(`"user"`).Where(sq.Eq{"id": id})).
+	err := queryRow(ctx, d.Pool, psql.Select("id", "username", "email", "verified").From("users").Where(sq.Eq{"id": id})).
 		Scan(&a.ID, &a.Username, &a.Email, &a.Verified)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Account{}, false, nil
@@ -39,7 +39,7 @@ func (d *DB) AccountByID(ctx context.Context, id string) (Account, bool, error) 
 // AccountsByLogin finds the users whose email or username is name, ignoring
 // case.
 func (d *DB) AccountsByLogin(ctx context.Context, name string) ([]AccountAuth, error) {
-	rows, err := query(ctx, d.Pool, psql.Select("id", "username", "email", "verified", "password_hash").From(`"user"`).
+	rows, err := query(ctx, d.Pool, psql.Select("id", "username", "email", "verified", "password_hash").From("users").
 		Where(sq.Or{sq.Expr("lower(email) = lower(?)", name), sq.Expr("lower(username) = lower(?)", name)}))
 	if err != nil {
 		return nil, err
@@ -70,7 +70,7 @@ func (d *DB) AccountAuthByEmail(ctx context.Context, email string) (AccountAuth,
 
 // accountAuth selects an AccountAuth's columns, but not verified.
 func accountAuth() sq.SelectBuilder {
-	return psql.Select("id", "username", "email", "password_hash").From(`"user"`)
+	return psql.Select("id", "username", "email", "password_hash").From("users")
 }
 
 // AccountAuthByID finds the user with id. Verified is not read.
@@ -88,7 +88,7 @@ func (d *DB) AccountAuthByID(ctx context.Context, id string) (AccountAuth, bool,
 // being sent (verify_sent). A taken username or email is a Postgres unique
 // violation, 23505.
 func (d *DB) InsertUser(ctx context.Context, id, username, email, hash string) error {
-	_, err := exec(ctx, d.Pool, psql.Insert(`"user"`).
+	_, err := exec(ctx, d.Pool, psql.Insert("users").
 		Columns("id", "username", "email", "password_hash", "verify_sent", "registered").
 		Values(id, username, email, hash, sq.Expr("now()"), sq.Expr("now()")))
 	return err
@@ -97,7 +97,7 @@ func (d *DB) InsertUser(ctx context.Context, id, username, email, hash string) e
 // UserHasConnection reports whether user has any connection.
 func (d *DB) UserHasConnection(ctx context.Context, user string) (bool, error) {
 	var has int
-	err := queryRow(ctx, d.Pool, psql.Select("1").From("connection").Where(sq.Eq{`"user"`: user}).Limit(1)).Scan(&has)
+	err := queryRow(ctx, d.Pool, psql.Select("1").From("connections").Where(sq.Eq{"user_id": user}).Limit(1)).Scan(&has)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return false, nil
 	}
@@ -109,19 +109,19 @@ func (d *DB) UserHasConnection(ctx context.Context, user string) (bool, error) {
 // minSeconds; it reports whether it was claimed. The update both checks and
 // records, so two at once claim once.
 func (d *DB) ClaimVerifyResend(ctx context.Context, id string, minSeconds float64) (bool, error) {
-	n, err := affected(ctx, d.Pool, psql.Update(`"user"`).Set("verify_sent", sq.Expr("now()")).
+	n, err := affected(ctx, d.Pool, psql.Update("users").Set("verify_sent", sq.Expr("now()")).
 		Where(sq.Eq{"id": id, "verified": false}).
 		Where(sq.Or{sq.Eq{"verify_sent": nil}, sq.Expr("verify_sent < now() - make_interval(secs => ?)", minSeconds)}))
 	return n == 1, err
 }
 
 func replacePasswordHash(ctx context.Context, r runner, id, hash string, oldHash *string) (int64, error) {
-	return affected(ctx, r, psql.Update(`"user"`).Set("password_hash", hash).
+	return affected(ctx, r, psql.Update("users").Set("password_hash", hash).
 		Where(sq.Eq{"id": id}).Where("password_hash IS NOT DISTINCT FROM ?", oldHash))
 }
 
 func markVerified(ctx context.Context, r runner, id string) (bool, error) {
-	verify := psql.Update(`"user"`).Set("verified", true)
+	verify := psql.Update("users").Set("verified", true)
 	n, err := affected(ctx, r, verify.Where(sq.Eq{"id": id, "verified": false}))
 	if err != nil {
 		return false, err

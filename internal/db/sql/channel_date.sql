@@ -7,22 +7,22 @@
 -- Only the archive blocks whose time span overlaps the range are unpacked.
 -- Their elements are filtered by their own time (whole seconds, which never
 -- moves a message across a day), not by the block's span.
-SELECT id, message::text AS message, connection, highlight
-FROM log
-WHERE connection = $1
+SELECT id, message::text AS message, connection_id, highlight
+FROM logs
+WHERE connection_id = $1
   AND channel = $2
   AND time >= date($3)
   AND time < (date($4) + '1 day'::interval)
   AND ($5::text IS NULL OR to_tsvector('english', message->'Params'->1) @@ websearch_to_tsquery($5::text))
   AND ($6::text IS NULL OR message->'Prefix'->>'Name' = $6::text)
 UNION ALL
-SELECT id, message, connection, highlight FROM (
+SELECT id, message, connection_id, highlight FROM (
   SELECT (e->>'id')::int AS id, e->'message' AS m, (e->'message')::text AS message,
-    a.connection, (e->>'highlight')::bool AS highlight,
+    a.connection_id, (e->>'highlight')::bool AS highlight,
     to_timestamp((e->>'time')::bigint) AT TIME ZONE 'UTC' AS time
-  FROM log_archive a
+  FROM log_archives a
   CROSS JOIN LATERAL json_array_elements(a.messages) e
-  WHERE a.connection = $1
+  WHERE a.connection_id = $1
     AND a.channel = $2
     AND a.min_time < (date($4) + '1 day'::interval)
     AND a.max_time >= date($3)

@@ -35,9 +35,9 @@ type UserFilter struct {
 func (d *DB) userRows(ctx context.Context, where sq.Sqlizer) ([]UserRow, error) {
 	rows, err := query(ctx, d.Pool, psql.Select(
 		"u.id", "u.username", "u.email", "u.verified", "u.last_login", "u.registered",
-		`(SELECT count(*) FROM connection c WHERE c."user" = u.id)`,
+		`(SELECT count(*) FROM connections c WHERE c.user_id = u.id)`,
 		"CASE WHEN coalesce(u.password_hash, '') <> '' THEN 'bcrypt' ELSE 'none' END").
-		From(`"user" u`).Where(where).OrderBy("u.last_login NULLS FIRST", "u.id"))
+		From("users u").Where(where).OrderBy("u.last_login NULLS FIRST", "u.id"))
 	if err != nil {
 		return nil, err
 	}
@@ -80,20 +80,28 @@ func (d *DB) LookupUsers(ctx context.Context, q string) ([]UserRow, error) {
 	return d.userRows(ctx, sq.Or{sq.Eq{"u.id": q}, sq.Expr("lower(u.username) = lower(?)", q), sq.Expr("lower(u.email) = lower(?)", q)})
 }
 
+// countKey is the name each table's row count goes by in the counts the
+// admin API returns: the table's name from before the tables were renamed
+// (migration 2), so the API's output and lctl's didn't change.
+var countKey = map[string]string{
+	"logs": "log", "log_archives": "log_archive", "seen_markers": "seen", "private_chats": "private",
+	"prefs": "pref", "web_push_subscriptions": "web_push", "connections": "connection", "logins": "login",
+}
+
 // UserCounts counts, by table, the rows deleting user id would remove: those
 // of the user and of its connections. The log and its archive also match by
 // user id: rows of a connection deleted before the user still carry it.
 func (d *DB) UserCounts(ctx context.Context, id string) (map[string]int64, error) {
-	owned := sq.Eq{`"user"`: id}
-	ofConns := sq.Expr("connection IN (?)", sub.Select("id").From("connection").Where(owned))
+	owned := sq.Eq{"user_id": id}
+	ofConns := sq.Expr("connection_id IN (?)", sub.Select("id").From("connections").Where(owned))
 	either := sq.Or{owned, ofConns}
 	tables := []struct {
 		table string
 		where sq.Sqlizer
 	}{
-		{"log", either}, {"log_archive", either}, {"seen", either},
-		{"private", ofConns},
-		{"pref", owned}, {"web_push", owned}, {"connection", owned}, {"login", owned},
+		{"logs", either}, {"log_archives", either}, {"seen_markers", either},
+		{"private_chats", ofConns},
+		{"prefs", owned}, {"web_push_subscriptions", owned}, {"connections", owned}, {"logins", owned},
 	}
 	out := make(map[string]int64, len(tables))
 	for _, t := range tables {
@@ -101,7 +109,7 @@ func (d *DB) UserCounts(ctx context.Context, id string) (map[string]int64, error
 		if err := queryRow(ctx, d.Pool, psql.Select("count(*)").From(t.table).Where(t.where)).Scan(&n); err != nil {
 			return nil, err
 		}
-		out[t.table] = n
+		out[countKey[t.table]] = n
 	}
 	return out, nil
 }
@@ -125,14 +133,14 @@ type ConnectionFilter struct {
 // ListConnections lists the connections matching f, by their owner's last
 // login (never first), then user id, then connection id.
 func (d *DB) ListConnections(ctx context.Context, f ConnectionFilter) ([]ConnectionRow, error) {
-	q := psql.Select("c.id", `c."user"`, "coalesce(u.username, '')", "coalesce(nullif(c.liercd, ''), 'main')", "c.config::text").
-		From("connection c").LeftJoin(`"user" u ON u.id = c."user"`).
-		OrderBy("u.last_login NULLS FIRST", `c."user"`, "c.id")
+	q := psql.Select("c.id", "c.user_id", "coalesce(u.username, '')", "coalesce(nullif(c.liercd, ''), 'main')", "c.config::text").
+		From("connections c").LeftJoin(`users u ON u.id = c.user_id`).
+		OrderBy("u.last_login NULLS FIRST", "c.user_id", "c.id")
 	if f.ID != "" {
 		q = q.Where(sq.Eq{"c.id": f.ID})
 	}
 	if f.User != "" {
-		q = q.Where(sq.Eq{`c."user"`: f.User})
+		q = q.Where(sq.Eq{"c.user_id": f.User})
 	}
 	if f.Instance != "" {
 		q = q.Where(onInstance(f.Instance))
@@ -171,12 +179,12 @@ func onInstance(instance string) sq.Sqlizer {
 // remove, apart from the connection's own.
 func (d *DB) ConnectionCounts(ctx context.Context, id string) (map[string]int64, error) {
 	out := map[string]int64{}
-	for _, t := range []string{"log", "log_archive", "seen", "private"} {
+	for _, t := range []string{"logs", "log_archives", "seen_markers", "private_chats"} {
 		var n int64
-		if err := queryRow(ctx, d.Pool, psql.Select("count(*)").From(t).Where(sq.Eq{"connection": id})).Scan(&n); err != nil {
+		if err := queryRow(ctx, d.Pool, psql.Select("count(*)").From(t).Where(sq.Eq{"connection_id": id})).Scan(&n); err != nil {
 			return nil, err
 		}
-		out[t] = n
+		out[countKey[t]] = n
 	}
 	return out, nil
 }
@@ -184,21 +192,21 @@ func (d *DB) ConnectionCounts(ctx context.Context, id string) (map[string]int64,
 // LastLogID is the highest log id, 0 when the log is empty.
 func (d *DB) LastLogID(ctx context.Context) (int64, error) {
 	var n int64
-	err := queryRow(ctx, d.Pool, psql.Select("coalesce(max(id), 0)").From("log")).Scan(&n)
+	err := queryRow(ctx, d.Pool, psql.Select("coalesce(max(id), 0)").From("logs")).Scan(&n)
 	return n, err
 }
 
 // staleSeen is the seen rows prune-seen deletes: their connection is gone,
 // or they haven't been updated in a month.
 var staleSeen = sq.Or{
-	sq.Expr("NOT EXISTS (SELECT 1 FROM connection c WHERE c.id = seen.connection)"),
+	sq.Expr("NOT EXISTS (SELECT 1 FROM connections c WHERE c.id = seen_markers.connection_id)"),
 	sq.Expr("updated < now() - interval '1 month'"),
 }
 
 // StaleSeenCount counts the seen rows prune-seen would delete.
 func (d *DB) StaleSeenCount(ctx context.Context) (int64, error) {
 	var n int64
-	err := queryRow(ctx, d.Pool, psql.Select("count(*)").From("seen").Where(staleSeen)).Scan(&n)
+	err := queryRow(ctx, d.Pool, psql.Select("count(*)").From("seen_markers").Where(staleSeen)).Scan(&n)
 	return n, err
 }
 
@@ -207,24 +215,25 @@ var ErrNotFound = errors.New("not found")
 
 // PruneStaleSeen deletes the seen rows StaleSeenCount counts.
 func (d *DB) PruneStaleSeen(ctx context.Context) (int64, error) {
-	return affected(ctx, d.Pool, psql.Delete("seen").Where(staleSeen))
+	return affected(ctx, d.Pool, psql.Delete("seen_markers").Where(staleSeen))
 }
 
-// deleteFrom deletes from table where cond and adds the count under table.
+// deleteFrom deletes from table where cond and adds the count under the
+// table's countKey.
 func deleteFrom(ctx context.Context, tx pgx.Tx, counts map[string]int64, table string, cond sq.Sqlizer) error {
 	n, err := affected(ctx, tx, psql.Delete(table).Where(cond))
 	if err != nil {
 		return err
 	}
-	counts[table] += n
+	counts[countKey[table]] += n
 	return nil
 }
 
 // DeleteUserData deletes user id and everything of theirs in one
-// transaction: log and log_archive (also the rows of connections deleted
-// before the user, which carry the user's id), seen, private, pref,
-// web_push, connection, login and the user. It returns a delete change for
-// each connection, to announce once this has returned, with the number of
+// transaction: logs and log_archives (also the rows of connections deleted
+// before the user, which carry the user's id), seen_markers, private_chats,
+// prefs, web_push_subscriptions, connections, logins and the user. It
+// returns a delete change for each connection, to announce once this has returned, with the number of
 // rows deleted per table. SweepLateLogs catches log rows written after.
 // ErrNotFound if there is no such user.
 func (d *DB) DeleteUserData(ctx context.Context, id string) ([]ConnectionChange, map[string]int64, error) {
@@ -235,13 +244,13 @@ func (d *DB) DeleteUserData(ctx context.Context, id string) ([]ConnectionChange,
 	defer tx.Rollback(context.WithoutCancel(ctx))
 
 	var found string
-	if err := queryRow(ctx, tx, psql.Select("id").From(`"user"`).Where(sq.Eq{"id": id}).Suffix("FOR UPDATE")).Scan(&found); err != nil {
+	if err := queryRow(ctx, tx, psql.Select("id").From("users").Where(sq.Eq{"id": id}).Suffix("FOR UPDATE")).Scan(&found); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, nil, ErrNotFound
 		}
 		return nil, nil, err
 	}
-	rows, err := query(ctx, tx, psql.Select("id").From("connection").Where(sq.Eq{`"user"`: id}).OrderBy("id"))
+	rows, err := query(ctx, tx, psql.Select("id").From("connections").Where(sq.Eq{"user_id": id}).OrderBy("id"))
 	if err != nil {
 		return nil, nil, err
 	}
@@ -262,29 +271,29 @@ func (d *DB) DeleteUserData(ctx context.Context, id string) ([]ConnectionChange,
 	}
 
 	counts := map[string]int64{}
-	owned := sq.Eq{`"user"`: id}
-	ofConns := sq.Expr("connection = ANY(?)", conns)
+	owned := sq.Eq{"user_id": id}
+	ofConns := sq.Expr("connection_id = ANY(?)", conns)
 	either := sq.Or{owned, ofConns}
 	steps := []struct {
 		table string
 		cond  sq.Sqlizer
 	}{
-		{"log", either},
+		{"logs", either},
 		// after the log delete, so a block the archiver moved in between is caught
-		{"log_archive", either},
-		{"seen", either},
-		{"private", ofConns},
-		{"pref", owned},
-		{"web_push", owned},
-		{"connection", owned},
-		{"login", owned},
+		{"log_archives", either},
+		{"seen_markers", either},
+		{"private_chats", ofConns},
+		{"prefs", owned},
+		{"web_push_subscriptions", owned},
+		{"connections", owned},
+		{"logins", owned},
 	}
 	for _, s := range steps {
 		if err := deleteFrom(ctx, tx, counts, s.table, s.cond); err != nil {
 			return nil, nil, err
 		}
 	}
-	if _, err := exec(ctx, tx, psql.Delete(`"user"`).Where(sq.Eq{"id": id})); err != nil {
+	if _, err := exec(ctx, tx, psql.Delete("users").Where(sq.Eq{"id": id})); err != nil {
 		return nil, nil, err
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -293,7 +302,7 @@ func (d *DB) DeleteUserData(ctx context.Context, id string) ([]ConnectionChange,
 	return changes, counts, nil
 }
 
-// DeleteConnectionData deletes connection id and its log, log_archive, seen
+// DeleteConnectionData deletes connection id and its log, log_archives, seen
 // and private rows in one transaction. It returns the connection's delete
 // change and the rows deleted per table. ErrNotFound if there is no such
 // connection.
@@ -305,24 +314,24 @@ func (d *DB) DeleteConnectionData(ctx context.Context, id string) ([]ConnectionC
 	defer tx.Rollback(context.WithoutCancel(ctx))
 
 	var owner string
-	if err := queryRow(ctx, tx, connectionByID(id, `"user"`).Suffix("FOR UPDATE")).Scan(&owner); err != nil {
+	if err := queryRow(ctx, tx, connectionByID(id, "user_id").Suffix("FOR UPDATE")).Scan(&owner); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, nil, ErrNotFound
 		}
 		return nil, nil, err
 	}
 	counts := map[string]int64{}
-	ofConn := sq.Eq{"connection": id}
+	ofConn := sq.Eq{"connection_id": id}
 	for _, s := range []struct {
 		table string
 		cond  sq.Sqlizer
 	}{
-		{"log", ofConn},
+		{"logs", ofConn},
 		// after the log delete, so a block the archiver moved in between is caught
-		{"log_archive", ofConn},
-		{"seen", ofConn},
-		{"private", ofConn},
-		{"connection", sq.Eq{"id": id}},
+		{"log_archives", ofConn},
+		{"seen_markers", ofConn},
+		{"private_chats", ofConn},
+		{"connections", sq.Eq{"id": id}},
 	} {
 		if err := deleteFrom(ctx, tx, counts, s.table, s.cond); err != nil {
 			return nil, nil, err
@@ -337,18 +346,18 @@ func (d *DB) DeleteConnectionData(ctx context.Context, id string) ([]ConnectionC
 // SweepLateLogs deletes the log rows with id > after that the logger wrote
 // once a delete had begun: those of user (none when empty) or of
 // connections. It looks only at those, by id, so it reads seconds of log.
-// It also clears the log_archive blocks of the same owners, which the
+// It also clears the log_archives blocks of the same owners, which the
 // archiver may have moved since. It returns the log rows and the archive
 // blocks it deleted.
 func (d *DB) SweepLateLogs(ctx context.Context, user string, connections []string, after int64) (rows, blocks int64, err error) {
-	owners := sq.Or{sq.Expr("connection = ANY(?)", connections)}
+	owners := sq.Or{sq.Expr("connection_id = ANY(?)", connections)}
 	if user != "" {
-		owners = append(owners, sq.Eq{`"user"`: user})
+		owners = append(owners, sq.Eq{"user_id": user})
 	}
-	if rows, err = affected(ctx, d.Pool, psql.Delete("log").Where(sq.Gt{"id": after}).Where(owners)); err != nil {
+	if rows, err = affected(ctx, d.Pool, psql.Delete("logs").Where(sq.Gt{"id": after}).Where(owners)); err != nil {
 		return 0, 0, err
 	}
-	if blocks, err = affected(ctx, d.Pool, psql.Delete("log_archive").Where(owners)); err != nil {
+	if blocks, err = affected(ctx, d.Pool, psql.Delete("log_archives").Where(owners)); err != nil {
 		return 0, 0, err
 	}
 	return rows, blocks, nil

@@ -7,9 +7,9 @@
 -- up the rest. The one block that can straddle $3 counts as empty, since
 -- only part of it is below $3, so it never cuts the blocks short.
 WITH l AS (
-  SELECT id, message::text AS message, connection, highlight
-  FROM log
-  WHERE channel = $1 AND connection = $2 AND id < $3::int
+  SELECT id, message::text AS message, connection_id, highlight
+  FROM logs
+  WHERE channel = $1 AND connection_id = $2 AND id < $3::int
   ORDER BY id DESC
   LIMIT $4::int
 ),
@@ -18,8 +18,8 @@ need AS (
 ),
 newest AS (
   SELECT id, last_id, count
-  FROM log_archive
-  WHERE connection = $2 AND channel = $1 AND first_id < $3::int
+  FROM log_archives
+  WHERE connection_id = $2 AND channel = $1 AND first_id < $3::int
   ORDER BY last_id DESC
   LIMIT (SELECT n FROM need)
 ),
@@ -32,14 +32,14 @@ blocks AS (
   ) w
   WHERE newer < (SELECT n FROM need)
 )
-SELECT id, message, connection, highlight FROM l
+SELECT id, message, connection_id, highlight FROM l
 UNION ALL
 SELECT * FROM (
-  SELECT (e->>'id')::int AS id, (e->'message')::text AS message, a.connection,
+  SELECT (e->>'id')::int AS id, (e->'message')::text AS message, a.connection_id,
     (e->>'highlight')::bool AS highlight
-  FROM log_archive a
+  FROM log_archives a
   JOIN blocks b ON b.id = a.id
-  AND a.connection = $2 AND a.channel = $1
+  AND a.connection_id = $2 AND a.channel = $1
   CROSS JOIN LATERAL json_array_elements(a.messages) e
   WHERE (e->>'id')::int < $3::int
   ORDER BY 1 DESC

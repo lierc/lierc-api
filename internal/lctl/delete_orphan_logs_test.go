@@ -11,10 +11,10 @@ func seedLogs(h *harness) {
 	u := h.user("ann")
 	insertConn(h, "live", u, cfg)
 	for i := 0; i < 2; i++ {
-		h.exec(`INSERT INTO log (connection, "user", channel, time, message) VALUES ('live', $1, '#a', now(), '{}')`, u)
+		h.exec(`INSERT INTO logs (connection_id, user_id, channel, time, message) VALUES ('live', $1, '#a', now(), '{}')`, u)
 	}
 	for i := 0; i < 5; i++ {
-		h.exec(`INSERT INTO log (connection, "user", channel, time, message) VALUES ('gone', $1, '#a', now(), '{}')`, u)
+		h.exec(`INSERT INTO logs (connection_id, user_id, channel, time, message) VALUES ('gone', $1, '#a', now(), '{}')`, u)
 	}
 	addArchive(h, u, "gone")
 	addArchive(h, u, "gone")
@@ -28,10 +28,10 @@ func TestDeleteOrphanLogsDryRun(t *testing.T) {
 		t.Fatal(err)
 	}
 	h.has("1 gone connection(s) and 0 gone user(s) still in log\n", "run with --delete to delete their log rows\n", "2 archive row(s) to delete\n")
-	if n := h.count(`SELECT count(*) FROM log_archive`); n != 3 {
+	if n := h.count(`SELECT count(*) FROM log_archives`); n != 3 {
 		t.Errorf("%d archive rows, want 3", n)
 	}
-	if n := h.count(`SELECT count(*) FROM log`); n != 7 {
+	if n := h.count(`SELECT count(*) FROM logs`); n != 7 {
 		t.Errorf("%d rows, want 7", n)
 	}
 }
@@ -43,10 +43,10 @@ func TestDeleteOrphanLogsDeleteInBatches(t *testing.T) {
 		t.Fatal(err)
 	}
 	h.has("deleted 5 log row(s)\n", "deleted 2 archive row(s)\n")
-	if n := h.count(`SELECT count(*) FROM log_archive WHERE connection = 'live'`); n != 1 || h.count(`SELECT count(*) FROM log_archive`) != 1 {
+	if n := h.count(`SELECT count(*) FROM log_archives WHERE connection_id = 'live'`); n != 1 || h.count(`SELECT count(*) FROM log_archives`) != 1 {
 		t.Error("wrong archive rows deleted")
 	}
-	if n := h.count(`SELECT count(*) FROM log WHERE connection = 'live'`); n != 2 || h.count(`SELECT count(*) FROM log`) != 2 {
+	if n := h.count(`SELECT count(*) FROM logs WHERE connection_id = 'live'`); n != 2 || h.count(`SELECT count(*) FROM logs`) != 2 {
 		t.Error("wrong rows deleted")
 	}
 }
@@ -63,7 +63,7 @@ func TestDeleteOrphanLogsCancelled(t *testing.T) {
 			}
 		}
 	}
-	if n := h.count(`SELECT count(*) FROM log`); n != 7 {
+	if n := h.count(`SELECT count(*) FROM logs`); n != 7 {
 		t.Errorf("%d rows after cancel, want 7", n)
 	}
 }
@@ -88,7 +88,7 @@ func TestDeleteOrphanLogsDeletedUsers(t *testing.T) {
 		{"ownerless", "nouser"}, {"ownerless", "nouser"}, {"ownerless", "nouser"},
 		{"live", "ghost"},
 	} {
-		h.exec(`INSERT INTO log (connection, "user", channel, time, message) VALUES ($1, $2, '#a', now(), '{}')`, r.conn, r.user)
+		h.exec(`INSERT INTO logs (connection_id, user_id, channel, time, message) VALUES ($1, $2, '#a', now(), '{}')`, r.conn, r.user)
 	}
 	addArchive(h, "nouser", "ownerless")
 	addArchive(h, u, "live")
@@ -100,10 +100,10 @@ func TestDeleteOrphanLogsDeletedUsers(t *testing.T) {
 		t.Fatal(err)
 	}
 	h.has("deleted 4 log row(s)\n", "deleted 1 archive row(s)\n")
-	if n := h.count(`SELECT count(*) FROM log WHERE "user" = $1`, u); n != 2 || h.count(`SELECT count(*) FROM log`) != 2 {
+	if n := h.count(`SELECT count(*) FROM logs WHERE user_id = $1`, u); n != 2 || h.count(`SELECT count(*) FROM logs`) != 2 {
 		t.Error("wrong log rows deleted")
 	}
-	if n := h.count(`SELECT count(*) FROM log_archive WHERE "user" = $1`, u); n != 1 || h.count(`SELECT count(*) FROM log_archive`) != 1 {
+	if n := h.count(`SELECT count(*) FROM log_archives WHERE user_id = $1`, u); n != 1 || h.count(`SELECT count(*) FROM log_archives`) != 1 {
 		t.Error("wrong archive rows deleted")
 	}
 }
@@ -120,7 +120,7 @@ func TestDeleteOrphanLogsConnectionAndUserGone(t *testing.T) {
 		{"gone", u},
 		{"live", "ghost"},
 	} {
-		h.exec(`INSERT INTO log (connection, "user", channel, time, message) VALUES ($1, $2, '#a', now(), '{}')`, r.conn, r.user)
+		h.exec(`INSERT INTO logs (connection_id, user_id, channel, time, message) VALUES ($1, $2, '#a', now(), '{}')`, r.conn, r.user)
 	}
 	if err := h.run("delete-orphan-logs"); err != nil {
 		t.Fatal(err)
@@ -132,7 +132,7 @@ func TestDeleteOrphanLogsConnectionAndUserGone(t *testing.T) {
 	h.has("deleted 4 log row(s)\n",
 		"connection gone: deleted 3 row(s) (3 so far)\n",
 		"user ghost: deleted 1 row(s) (4 so far)\n")
-	if n := h.count(`SELECT count(*) FROM log WHERE connection = 'live' AND "user" = $1`, u); n != 1 || h.count(`SELECT count(*) FROM log`) != 1 {
+	if n := h.count(`SELECT count(*) FROM logs WHERE connection_id = 'live' AND user_id = $1`, u); n != 1 || h.count(`SELECT count(*) FROM logs`) != 1 {
 		t.Error("wrong log rows deleted")
 	}
 }
@@ -144,7 +144,7 @@ func TestDeleteOrphanLogsProgress(t *testing.T) {
 	orphanProgressEvery = 2
 	h := newHarness(t)
 	for i := 0; i < 5; i++ {
-		h.exec(`INSERT INTO log (connection, "user", channel, time, message) VALUES ('gone', 'ghost', '#a', now(), '{}')`)
+		h.exec(`INSERT INTO logs (connection_id, user_id, channel, time, message) VALUES ('gone', 'ghost', '#a', now(), '{}')`)
 	}
 	if err := h.run("delete-orphan-logs", "--delete", "--batch", "1"); err != nil {
 		t.Fatal(err)

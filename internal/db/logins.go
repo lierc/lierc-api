@@ -34,7 +34,7 @@ type LoginInfo struct {
 
 // InsertLogin logs user in under tokenHash. An empty ip is stored as NULL.
 func (d *DB) InsertLogin(ctx context.Context, tokenHash []byte, user, userAgent, ip string) error {
-	_, err := exec(ctx, d.Pool, psql.Insert("login").Columns("token_hash", `"user"`, "user_agent", "ip").
+	_, err := exec(ctx, d.Pool, psql.Insert("logins").Columns("token_hash", "user_id", "user_agent", "ip").
 		Values(tokenHash, user, userAgent, sq.Expr("NULLIF(?::text, '')::inet", ip)))
 	return err
 }
@@ -42,8 +42,8 @@ func (d *DB) InsertLogin(ctx context.Context, tokenHash []byte, user, userAgent,
 // LoginByHash finds the live login for tokenHash.
 func (d *DB) LoginByHash(ctx context.Context, tokenHash []byte) (Login, bool, error) {
 	var l Login
-	err := queryRow(ctx, d.Pool, psql.Select("l.id", `l."user"`, "u.verified IS NOT DISTINCT FROM false", "l.last_used").
-		From("login l").Join(`"user" u ON u.id = l."user"`).
+	err := queryRow(ctx, d.Pool, psql.Select("l.id", "l.user_id", "u.verified IS NOT DISTINCT FROM false", "l.last_used").
+		From("logins l").Join(`users u ON u.id = l.user_id`).
 		Where(sq.Eq{"l.token_hash": tokenHash}).Where("l."+live)).
 		Scan(&l.ID, &l.User, &l.Unverified, &l.LastUsed)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -57,20 +57,20 @@ func (d *DB) LoginByHash(ctx context.Context, tokenHash []byte) (Login, bool, er
 
 // TouchLogin marks login id as used now.
 func (d *DB) TouchLogin(ctx context.Context, id int64) error {
-	_, err := exec(ctx, d.Pool, psql.Update("login").Set("last_used", sq.Expr("now()")).Where(sq.Eq{"id": id}))
+	_, err := exec(ctx, d.Pool, psql.Update("logins").Set("last_used", sq.Expr("now()")).Where(sq.Eq{"id": id}))
 	return err
 }
 
 // DeleteLogin deletes login id if it belongs to user, and reports whether it did.
 func (d *DB) DeleteLogin(ctx context.Context, user string, id int64) (bool, error) {
-	n, err := affected(ctx, d.Pool, psql.Delete("login").Where(sq.Eq{"id": id, `"user"`: user}))
+	n, err := affected(ctx, d.Pool, psql.Delete("logins").Where(sq.Eq{"id": id, "user_id": user}))
 	return n > 0, err
 }
 
 // DeleteLoginByHash deletes the login for tokenHash; it is no error if
 // there is none.
 func (d *DB) DeleteLoginByHash(ctx context.Context, tokenHash []byte) error {
-	_, err := exec(ctx, d.Pool, psql.Delete("login").Where(sq.Eq{"token_hash": tokenHash}))
+	_, err := exec(ctx, d.Pool, psql.Delete("logins").Where(sq.Eq{"token_hash": tokenHash}))
 	return err
 }
 
@@ -81,21 +81,21 @@ func (d *DB) DeleteLogins(ctx context.Context, user string) (int64, error) {
 
 // deleteLogins ends every login of user, in r (the pool or a transaction).
 func deleteLogins(ctx context.Context, r runner, user string) (int64, error) {
-	return affected(ctx, r, psql.Delete("login").Where(sq.Eq{`"user"`: user}))
+	return affected(ctx, r, psql.Delete("logins").Where(sq.Eq{"user_id": user}))
 }
 
 // LoginAlive reports whether login id exists and has not expired.
 func (d *DB) LoginAlive(ctx context.Context, id int64) (bool, error) {
 	var ok bool
 	err := queryRow(ctx, d.Pool, psql.Select().
-		Column(sq.Expr("EXISTS (?)", sub.Select("1").From("login").Where(sq.Eq{"id": id}).Where(live)))).Scan(&ok)
+		Column(sq.Expr("EXISTS (?)", sub.Select("1").From("logins").Where(sq.Eq{"id": id}).Where(live)))).Scan(&ok)
 	return ok, err
 }
 
 // Logins returns user's live logins, most recently used first.
 func (d *DB) Logins(ctx context.Context, user string) ([]LoginInfo, error) {
 	rows, err := query(ctx, d.Pool, psql.Select("id", "created", "last_used", "user_agent", "COALESCE(host(ip), '')").
-		From("login").Where(sq.Eq{`"user"`: user}).Where(live).OrderBy("last_used DESC", "id DESC"))
+		From("logins").Where(sq.Eq{"user_id": user}).Where(live).OrderBy("last_used DESC", "id DESC"))
 	if err != nil {
 		return nil, err
 	}
@@ -113,5 +113,5 @@ func (d *DB) Logins(ctx context.Context, user string) ([]LoginInfo, error) {
 
 // PruneLogins deletes expired logins and returns how many there were.
 func (d *DB) PruneLogins(ctx context.Context) (int64, error) {
-	return affected(ctx, d.Pool, psql.Delete("login").Where("NOT ("+live+")"))
+	return affected(ctx, d.Pool, psql.Delete("logins").Where("NOT ("+live+")"))
 }

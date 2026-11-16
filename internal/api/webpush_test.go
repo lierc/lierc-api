@@ -77,7 +77,7 @@ func TestWebPushRoutes(t *testing.T) {
 	if c, b := post("", body); c != 204 {
 		t.Fatalf("subscribe: %d %s", c, b)
 	}
-	if v := e.row(`SELECT endpoint || ' ' || key || ' ' || auth FROM web_push WHERE "user"=$1`, a); v != ep+" "+goodKey+" "+goodAuth {
+	if v := e.row(`SELECT endpoint || ' ' || key || ' ' || auth FROM web_push_subscriptions WHERE user_id=$1`, a); v != ep+" "+goodKey+" "+goodAuth {
 		t.Errorf("row = %s", v)
 	}
 	if c, b := post("", url.Values{"endpoint": {"http://fcm.googleapis.com/x"}, "key": {goodKey}, "auth": {goodAuth}}.Encode()); c != 400 || b != `{"status":"error","error":"endpoint must be an https URL"}` {
@@ -91,7 +91,7 @@ func TestWebPushRoutes(t *testing.T) {
 		t.Errorf("body key wins: %d %s", c, b)
 	}
 	e.sendWant("DELETE", "/notification/web_push?endpoint="+url.QueryEscape(ep), a, "", 204, "")
-	if v := e.row(`SELECT count(*)::text FROM web_push WHERE endpoint=$1`, ep); v != "0" {
+	if v := e.row(`SELECT count(*)::text FROM web_push_subscriptions WHERE endpoint=$1`, ep); v != "0" {
 		t.Errorf("%s rows left", v)
 	}
 	e.sendWant("DELETE", "/notification/web_push", a, "", 400, `{"status":"error","error":"endpoint is required"}`)

@@ -67,20 +67,20 @@ func TestCreateLookup(t *testing.T) {
 		t.Errorf("login = %+v", l)
 	}
 	sum := sha256.Sum256([]byte(tok))
-	if n := count(t, d, `SELECT count(*) FROM login WHERE token_hash = $1`, sum[:]); n != 1 {
+	if n := count(t, d, `SELECT count(*) FROM logins WHERE token_hash = $1`, sum[:]); n != 1 {
 		t.Errorf("token_hash rows = %d", n)
 	}
-	if n := count(t, d, `SELECT count(*) FROM login WHERE login::text LIKE '%' || $1 || '%'`, tok); n != 0 {
+	if n := count(t, d, `SELECT count(*) FROM logins WHERE logins::text LIKE '%' || $1 || '%'`, tok); n != 0 {
 		t.Error("the token is stored in a column")
 	}
 	if _, ok, _ := login.Lookup(ctx, d, strings.Repeat("a", 43)); ok {
 		t.Error("unknown token found")
 	}
-	exec(t, d, `UPDATE "user" SET verified = false WHERE id = $1`, u)
+	exec(t, d, `UPDATE users SET verified = false WHERE id = $1`, u)
 	if l, _, _ := login.Lookup(ctx, d, tok); !l.Unverified {
 		t.Error("unverified user not reported")
 	}
-	exec(t, d, `UPDATE "user" SET verified = NULL WHERE id = $1`, u)
+	exec(t, d, `UPDATE users SET verified = NULL WHERE id = $1`, u)
 	if l, _, _ := login.Lookup(ctx, d, tok); l.Unverified {
 		t.Error("NULL verified (legacy user) reported as unverified")
 	}
@@ -93,14 +93,14 @@ func TestLookupExpired(t *testing.T) {
 	if err != nil || !ok || l.ID <= 0 {
 		t.Fatalf("fresh Lookup: %+v %v %v", l, ok, err)
 	}
-	exec(t, d, `UPDATE login SET last_used = now() - interval '7 days 1 second'`)
+	exec(t, d, `UPDATE logins SET last_used = now() - interval '7 days 1 second'`)
 	if _, ok, err := login.Lookup(ctx, d, tok); err != nil || ok {
 		t.Fatalf("expired Lookup: %v %v", ok, err)
 	}
 	if alive, err := login.Alive(ctx, d, l.ID); err != nil || alive {
 		t.Errorf("expired Alive = %v %v", alive, err)
 	}
-	exec(t, d, `UPDATE login SET last_used = now() - interval '6 days 23 hours'`)
+	exec(t, d, `UPDATE logins SET last_used = now() - interval '6 days 23 hours'`)
 	if _, ok, err = login.Lookup(ctx, d, tok); err != nil || !ok {
 		t.Fatalf("live Lookup: %v %v", ok, err)
 	}
@@ -115,12 +115,12 @@ func TestLookupExpired(t *testing.T) {
 func TestTouch(t *testing.T) {
 	d := testenv.Postgres(t)
 	tok := testenv.Login(t, d, testenv.AddUser(t, d, "alice"))
-	exec(t, d, `UPDATE login SET last_used = now() - interval '2 hours'`)
+	exec(t, d, `UPDATE logins SET last_used = now() - interval '2 hours'`)
 	l, _, _ := login.Lookup(ctx, d, tok)
 	if err := login.Touch(ctx, d, l.ID); err != nil {
 		t.Fatal(err)
 	}
-	if n := count(t, d, `SELECT count(*) FROM login WHERE last_used > now() - interval '1 minute'`); n != 1 {
+	if n := count(t, d, `SELECT count(*) FROM logins WHERE last_used > now() - interval '1 minute'`); n != 1 {
 		t.Error("Touch did not refresh last_used")
 	}
 }
@@ -190,7 +190,7 @@ func TestUserAgentTruncated(t *testing.T) {
 	}
 	var got string
 	var nullIP bool
-	if err := d.Pool.QueryRow(ctx, `SELECT user_agent, ip IS NULL FROM login ORDER BY id LIMIT 1`).Scan(&got, &nullIP); err != nil {
+	if err := d.Pool.QueryRow(ctx, `SELECT user_agent, ip IS NULL FROM logins ORDER BY id LIMIT 1`).Scan(&got, &nullIP); err != nil {
 		t.Fatal(err)
 	}
 	if got != long[:256] || !nullIP {
@@ -219,8 +219,8 @@ func TestUserAgentTruncated(t *testing.T) {
 func TestUserDeleteCascades(t *testing.T) {
 	d := testenv.Postgres(t)
 	testenv.Login(t, d, testenv.AddUser(t, d, "alice"))
-	exec(t, d, `DELETE FROM "user"`)
-	if n := count(t, d, `SELECT count(*) FROM login`); n != 0 {
+	exec(t, d, `DELETE FROM users`)
+	if n := count(t, d, `SELECT count(*) FROM logins`); n != 0 {
 		t.Errorf("%d logins left", n)
 	}
 }
@@ -229,7 +229,7 @@ func TestPrune(t *testing.T) {
 	d := testenv.Postgres(t)
 	u := testenv.AddUser(t, d, "alice")
 	old, live := testenv.Login(t, d, u), testenv.Login(t, d, u)
-	exec(t, d, `UPDATE login SET last_used = now() - interval '8 days'
+	exec(t, d, `UPDATE logins SET last_used = now() - interval '8 days'
 		WHERE token_hash = $1`, hash(old))
 	n, err := login.Prune(ctx, d)
 	if err != nil || n != 1 {
@@ -238,7 +238,7 @@ func TestPrune(t *testing.T) {
 	if _, ok, _ := login.Lookup(ctx, d, live); !ok {
 		t.Error("live login pruned")
 	}
-	if c := count(t, d, `SELECT count(*) FROM login`); c != 1 {
+	if c := count(t, d, `SELECT count(*) FROM logins`); c != 1 {
 		t.Errorf("%d rows left", c)
 	}
 }
@@ -254,7 +254,7 @@ func TestListOrder(t *testing.T) {
 	}
 	// toks[1] newest, then toks[2], then toks[0]; toks[0] kept live
 	for i, ago := range map[int]string{0: "3 days", 1: "1 hour", 2: "1 day"} {
-		exec(t, d, `UPDATE login SET last_used = now() - $2::interval WHERE token_hash = $1`, hash(toks[i]), ago)
+		exec(t, d, `UPDATE logins SET last_used = now() - $2::interval WHERE token_hash = $1`, hash(toks[i]), ago)
 	}
 	infos, err := login.List(ctx, d, u)
 	if err != nil || len(infos) != 3 {
@@ -270,7 +270,7 @@ func TestListOrder(t *testing.T) {
 			t.Errorf("position %d: id %d, want %d", i, info.ID, want[i])
 		}
 	}
-	exec(t, d, `UPDATE login SET last_used = now() - interval '8 days' WHERE token_hash = $1`, hash(toks[0]))
+	exec(t, d, `UPDATE logins SET last_used = now() - interval '8 days' WHERE token_hash = $1`, hash(toks[0]))
 	if infos, _ := login.List(ctx, d, u); len(infos) != 2 {
 		t.Errorf("List includes an expired login: %d", len(infos))
 	}

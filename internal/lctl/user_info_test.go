@@ -11,13 +11,13 @@ func TestUserInfo(t *testing.T) {
 	now := time.Date(2026, 11, 2, 12, 0, 0, 0, time.UTC)
 	h.env.Now = func() time.Time { return now }
 	u := h.user("Ann")
-	h.exec(`UPDATE "user" SET last_login = $2, verified = true, password_hash = '$2a$12$x', registered = $3 WHERE id = $1`,
+	h.exec(`UPDATE users SET last_login = $2, verified = true, password_hash = '$2a$12$x', registered = $3 WHERE id = $1`,
 		u, now.Add(-3*24*time.Hour-2*time.Hour), now.Add(-40*24*time.Hour))
 	h.conn("c1", u, `{"Host":"irc.libera.chat","Port":6697,"Nick":"ann","Ssl":true,"SASL":true,"User":"ann","Pass":"hunter2","Alias":"Libera","Channels":["#a","#b"]}`)
 	h.conn("c2", u, `{"Host":"irc.relaychat.party","Port":6667,"Nick":"ann_"}`)
 	h.conn("c3", u, `"not an object"`)
-	h.exec(`UPDATE connection SET liercd='next' WHERE id='c2'`)
-	h.exec(`UPDATE connection SET liercd='' WHERE id='c3'`) // '' is main, as NULL
+	h.exec(`UPDATE connections SET liercd='next' WHERE id='c2'`)
+	h.exec(`UPDATE connections SET liercd='' WHERE id='c3'`) // '' is main, as NULL
 	if _, err := h.env.Liercd.Do(h.t.Context(), "POST", "c1/create", []byte("{}")); err != nil {
 		t.Fatal(err)
 	}
@@ -61,7 +61,7 @@ func TestUserInfoAges(t *testing.T) {
 func TestUserInfoUnknownAndNoPassword(t *testing.T) {
 	h := newHarness(t)
 	u := h.user("bob") // testenv users have no password
-	h.exec(`UPDATE "user" SET verified = false WHERE id = $1`, u)
+	h.exec(`UPDATE users SET verified = false WHERE id = $1`, u)
 	if err := h.run("user-info", "bob", "nobody"); err == nil {
 		t.Fatal("no error for an unknown user")
 	}
@@ -93,7 +93,7 @@ func TestUserInfoUsage(t *testing.T) {
 func TestUserInfoGrandfathered(t *testing.T) {
 	h := newHarness(t)
 	u := h.user("Gus")
-	h.exec(`UPDATE "user" SET verified = NULL WHERE id = $1`, u)
+	h.exec(`UPDATE users SET verified = NULL WHERE id = $1`, u)
 	if err := h.run("user-info", u); err != nil {
 		t.Fatal(err)
 	}
@@ -105,8 +105,8 @@ func TestUserInfoGrandfathered(t *testing.T) {
 func TestUserInfoNeverLoggedIn(t *testing.T) {
 	h := newHarness(t)
 	u := h.user("Nel")
-	h.exec(`ALTER TABLE "user" ALTER COLUMN last_login DROP NOT NULL`)
-	h.exec(`UPDATE "user" SET last_login = NULL WHERE id = $1`, u)
+	h.exec(`ALTER TABLE users ALTER COLUMN last_login DROP NOT NULL`)
+	h.exec(`UPDATE users SET last_login = NULL WHERE id = $1`, u)
 	if err := h.run("user-info", u); err != nil {
 		t.Fatal(err)
 	}

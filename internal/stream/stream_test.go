@@ -432,7 +432,7 @@ func TestUnverifiedForbidden(t *testing.T) {
 	e := setup(t)
 	u := e.addUser("newbie")
 	setVerified := func(v any) {
-		if _, err := e.db.Pool.Exec(context.Background(), `UPDATE "user" SET verified=$2 WHERE id=$1`, u, v); err != nil {
+		if _, err := e.db.Pool.Exec(context.Background(), `UPDATE users SET verified=$2 WHERE id=$1`, u, v); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -1170,7 +1170,7 @@ func TestCloseSavesChannels(t *testing.T) {
 	case <-time.After(waitFor):
 		t.Fatal("replay never asked liercd for status")
 	}
-	if _, err := d.Pool.Exec(ctx, `UPDATE "user" SET last_login='2000-01-01' WHERE id=$1`, u); err != nil {
+	if _, err := d.Pool.Exec(ctx, `UPDATE users SET last_login='2000-01-01' WHERE id=$1`, u); err != nil {
 		t.Fatal(err)
 	}
 	c.close() // disconnect mid-replay
@@ -1178,12 +1178,12 @@ func TestCloseSavesChannels(t *testing.T) {
 	e.waitReplay()
 	poll(t, "last_login", func() bool {
 		var old bool
-		d.Pool.QueryRow(ctx, `SELECT last_login < '2001-01-01' FROM "user" WHERE id=$1`, u).Scan(&old)
+		d.Pool.QueryRow(ctx, `SELECT last_login < '2001-01-01' FROM users WHERE id=$1`, u).Scan(&old)
 		return !old
 	})
 	var cfg map[string]any
 	var raw []byte
-	if err := d.Pool.QueryRow(ctx, `SELECT config FROM connection WHERE id='c1'`).Scan(&raw); err != nil {
+	if err := d.Pool.QueryRow(ctx, `SELECT config FROM connections WHERE id='c1'`).Scan(&raw); err != nil {
 		t.Fatal(err)
 	}
 	json.Unmarshal(raw, &cfg)

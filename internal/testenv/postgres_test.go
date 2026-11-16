@@ -32,11 +32,11 @@ func TestTemplateIsMigrated(t *testing.T) {
 	}
 	var compression string
 	err = d.Pool.QueryRow(ctx, `SELECT attcompression::text FROM pg_attribute
-		WHERE attrelid = 'log_archive'::regclass AND attname = 'messages'`).Scan(&compression)
+		WHERE attrelid = 'log_archives'::regclass AND attname = 'messages'`).Scan(&compression)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if compression != "" {
-		t.Errorf("log_archive.messages compression = %q, want none", compression)
+		t.Errorf("log_archives.messages compression = %q, want none", compression)
 	}
 }

@@ -60,7 +60,7 @@ func TestConnectedLoginsDropsEnded(t *testing.T) {
 	a := testenv.Login(t, e.db, alice)
 	c := e.openToken(a)
 	e.wantConnected(alice, map[int64]bool{e.loginID(a): true})
-	e.exec(`DELETE FROM login WHERE "user" = $1`, alice)
+	e.exec(`DELETE FROM logins WHERE user_id = $1`, alice)
 	if !c.ended(2 * time.Second) {
 		t.Fatal("stream of the ended login stayed open")
 	}

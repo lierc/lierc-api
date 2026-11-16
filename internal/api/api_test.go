@@ -214,7 +214,7 @@ func TestStreamSetsCookie(t *testing.T) {
 	e := setup(t)
 	u := testenv.AddUser(t, e.db, "alice")
 	token := testenv.Login(t, e.db, u)
-	e.exec(`UPDATE login SET last_used = now() - interval '2 hours'`)
+	e.exec(`UPDATE logins SET last_used = now() - interval '2 hours'`)
 	res := e.doReq("GET", "/events", "", "", "Cookie", "chats="+token)
 	defer res.Body.Close()
 	if res.StatusCode != 200 {

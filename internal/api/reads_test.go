@@ -50,7 +50,7 @@ func TestReadsNeedLogin(t *testing.T) {
 func TestPreference(t *testing.T) {
 	e := setup(t)
 	a, c := testenv.AddUser(t, e.db, "alice"), testenv.AddUser(t, e.db, "carol")
-	e.exec(`INSERT INTO pref ("user", name, value) VALUES ($1,'theme','"dark"')`, a)
+	e.exec(`INSERT INTO prefs (user_id, name, value) VALUES ($1,'theme','"dark"')`, a)
 	e.want("/preference", a, 200, `[{"name":"theme","value":"\"dark\""}]`)
 	e.want("/preference", c, 200, `[]`)
 }
@@ -59,7 +59,7 @@ func TestPrivatesRoute(t *testing.T) {
 	e := setup(t)
 	a, c := testenv.AddUser(t, e.db, "alice"), testenv.AddUser(t, e.db, "carol")
 	testenv.AddConnection(t, e.db, "c1", a, "{}")
-	e.exec(`INSERT INTO private (connection, nick, time) VALUES ('c1','bob','2026-10-29 12:34:56.789')`)
+	e.exec(`INSERT INTO private_chats (connection_id, nick, time) VALUES ('c1','bob','2026-10-29 12:34:56.789')`)
 	e.want("/privates", a, 200, `[{"nick":"bob","connection":"c1","time":"2026-10-29 12:34:56.789"}]`)
 	e.want("/privates", c, 200, `[]`)
 }
@@ -68,7 +68,7 @@ func TestSeenRoute(t *testing.T) {
 	e := setup(t)
 	a := testenv.AddUser(t, e.db, "alice")
 	testenv.AddConnection(t, e.db, "c1", a, "{}")
-	e.exec(`INSERT INTO seen ("user", connection, channel, message_id) VALUES ($1,'c1','#a',7)`, a)
+	e.exec(`INSERT INTO seen_markers (user_id, connection_id, channel, message_id) VALUES ($1,'c1','#a',7)`, a)
 	e.want("/seen", a, 200, `[{"connection":"c1","channel":"#a","message_id":7}]`)
 }
 
@@ -84,7 +84,7 @@ func TestWebPushKeys(t *testing.T) {
 
 func logRow(e *env, id int64, conn, user, channel string, command any, highlight bool) {
 	e.t.Helper()
-	e.exec(`INSERT INTO log (id, connection, "user", channel, command, highlight, time, message) VALUES ($1,$2,$3,$4,$5,$6,now(),'{}')`,
+	e.exec(`INSERT INTO logs (id, connection_id, user_id, channel, command, highlight, time, message) VALUES ($1,$2,$3,$4,$5,$6,now(),'{}')`,
 		id, conn, user, channel, command, highlight)
 }
 

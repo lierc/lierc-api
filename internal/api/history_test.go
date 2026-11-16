@@ -17,7 +17,7 @@ import (
 func (e *env) msg(id int64, conn, user, channel, text string, self, highlight bool, when string) {
 	e.t.Helper()
 	m := fmt.Sprintf(`{"Command":"PRIVMSG","Params":[%q,%q]}`, channel, text)
-	e.exec(`INSERT INTO log (id, connection, "user", channel, command, self, highlight, time, message) VALUES ($1,$2,$3,$4,'PRIVMSG',$5,$6,$7::timestamp,$8)`,
+	e.exec(`INSERT INTO logs (id, connection_id, user_id, channel, command, self, highlight, time, message) VALUES ($1,$2,$3,$4,'PRIVMSG',$5,$6,$7::timestamp,$8)`,
 		id, conn, user, channel, self, highlight, when, m)
 }
 
@@ -69,7 +69,7 @@ func TestLogRoute(t *testing.T) {
 	e := setup(t)
 	a := testenv.AddUser(t, e.db, "alice")
 	testenv.AddConnection(t, e.db, "c1", a, "{}")
-	e.exec(`INSERT INTO log (id, connection, "user", channel, command, time, message)
+	e.exec(`INSERT INTO logs (id, connection_id, user_id, channel, command, time, message)
 		SELECT g, 'c1', $1, '#a', 'PRIVMSG', now(), '{}' FROM generate_series(1, 251) g`, a)
 	c, b := e.getJSON("/log/1", a)
 	if ids := msgIDs(t, b); c != 200 || len(ids) != 250 || ids[0] != 2 || ids[249] != 251 {
@@ -84,7 +84,7 @@ func TestLogRouteBody(t *testing.T) {
 	e := setup(t)
 	a := testenv.AddUser(t, e.db, "alice")
 	testenv.AddConnection(t, e.db, "c1", a, "{}")
-	e.exec(`INSERT INTO log (id, connection, "user", channel, command, self, highlight, time, message) VALUES (7,'c1',$1,'#a','PRIVMSG',true,false,now(),'{"Command":"PRIVMSG"}')`, a)
+	e.exec(`INSERT INTO logs (id, connection_id, user_id, channel, command, self, highlight, time, message) VALUES (7,'c1',$1,'#a','PRIVMSG',true,false,now(),'{"Command":"PRIVMSG"}')`, a)
 	c, b := e.getJSON("/log/1", a)
 	var got bytes.Buffer
 	json.Compact(&got, []byte(b))
@@ -129,7 +129,7 @@ func TestLastRoute(t *testing.T) {
 	e := setup(t)
 	a := testenv.AddUser(t, e.db, "alice")
 	testenv.AddConnection(t, e.db, "c1", a, "{}")
-	e.exec(`INSERT INTO log (connection, "user", channel, command, time, message) VALUES ('c1',$1,'#a','PRIVMSG',now(),'{"Params":["#a","running late again"]}')`, a)
+	e.exec(`INSERT INTO logs (connection_id, user_id, channel, command, time, message) VALUES ('c1',$1,'#a','PRIVMSG',now(),'{"Params":["#a","running late again"]}')`, a)
 	if c, b := e.getJSON("/connection/c1/channel/%23a/last?query=running%20late", a); c != 200 || len(msgIDs(t, b)) != 1 {
 		t.Errorf("running late: %d %s", c, b)
 	}

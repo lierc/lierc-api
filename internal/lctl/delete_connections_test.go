@@ -19,7 +19,7 @@ func TestDeleteConnectionsDryRun(t *testing.T) {
 	h.has("nope: no such connection\n",
 		"c1 (user "+u+", ann, irc.libera.chat:6697): log=1 seen=1 private=1 connection=1\n",
 		"dry run: nothing deleted; run with --delete to delete\n")
-	if n := h.count(`SELECT count(*) FROM connection`); n != 1 {
+	if n := h.count(`SELECT count(*) FROM connections`); n != 1 {
 		t.Errorf("%d connections, want 1", n)
 	}
 	if len(h.liercd.Calls()) != 0 {
@@ -48,15 +48,15 @@ func TestDeleteConnectionsDelete(t *testing.T) {
 	if len(h.slept) != 1 || h.slept[0].Seconds() != 3 {
 		t.Errorf("slept %v", h.slept)
 	}
-	for _, table := range []string{"log", "seen", "private", "log_archive"} {
-		if n := h.count(`SELECT count(*) FROM ` + table + ` WHERE connection = 'c1'`); n != 0 {
+	for _, table := range []string{"logs", "seen_markers", "private_chats", "log_archives"} {
+		if n := h.count(`SELECT count(*) FROM ` + table + ` WHERE connection_id = 'c1'`); n != 0 {
 			t.Errorf("%s: %d rows left", table, n)
 		}
-		if n := h.count(`SELECT count(*) FROM ` + table + ` WHERE connection = 'c2'`); n != 1 {
+		if n := h.count(`SELECT count(*) FROM ` + table + ` WHERE connection_id = 'c2'`); n != 1 {
 			t.Errorf("%s: other connection's row gone", table)
 		}
 	}
-	if n := h.count(`SELECT count(*) FROM "user" WHERE id = $1`, u); n != 1 {
+	if n := h.count(`SELECT count(*) FROM users WHERE id = $1`, u); n != 1 {
 		t.Error("user deleted")
 	}
 }
@@ -70,7 +70,7 @@ func TestDeleteConnectionsLiercdRefuses(t *testing.T) {
 		t.Fatal("no error")
 	}
 	h.has("c1: liercd said 500 Internal Server Error, skipped\n", "deleted 0 connection(s), skipped 1\n")
-	if n := h.count(`SELECT count(*) FROM connection WHERE id = 'c1'`); n != 1 {
+	if n := h.count(`SELECT count(*) FROM connections WHERE id = 'c1'`); n != 1 {
 		t.Error("refused connection deleted")
 	}
 }
@@ -82,7 +82,7 @@ func TestDeleteConnectionsCancelledDuringSettle(t *testing.T) {
 	if err := h.run("delete-connections", "--delete", "c1"); !errors.Is(err, context.Canceled) {
 		t.Fatalf("got %v", err)
 	}
-	if n := h.count(`SELECT count(*) FROM connection`); n != 1 {
+	if n := h.count(`SELECT count(*) FROM connections`); n != 1 {
 		t.Error("deleted after cancel")
 	}
 }
@@ -154,7 +154,7 @@ func TestDeleteConnectionsAdminDown(t *testing.T) {
 	if calls := h.liercd.Calls(); len(calls) != 0 {
 		t.Errorf("liercd was called: %v", calls)
 	}
-	if n := h.count(`SELECT count(*) FROM connection`); n != 1 {
+	if n := h.count(`SELECT count(*) FROM connections`); n != 1 {
 		t.Error("connection deleted")
 	}
 }
@@ -210,7 +210,7 @@ func TestDeleteSweepErrorWarns(t *testing.T) {
 func TestDeleteConnectionsAlreadyGone(t *testing.T) {
 	h := newHarness(t)
 	h.conn("c1", h.user("ann"), cfg)
-	h.beforeSleep = func() { h.exec(`DELETE FROM connection WHERE id = 'c1'`) }
+	h.beforeSleep = func() { h.exec(`DELETE FROM connections WHERE id = 'c1'`) }
 	if err := h.run("delete-connections", "--delete", "c1"); err != nil {
 		t.Fatalf("got %v, want no error", err)
 	}

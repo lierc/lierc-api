@@ -1,4 +1,4 @@
-// Package archive moves old log rows into compressed blocks in log_archive,
+// Package archive moves old log rows into compressed blocks in log_archives,
 // and deletes old status window messages.
 //
 // Per connection and channel, the archivable ids are those below the Keep-th
@@ -86,7 +86,7 @@ func Candidates(ctx context.Context, store db.Store, o Options) ([]Channel, erro
 }
 
 // MoveBlock moves the oldest Block archivable messages of c into one
-// log_archive row, in one statement. It returns false, changing nothing,
+// log_archives row, in one statement. It returns false, changing nothing,
 // when fewer than Block messages are archivable.
 func MoveBlock(ctx context.Context, store db.Store, c Channel, o Options) (Block, bool, error) {
 	if err := o.check(); err != nil {
