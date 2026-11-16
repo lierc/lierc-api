@@ -7,7 +7,17 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
+// withTestCost runs the rest of the test at bcrypt's minimum cost, for
+// behaviour that doesn't depend on the cost; cost 12 itself is checked by
+// TestProductionCost and TestDummy.
+func withTestCost(t *testing.T) {
+	oldCost, oldDummy := cost, Dummy
+	t.Cleanup(func() { cost, Dummy = oldCost, oldDummy })
+	UseTestCost()
+}
+
 func TestHashCut72(t *testing.T) {
+	withTestCost(t)
 	pw := strings.Repeat("0123456789", 10)
 	h, err := Hash(pw)
 	if err != nil {
@@ -30,13 +40,14 @@ func TestCheckRefusesOtherHashes(t *testing.T) {
 }
 
 func TestNeedsRehash(t *testing.T) {
-	// the Perl conversion left $2b$15$ hashes; any cost but 12 is rehashed
-	other, err := bcrypt.GenerateFromPassword([]byte("pw"), 13)
+	withTestCost(t)
+	// the Perl conversion left $2b$15$ hashes; any cost but Cost() is rehashed
+	other, err := bcrypt.GenerateFromPassword([]byte("pw"), Cost()+1)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !NeedsRehash(string(other)) {
-		t.Error("a cost-13 hash should need a rehash")
+		t.Error("a hash at another cost should need a rehash")
 	}
 	fresh, err := Hash("pw")
 	if err != nil {
@@ -60,10 +71,7 @@ func TestDummy(t *testing.T) {
 }
 
 func TestUseTestCost(t *testing.T) {
-	oldCost, oldDummy := cost, Dummy
-	t.Cleanup(func() { cost, Dummy = oldCost, oldDummy })
-
-	UseTestCost()
+	withTestCost(t)
 	if Cost() != bcrypt.MinCost {
 		t.Fatalf("Cost() = %d, want %d", Cost(), bcrypt.MinCost)
 	}
@@ -79,10 +87,17 @@ func TestUseTestCost(t *testing.T) {
 	}
 }
 
-// Without UseTestCost (this package never calls it outside the test
-// above), hashes are made at the production cost.
+// Without UseTestCost, hashes are made at the production cost, and a
+// hash at that cost needs no rehash.
 func TestProductionCost(t *testing.T) {
 	if Cost() != 12 {
-		t.Errorf("Cost() = %d, want 12", Cost())
+		t.Fatalf("Cost() = %d, want 12", Cost())
+	}
+	h, err := Hash("pw")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c, _ := bcrypt.Cost([]byte(h)); c != 12 || NeedsRehash(h) || !Check("pw", h) {
+		t.Errorf("hash %q: cost %d, NeedsRehash %v", h, c, NeedsRehash(h))
 	}
 }
