@@ -20,7 +20,7 @@ func listSetup(m *instancesHarness) {
 	m.conn("a2", u, `{"Host":"irc.oftc.net","Port":6667}`)
 	m.conn("b1", u, `"not an object"`)
 	m.conn("c1", m.user("bob"), `{"Host":"irc.relaychat.party","Port":6697}`)
-	m.exec(`UPDATE connections SET liercd='' WHERE id='a2'`)
+	m.exec(`UPDATE connections SET liercd='main' WHERE id='a2'`)
 	m.exec(`UPDATE connections SET liercd='next' WHERE id IN ('b1', 'c1')`)
 	m.main.MarkRunning("a1")
 	m.main.SetStatus("a1", `{"Nick":"alice","Status":{"Connected":true}}`)

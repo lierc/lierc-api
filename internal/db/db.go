@@ -43,7 +43,10 @@ func Open(ctx context.Context, cfg config.Config) (*DB, error) {
 	if maxConns <= 0 {
 		maxConns = config.DefaultDBMaxConns
 	}
-	q := url.Values{"sslmode": {"prefer"}, "pool_max_conns": {strconv.Itoa(maxConns)}}
+	// timezone: times are UTC to everything here (the ::text and date()
+	// of timestamptz columns follow the session's zone), whatever the
+	// server's default
+	q := url.Values{"sslmode": {"prefer"}, "pool_max_conns": {strconv.Itoa(maxConns)}, "timezone": {"UTC"}}
 	u.RawQuery = q.Encode()
 	pool, err := pgxpool.New(ctx, u.String())
 	if err != nil {
@@ -117,17 +120,14 @@ func (d *DB) LookupConnection(ctx context.Context, id string) (owner string, cfg
 }
 
 // LookupLiercd returns the liercd instance connection id is on: "" for main
-// (a NULL column) or when there is no such connection.
+// (stored as 'main') or when there is no such connection.
 func (d *DB) LookupLiercd(ctx context.Context, id string) (string, error) {
-	var inst *string
+	var inst string
 	err := queryRow(ctx, d.Pool, connectionByID(id, "liercd")).Scan(&inst)
-	if errors.Is(err, pgx.ErrNoRows) {
+	if errors.Is(err, pgx.ErrNoRows) || inst == "main" {
 		return "", nil
 	}
-	if err != nil || inst == nil {
-		return "", err
-	}
-	return *inst, nil
+	return inst, err
 }
 
 func (d *DB) LookupOwner(ctx context.Context, id string) (string, bool, error) {
@@ -159,14 +159,12 @@ func (d *DB) SaveLastLogin(ctx context.Context, user string) error {
 	return err
 }
 
-// SetLiercd records which liercd instance connection id is on; "" stores NULL
-// (main).
+// SetLiercd records which liercd instance connection id is on; "" is main.
 func (d *DB) SetLiercd(ctx context.Context, id, instance string) error {
-	var inst *string
-	if instance != "" {
-		inst = &instance
+	if instance == "" {
+		instance = "main"
 	}
-	_, err := exec(ctx, d.Pool, psql.Update("connections").Set("liercd", inst).Where(sq.Eq{"id": id}))
+	_, err := exec(ctx, d.Pool, psql.Update("connections").Set("liercd", instance).Where(sq.Eq{"id": id}))
 	return err
 }
 

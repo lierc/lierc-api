@@ -98,7 +98,7 @@ func (a *api) setPreference(w http.ResponseWriter, r *http.Request, user string)
 func (a *api) setSeen(w http.ResponseWriter, r *http.Request, user, id string) {
 	channel := strings.ToLower(pathText(r, "channel"))
 	body, ok := readBody(w, r)
-	if !ok || tooLong(w, channel, 32, "channel name is too long") {
+	if !ok || tooLong(w, channel, 64, "channel name is too long") {
 		return
 	}
 	msg, err := strconv.ParseInt(strings.TrimSpace(body), 10, 32)

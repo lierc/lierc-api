@@ -194,7 +194,7 @@ func (m *instancesHarness) calledNothing() {
 }
 
 // insertConn saves a connection row as given, on the main liercd (liercd
-// NULL); user must exist (connections_user_id_fkey).
+// 'main'); user must exist (connections_user_id_fkey).
 func insertConn(h *harness, id, user, config string) {
-	h.exec(`INSERT INTO connections (id, user_id, config, liercd) VALUES ($1, $2, $3, NULL)`, id, user, config)
+	h.exec(`INSERT INTO connections (id, user_id, config, liercd) VALUES ($1, $2, $3, 'main')`, id, user, config)
 }

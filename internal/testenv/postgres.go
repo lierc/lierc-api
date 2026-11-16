@@ -177,12 +177,12 @@ func AddUser(t testing.TB, d *db.DB, name string) string {
 }
 
 // AddConnection inserts a connection owned by user (added if missing), on the main liercd
-// (liercd NULL; the column's default is 'next').
+// (liercd 'main'; the column's default is 'next').
 func AddConnection(t testing.TB, d *db.DB, id, user, config string) {
 	t.Helper()
 	ensureUser(t, d, user)
 	if _, err := d.Pool.Exec(context.Background(),
-		`INSERT INTO connections (id, user_id, config, liercd) VALUES ($1, $2, $3, NULL)`, id, user, config); err != nil {
+		`INSERT INTO connections (id, user_id, config, liercd) VALUES ($1, $2, $3, 'main')`, id, user, config); err != nil {
 		t.Fatal(err)
 	}
 }

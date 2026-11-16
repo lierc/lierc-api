@@ -69,9 +69,9 @@ func (d *DB) ListUsers(ctx context.Context, f UserFilter) ([]UserRow, error) {
 }
 
 // inactiveSince matches a user u that never logged in, or last did before
-// t. last_login is a timestamp without a zone, stored in UTC.
+// t.
 func inactiveSince(t time.Time) sq.Sqlizer {
-	return sq.Or{sq.Eq{"u.last_login": nil}, sq.Expr("u.last_login < (?::timestamptz AT TIME ZONE 'UTC')", t)}
+	return sq.Or{sq.Eq{"u.last_login": nil}, sq.Lt{"u.last_login": t}}
 }
 
 // LookupUsers finds users whose id, username or email is q (names and
@@ -129,7 +129,7 @@ func countRows(ctx context.Context, r runner, tables []tableRows) (map[string]in
 type ConnectionRow struct {
 	ID, User string
 	Username string // empty when the owner is gone
-	Instance string // "main" or "next": the liercd column, main when NULL or empty
+	Instance string // "main" or "next": the liercd column
 	Config   json.RawMessage
 }
 
@@ -144,7 +144,7 @@ type ConnectionFilter struct {
 // ListConnections lists the connections matching f, by their owner's last
 // login (never first), then user id, then connection id.
 func (d *DB) ListConnections(ctx context.Context, f ConnectionFilter) ([]ConnectionRow, error) {
-	q := psql.Select("c.id", "c.user_id", "coalesce(u.username, '')", "coalesce(nullif(c.liercd, ''), 'main')", "c.config::text").
+	q := psql.Select("c.id", "c.user_id", "coalesce(u.username, '')", "c.liercd", "c.config::text").
 		From("connections c").LeftJoin(`users u ON u.id = c.user_id`).
 		OrderBy("u.last_login NULLS FIRST", "c.user_id", "c.id")
 	if f.ID != "" {
@@ -177,13 +177,9 @@ func (d *DB) ListConnections(ctx context.Context, f ConnectionFilter) ([]Connect
 	return out, rows.Err()
 }
 
-// onInstance matches a connection c on liercd instance (main or next); main
-// is a NULL or empty column.
+// onInstance matches a connection c on liercd instance (main or next).
 func onInstance(instance string) sq.Sqlizer {
-	if instance == "main" {
-		instance = ""
-	}
-	return sq.Expr("coalesce(c.liercd, '') = ?", instance)
+	return sq.Eq{"c.liercd": instance}
 }
 
 // ConnectionCounts counts, by table, the rows deleting connection id would

@@ -197,7 +197,7 @@ func TestListConnections(t *testing.T) {
 	testenv.AddConnection(t, d, "o1", old, `{}`)
 	testenv.AddConnection(t, d, "n1", never, `{}`)
 	exec(t, d, `UPDATE connections SET liercd = 'next' WHERE id IN ('o2', 'r1')`)
-	exec(t, d, `UPDATE connections SET liercd = '' WHERE id = 'o1'`)
+	exec(t, d, `UPDATE connections SET liercd = 'main' WHERE id = 'o1'`)
 
 	all, err := d.ListConnections(ctx, db.ConnectionFilter{})
 	if err != nil {

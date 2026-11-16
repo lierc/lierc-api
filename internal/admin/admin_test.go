@@ -211,7 +211,7 @@ func TestListConnections(t *testing.T) {
 	testenv.AddConnection(t, e.d, "o2", old, `{"Host":"o.example","Port":6697}`)
 	testenv.AddConnection(t, e.d, "o1", old, `{}`)
 	e.exec(`UPDATE connections SET liercd = 'next' WHERE id = 'o2'`)
-	e.exec(`UPDATE connections SET liercd = '' WHERE id = 'r1'`)
+	e.exec(`UPDATE connections SET liercd = 'main' WHERE id = 'r1'`)
 
 	var cs []admin.Connection
 	e.getJSON("/admin/connections", &cs)

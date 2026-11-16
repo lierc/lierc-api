@@ -272,10 +272,10 @@ func TestMoveElements(t *testing.T) {
 		"2026-09-01 00:00:00",
 		"2026-09-01 23:59:59.999999",
 	}
-	testenv.EnsureConnection(t, d.db, "c1", "u1")
+	testenv.EnsureConnection(t, d.db, "c1", "u-c1") // the owner d.insert uses
 	for i, ts := range times {
 		d.exec(`INSERT INTO logs (id, connection_id, user_id, channel, command, highlight, time, message)
-			VALUES ($1, 'c1', 'u1', '#chan', 'PRIVMSG', $2, $3::timestamp, $4)`,
+			VALUES ($1, 'c1', 'u-c1', '#chan', 'PRIVMSG', $2, $3::timestamp, $4)`,
 			i+1, i%2 == 0, ts,
 			fmt.Sprintf(`{"Command":"PRIVMSG","Params":["#chan","héllo \"%d\" ☃"],"Prefix":{"Name":"nick","Self":true},"Tags":{"msgid":"m%d"}}`, i, i))
 	}
@@ -318,7 +318,7 @@ func TestMoveElements(t *testing.T) {
 	// Each element matches its original row.
 	if n := d.count(`SELECT count(*) FROM log_archives a, json_array_elements(a.messages) e
 		JOIN before b ON b.id = (e->>'id')::int
-		WHERE to_timestamp((e->>'time')::bigint) AT TIME ZONE 'UTC' = date_trunc('second', b.time)
+		WHERE to_timestamp((e->>'time')::bigint) = date_trunc('second', b.time)
 		  AND (e->'message')::jsonb = b.message
 		  AND (e->>'highlight')::bool = b.highlight`); n != 4 {
 		t.Fatalf("%d of 4 elements match their rows", n)
@@ -330,7 +330,7 @@ func TestMoveElements(t *testing.T) {
 		t.Fatalf("%d of 4 element times equal the epoch seconds", n)
 	}
 	if n := d.count(`SELECT count(*) FROM log_archives a
-		WHERE a.user_id = 'u1'
+		WHERE a.user_id = 'u-c1'
 		  AND a.min_time = (SELECT min(time) FROM before)
 		  AND a.max_time = (SELECT max(time) FROM before)
 		  AND a.first_id = 1 AND a.last_id = 4 AND a.count = 4`); n != 1 {

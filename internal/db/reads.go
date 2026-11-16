@@ -24,8 +24,9 @@ func (d *DB) Prefs(ctx context.Context, user string) ([]Pref, error) {
 	return collect(rows, pgx.RowToStructByPos[Pref])
 }
 
-// Private is a private chat. Time is the text Postgres prints for the
-// timestamp ("2026-10-29 12:34:56.789"), which the UI parses.
+// Private is a private chat. Time is the text Postgres prints for the time
+// as a UTC timestamp without a zone ("2026-10-29 12:34:56.789"), which the
+// UI parses.
 type Private struct {
 	Nick       string `json:"nick"`
 	Connection string `json:"connection"`
@@ -34,7 +35,7 @@ type Private struct {
 
 // Privates is user's private chats, oldest first.
 func (d *DB) Privates(ctx context.Context, user string) ([]Private, error) {
-	rows, err := query(ctx, d.Pool, psql.Select("p.nick", "p.connection_id", "p.time::text").
+	rows, err := query(ctx, d.Pool, psql.Select("p.nick", "p.connection_id", "(p.time AT TIME ZONE 'UTC')::text").
 		From("private_chats AS p").Join("connections AS c ON c.id = p.connection_id").
 		Where(sq.Eq{"c.user_id": user}).OrderBy("p.time ASC"))
 	if err != nil {

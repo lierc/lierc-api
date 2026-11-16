@@ -70,7 +70,9 @@ func TestSetSeenRoute(t *testing.T) {
 	for _, body := range []string{"abc", "", "3000000000"} {
 		e.sendWant("POST", "/connection/c1/channel/%23a/seen", a, body, 400, `{"status":"error","error":"message id must be a number"}`)
 	}
-	e.sendWant("POST", "/connection/c1/channel/%23"+strings.Repeat("a", 32)+"/seen", a, "1", 400, `{"status":"error","error":"channel name is too long"}`)
+	// up to 64 characters, the longest channel name common networks allow
+	e.sendWant("POST", "/connection/c1/channel/%23"+strings.Repeat("a", 63)+"/seen", a, "1", 204, "")
+	e.sendWant("POST", "/connection/c1/channel/%23"+strings.Repeat("a", 64)+"/seen", a, "1", 400, `{"status":"error","error":"channel name is too long"}`)
 	e.sendWant("POST", "/connection/c1/channel/%23a/seen", b, "abc", 401, `{"status":"error","error":"Invalid connection id 'c1'"}`)
 }
 

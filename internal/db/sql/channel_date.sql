@@ -19,7 +19,7 @@ UNION ALL
 SELECT id, message, connection_id, highlight FROM (
   SELECT (e->>'id')::int AS id, e->'message' AS m, (e->'message')::text AS message,
     a.connection_id, (e->>'highlight')::bool AS highlight,
-    to_timestamp((e->>'time')::bigint) AT TIME ZONE 'UTC' AS time
+    to_timestamp((e->>'time')::bigint) AS time
   FROM log_archives a
   CROSS JOIN LATERAL json_array_elements(a.messages) e
   WHERE a.connection_id = $1

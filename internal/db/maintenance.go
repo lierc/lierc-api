@@ -10,7 +10,7 @@ type ReviveConnection struct{ ID, Config string }
 
 // ReviveCandidates lists the connections of users who logged in within
 // since, in id order. A non-empty instance (main or next) limits it to that
-// liercd's connections; main is a NULL or empty column.
+// liercd's connections.
 func (d *DB) ReviveCandidates(ctx context.Context, since time.Duration, instance string) ([]ReviveConnection, error) {
 	q := psql.Select("c.id", "c.config::text").From("connections c").Join(`users u ON u.id = c.user_id`).
 		Where("u.last_login > now() - make_interval(secs => ?)", since.Seconds()).

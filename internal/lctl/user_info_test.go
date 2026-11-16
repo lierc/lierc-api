@@ -17,7 +17,7 @@ func TestUserInfo(t *testing.T) {
 	h.conn("c2", u, `{"Host":"irc.relaychat.party","Port":6667,"Nick":"ann_"}`)
 	h.conn("c3", u, `"not an object"`)
 	h.exec(`UPDATE connections SET liercd='next' WHERE id='c2'`)
-	h.exec(`UPDATE connections SET liercd='' WHERE id='c3'`) // '' is main, as NULL
+	h.exec(`UPDATE connections SET liercd='main' WHERE id='c3'`)
 	if _, err := h.env.Liercd.Do(h.t.Context(), "POST", "c1/create", []byte("{}")); err != nil {
 		t.Fatal(err)
 	}

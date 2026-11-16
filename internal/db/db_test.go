@@ -211,21 +211,20 @@ func TestLookupLiercd(t *testing.T) {
 	}
 }
 
-// SetLiercd stores an instance, and "" as NULL.
-func TestSetLiercd(t *testing.T) {
+// SetLiercd stores an instance, and "" (main, to the Go code) as 'main';
+// LookupLiercd turns it back into "".
+func TestSetLiercdMain(t *testing.T) {
 	d := testenv.Postgres(t)
 	testenv.AddConnection(t, d, "c1", "u1", `{}`)
-	for _, inst := range []string{"next", ""} {
+	for inst, stored := range map[string]string{"next": "next", "": "main"} {
 		if err := d.SetLiercd(ctx, "c1", inst); err != nil {
 			t.Fatal(err)
 		}
-		var isNull bool
-		var got string
-		if err := d.Pool.QueryRow(ctx, `SELECT liercd IS NULL, coalesce(liercd, '') FROM connections WHERE id='c1'`).Scan(&isNull, &got); err != nil {
-			t.Fatal(err)
+		if got := one[string](t, d, `SELECT liercd FROM connections WHERE id = 'c1'`); got != stored {
+			t.Errorf("SetLiercd(%q) stored %q, want %q", inst, got, stored)
 		}
-		if got != inst || isNull != (inst == "") {
-			t.Errorf("SetLiercd(%q): stored %q, null %v", inst, got, isNull)
+		if got, err := d.LookupLiercd(ctx, "c1"); err != nil || got != inst {
+			t.Errorf("LookupLiercd after SetLiercd(%q) = %q, %v", inst, got, err)
 		}
 	}
 }
@@ -409,5 +408,26 @@ func TestEditConfigAllowsLogging(t *testing.T) {
 	}
 	if insertErr != nil {
 		t.Errorf("logging while the config is edited: %v", insertErr)
+	}
+}
+
+// New connections go to liercd "next" (the column's default): neither save
+// path names an instance.
+func TestNewConnectionsOnNext(t *testing.T) {
+	d := testenv.Postgres(t)
+	u := testenv.AddUser(t, d, "u")
+	if err := d.SaveConnection(ctx, "c1", u, []byte(`{}`)); err != nil {
+		t.Fatal(err)
+	}
+	if ok, err := d.SaveConnectionLimited(ctx, "c2", u, []byte(`{}`), 5); err != nil || !ok {
+		t.Fatalf("SaveConnectionLimited: %v %v", ok, err)
+	}
+	for _, id := range []string{"c1", "c2"} {
+		if got := one[string](t, d, `SELECT liercd FROM connections WHERE id = '`+id+`'`); got != "next" {
+			t.Errorf("%s stored liercd %q, want next", id, got)
+		}
+		if got, err := d.LookupLiercd(ctx, id); err != nil || got != "next" {
+			t.Errorf("LookupLiercd(%s) = %q, %v", id, got, err)
+		}
 	}
 }

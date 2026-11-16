@@ -30,7 +30,7 @@ keep_id AS (
 	ORDER BY id DESC OFFSET $3::int - 1 LIMIT 1
 ),
 age_id AS (
-	SELECT id FROM logs WHERE connection_id = $1 AND channel = $2 AND time < $4::timestamp
+	SELECT id FROM logs WHERE connection_id = $1 AND channel = $2 AND time < $4::timestamptz
 	ORDER BY id DESC LIMIT 1
 ),
 below AS (
@@ -83,7 +83,7 @@ LEFT JOIN LATERAL (
 	ORDER BY id DESC OFFSET $1::int - 1 LIMIT 1
 ) k ON true
 LEFT JOIN LATERAL (
-	SELECT id FROM logs WHERE connection_id = p.connection_id AND channel = p.channel AND time < $2::timestamp
+	SELECT id FROM logs WHERE connection_id = p.connection_id AND channel = p.channel AND time < $2::timestamptz
 	ORDER BY id DESC LIMIT 1
 ) a ON true
 CROSS JOIN LATERAL (

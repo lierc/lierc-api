@@ -185,7 +185,7 @@ func TestReviveInstance(t *testing.T) {
 		m.conn(id, u, cfg)
 	}
 	m.exec(`UPDATE connections SET liercd = 'next' WHERE id = 'n'`)
-	m.exec(`UPDATE connections SET liercd = '' WHERE id = 'b'`)
+	m.exec(`UPDATE connections SET liercd = 'main' WHERE id = 'b'`)
 	if err := m.run("revive", "--instance", "next"); err != nil {
 		t.Fatal(err)
 	}
