@@ -387,3 +387,27 @@ func TestEditConfigBlocksMerge(t *testing.T) {
 		t.Errorf("saved %s", got)
 	}
 }
+
+// While EditConfig holds a connection (its edit can wait on liercd), the
+// logger can still log for it: the logs insert's key check only needs the
+// row not to be deleted or re-keyed, which EditConfig's lock allows.
+func TestEditConfigAllowsLogging(t *testing.T) {
+	d := testenv.Postgres(t)
+	ctx := context.Background()
+	u := testenv.AddUser(t, d, "u")
+	testenv.AddConnection(t, d, "c1", u, `{}`)
+	var insertErr error
+	_, err := d.EditConfig(ctx, "c1", func(saved []byte) ([]byte, error) {
+		ictx, cancel := context.WithTimeout(ctx, 2*time.Second)
+		defer cancel()
+		_, insertErr = d.Pool.Exec(ictx, `INSERT INTO logs (connection_id, user_id, channel, time, message)
+			VALUES ('c1', $1, '#a', now(), '{}')`, u)
+		return saved, nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if insertErr != nil {
+		t.Errorf("logging while the config is edited: %v", insertErr)
+	}
+}

@@ -19,7 +19,9 @@ func (d *DB) SaveConnectionLimited(ctx context.Context, id, user string, config 
 	}
 	defer tx.Rollback(ctx)
 	var one int
-	if err := queryRow(ctx, tx, psql.Select("1").From("users").Where(sq.Eq{"id": user}).Suffix("FOR UPDATE")).Scan(&one); err != nil {
+	// NO KEY UPDATE: serializes this user's creates without blocking the
+	// key checks of rows that reference the user (logins, prefs, ...)
+	if err := queryRow(ctx, tx, psql.Select("1").From("users").Where(sq.Eq{"id": user}).Suffix("FOR NO KEY UPDATE")).Scan(&one); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return false, nil
 		}
@@ -81,7 +83,9 @@ func (d *DB) EditConfig(ctx context.Context, id string, edit func(saved []byte) 
 	}
 	defer tx.Rollback(ctx)
 	var saved []byte
-	if err := queryRow(ctx, tx, connectionByID(id, "config").Suffix("FOR UPDATE")).Scan(&saved); err != nil {
+	// NO KEY UPDATE: a MergeConfig waits, but the logger's inserts, whose
+	// key check (logs_connection_id_fkey) needs only KEY SHARE, don't
+	if err := queryRow(ctx, tx, connectionByID(id, "config").Suffix("FOR NO KEY UPDATE")).Scan(&saved); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return false, nil
 		}

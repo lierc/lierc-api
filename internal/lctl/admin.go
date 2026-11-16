@@ -195,14 +195,6 @@ func (a *Admin) Logins(ctx context.Context, user string) ([]admin.Login, error) 
 	return out, a.do(ctx, http.MethodGet, "/admin/users/"+url.PathEscape(user)+"/logins", nil, &out)
 }
 
-// LastLogID is the highest id in the log (0 if it's empty).
-func (a *Admin) LastLogID(ctx context.Context) (int64, error) {
-	var out struct {
-		ID int64 `json:"id"`
-	}
-	return out.ID, a.do(ctx, http.MethodGet, "/admin/log/last", nil, &out)
-}
-
 // StaleSeen counts the seen rows prune-seen would delete.
 func (a *Admin) StaleSeen(ctx context.Context) (int64, error) {
 	var out struct {
@@ -215,38 +207,33 @@ func (a *Admin) StaleSeen(ctx context.Context) (int64, error) {
 // reached the API and been done.
 var ErrMaybeDone = errors.New("the request ended before the API answered; the delete may have finished")
 
-// Deleted is what a delete did. Counts are the delete's own rows per table;
-// Swept and SweptArchive are the late log rows and archive blocks removed
-// after it. SweepError, if set, says the delete is done but the sweep failed.
+// Deleted is what a delete did: the rows deleted per table.
 type Deleted struct {
-	Counts       map[string]int64
-	Swept        int64
-	SweptArchive int64
-	SweepError   string
+	Counts map[string]int64
 }
 
-// remove sends a delete; logAfter is the log's last id from before the
-// command began destroying connections.
-func (a *Admin) remove(ctx context.Context, path string, logAfter int64) (Deleted, error) {
+// remove sends a delete.
+func (a *Admin) remove(ctx context.Context, path string) (Deleted, error) {
 	var out admin.DeleteResult
-	err := a.send(ctx, 0, http.MethodDelete, path, url.Values{"log_after": {strconv.FormatInt(logAfter, 10)}}, &out)
+	err := a.send(ctx, 0, http.MethodDelete, path, nil, &out)
 	if errors.Is(err, ErrUnreachable) {
-		// the caller has already reached the server (LastLogID), so this
-		// request may have arrived before the connection broke
+		// the caller has already reached the server (looking up what it
+		// deletes), so this request may have arrived before the
+		// connection broke
 		return Deleted{}, ErrMaybeDone
 	}
-	return Deleted{out.Counts, out.Swept, out.SweptArchive, out.SweepError}, err
+	return Deleted{out.Counts}, err
 }
 
-// DeleteUser deletes a user and their data, then sweeps log rows with an id
-// above logAfter. It returns what was deleted. ErrNotFound if there is no such user.
-func (a *Admin) DeleteUser(ctx context.Context, id string, logAfter int64) (Deleted, error) {
-	return a.remove(ctx, "/admin/users/"+url.PathEscape(id), logAfter)
+// DeleteUser deletes a user and, with them, all their data. ErrNotFound if
+// there is no such user.
+func (a *Admin) DeleteUser(ctx context.Context, id string) (Deleted, error) {
+	return a.remove(ctx, "/admin/users/"+url.PathEscape(id))
 }
 
 // DeleteConnection deletes a connection and its data like DeleteUser.
-func (a *Admin) DeleteConnection(ctx context.Context, id string, logAfter int64) (Deleted, error) {
-	return a.remove(ctx, "/admin/connections/"+url.PathEscape(id), logAfter)
+func (a *Admin) DeleteConnection(ctx context.Context, id string) (Deleted, error) {
+	return a.remove(ctx, "/admin/connections/"+url.PathEscape(id))
 }
 
 // EndLogin ends one login of a user; ErrNotFound if there is no such login.

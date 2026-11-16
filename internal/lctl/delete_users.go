@@ -20,10 +20,10 @@ stop running. If liercd can't be reached or refuses (anything but 200, or
 404 for a connection that isn't running), that user is skipped and nothing
 of theirs is deleted. Destroying a connection makes it QUIT, and that
 message reaches the log through NSQ a moment later, so the command waits
---settle seconds before deleting. Each user's rows are then deleted in one
-transaction: a user is either fully deleted or left as they were. A last
-sweep removes any log rows that still arrived late (it looks only at rows
-written after the command started, so it takes moments).`
+--settle seconds before deleting. Each user is then deleted in one
+transaction, everything of theirs with them: a user is either fully
+deleted or left as they were. (A message arriving for a deleted
+connection afterwards is dropped: nothing of theirs can be written.)`
 
 // userTables are the tables a user's dry run lists, in this order.
 var userTables = []string{"log", "seen", "private", "pref", "web_push", "connection", "user"}
@@ -88,14 +88,6 @@ func deleteUsers(ctx context.Context, env *Env, args []string) error {
 		return nil
 	}
 
-	// log rows from here on are new: the API's last sweep looks only at
-	// those, not at each user's whole (just deleted) history. This is also
-	// the first call that must reach the admin server, before liercd is touched.
-	logAfter, err := env.Admin.LastLogID(ctx)
-	if err != nil {
-		return err
-	}
-
 	// stop every connection first, so nothing keeps running for these users
 	var ready []foundUser
 	wait := false
@@ -124,12 +116,11 @@ func deleteUsers(ctx context.Context, env *Env, args []string) error {
 	}
 
 	var deleted []foundUser
-	late, lateBlocks := map[string]int64{}, map[string]int64{}
 	for _, u := range ready {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		res, err := env.Admin.DeleteUser(ctx, u.id, logAfter)
+		_, err := env.Admin.DeleteUser(ctx, u.id)
 		if errors.Is(err, ErrMaybeDone) {
 			return err
 		}
@@ -144,20 +135,8 @@ func deleteUsers(ctx context.Context, env *Env, args []string) error {
 			skipped++
 			continue
 		}
-		late[u.id] = res.Swept
-		lateBlocks[u.id] = res.SweptArchive
-		warnSweep(env, u.id, res)
 		fmt.Fprintf(out, "%s: deleted\n", u.id)
 		deleted = append(deleted, u)
-	}
-
-	for _, u := range deleted {
-		if n := late[u.id]; n > 0 {
-			fmt.Fprintf(out, "%s: removed %d late log row(s)\n", u.id, n)
-		}
-		if n := lateBlocks[u.id]; n > 0 {
-			fmt.Fprintf(out, "%s: removed %d late archive block(s)\n", u.id, n)
-		}
 	}
 
 	fmt.Fprintf(out, "deleted %d user(s), skipped %d\n", len(deleted), skipped)

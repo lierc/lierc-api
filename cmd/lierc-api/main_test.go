@@ -285,8 +285,8 @@ func TestAdminRoutesMounted(t *testing.T) {
 		resp.Body.Close()
 		return resp.StatusCode
 	}
-	if c := status(a[1], "/admin/log/last"); c != 200 {
-		t.Errorf("admin /admin/log/last = %d, want 200", c)
+	if c := status(a[1], "/admin/seen/stale"); c != 200 {
+		t.Errorf("admin /admin/seen/stale = %d, want 200", c)
 	}
 	if c := status(a[1], "/stats"); c != 200 {
 		t.Errorf("admin /stats = %d, want 200", c)

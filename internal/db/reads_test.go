@@ -64,7 +64,7 @@ func TestSeen(t *testing.T) {
 	ctx := context.Background()
 	a, c := testenv.AddUser(t, d, "alice"), testenv.AddUser(t, d, "carol")
 	testenv.AddConnection(t, d, "c1", a, "{}")
-	exec(t, d, `INSERT INTO seen_markers (user_id, connection_id, channel, message_id) VALUES ($1,'c1','#a',7), ($1,'gone','#a',9)`, a)
+	exec(t, d, `INSERT INTO seen_markers (user_id, connection_id, channel, message_id) VALUES ($1,'c1','#a',7)`, a)
 	got, err := d.Seen(ctx, a)
 	if err != nil || !reflect.DeepEqual(got, []db.SeenRow{{Connection: "c1", Channel: "#a", MessageID: 7}}) {
 		t.Errorf("alice seen = %v, %v", got, err)

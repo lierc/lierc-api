@@ -80,12 +80,6 @@ type Store interface {
 	ArchiveCandidates(ctx context.Context, keep int, cutoff time.Time, block int, conns []string) ([]ChannelCount, error)
 	ArchiveBlock(ctx context.Context, conn, channel string, keep int, cutoff time.Time, block int) (ArchivedBlock, bool, error)
 	DropStatusBlock(ctx context.Context, conn, channel string, keep int, cutoff time.Time, block int) (ArchivedBlock, bool, error)
-	GoneConnections(ctx context.Context) ([]string, error)
-	GoneUsers(ctx context.Context) ([]string, error)
-	CountOrphanArchive(ctx context.Context) (int, error)
-	DeleteGoneConnectionLogs(ctx context.Context, id string, batch int) (int64, error)
-	DeleteGoneUserLogs(ctx context.Context, id string, batch int) (int64, error)
-	DeleteOrphanArchive(ctx context.Context, batch int) (int64, error)
 	ReviveCandidates(ctx context.Context, since time.Duration, instance string) ([]ReviveConnection, error)
 
 	// the admin API's reads
@@ -94,13 +88,11 @@ type Store interface {
 	UserCounts(ctx context.Context, id string) (map[string]int64, error)
 	ListConnections(ctx context.Context, f ConnectionFilter) ([]ConnectionRow, error)
 	ConnectionCounts(ctx context.Context, id string) (map[string]int64, error)
-	LastLogID(ctx context.Context) (int64, error)
 	StaleSeenCount(ctx context.Context) (int64, error)
 
 	// the admin API's writes
 	DeleteUserData(ctx context.Context, id string) ([]ConnectionChange, map[string]int64, error)
 	DeleteConnectionData(ctx context.Context, id string) ([]ConnectionChange, map[string]int64, error)
-	SweepLateLogs(ctx context.Context, user string, connections []string, after int64) (rows, blocks int64, err error)
 	PruneStaleSeen(ctx context.Context) (int64, error)
 }
 

@@ -13,14 +13,13 @@ import (
 )
 
 // listSetup adds a1 (main, connected), a2 (main, empty column, not
-// running), b1 (next, running but not connected) and c1 (next, its owner
-// gone).
+// running), b1 (next, running but not connected) and c1 (next, bob's).
 func listSetup(m *instancesHarness) {
 	u := m.user("alice")
 	m.conn("a1", u, `{"Host":"irc.libera.chat","Port":6697}`)
 	m.conn("a2", u, `{"Host":"irc.oftc.net","Port":6667}`)
 	m.conn("b1", u, `"not an object"`)
-	insertConn(m.harness, "c1", "nobody", `{"Host":"irc.relaychat.party","Port":6697}`)
+	m.conn("c1", m.user("bob"), `{"Host":"irc.relaychat.party","Port":6697}`)
 	m.exec(`UPDATE connections SET liercd='' WHERE id='a2'`)
 	m.exec(`UPDATE connections SET liercd='next' WHERE id IN ('b1', 'c1')`)
 	m.main.MarkRunning("a1")
@@ -39,7 +38,7 @@ func TestConnectionList(t *testing.T) {
 	want := "a1  main  alice  irc.libera.chat:6697\n" +
 		"a2  main  alice  irc.oftc.net:6667\n" +
 		"b1  next  alice  ?\n" +
-		"c1  next  nobody (no such user)  irc.relaychat.party:6697\n"
+		"c1  next  bob  irc.relaychat.party:6697\n"
 	if got := m.out(); got != want {
 		t.Errorf("output:\n%s\nwant:\n%s", got, want)
 	}

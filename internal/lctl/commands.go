@@ -4,7 +4,6 @@ package lctl
 // These use the database directly.
 var Commands = []Command{
 	{Name: "revive", Summary: "Start saved connections liercd isn't running, for recently active users", Run: revive, NeedsDB: true},
-	{Name: "delete-orphan-logs", Summary: "Find or delete log rows of deleted connections and users", Run: deleteOrphanLogs, NeedsDB: true},
 	{Name: "archive", Summary: "Move old log rows into compressed archive blocks; dry run unless --move", Run: archiveCmd, NeedsDB: true},
 }
 

@@ -73,6 +73,12 @@ lock (say behind the nightly backup) is rolled back and retried for up to
 a minute, so deploy migrations that lock busy tables outside the backup
 and nightly window (07:00-09:30 UTC).
 
+Every row references the user or connection it belongs to, with
+`ON DELETE CASCADE`: deleting a user or connection deletes everything of
+theirs in the same statement, and nothing is left for a later clean-up. A
+new table that belongs to a user or connection gets such a key too, and
+an index leading with that column so the cascade doesn't scan the table.
+
 Tests
 -----
 

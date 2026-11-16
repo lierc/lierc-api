@@ -143,7 +143,6 @@ func seedCounts(t *testing.T, d *db.DB) (user, conn string) {
 	testenv.AddConnection(t, d, "otherc", other, `{}`)
 	testenv.AddLog(t, d, 1, conn, user)
 	testenv.AddLog(t, d, 2, conn, user)
-	testenv.AddLog(t, d, 3, "gone", user) // the user's, connection already deleted
 	testenv.AddLog(t, d, 4, "otherc", other)
 	exec(t, d, `INSERT INTO log_archives (connection_id, user_id, channel, first_id, last_id, min_time, max_time, count, messages)
 	  VALUES ('conn1', '`+user+`', '#a', 1, 1, now(), now(), 1, '[]')`)
@@ -162,7 +161,7 @@ func TestUserCounts(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := map[string]int64{"log": 3, "log_archive": 1, "seen": 2, "private": 1, "pref": 1, "web_push": 1, "connection": 2, "login": 2}
+	want := map[string]int64{"log": 2, "log_archive": 1, "seen": 2, "private": 1, "pref": 1, "web_push": 1, "connection": 2, "login": 2}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("counts = %v, want %v", got, want)
 	}
@@ -197,7 +196,6 @@ func TestListConnections(t *testing.T) {
 	testenv.AddConnection(t, d, "o2", old, `{"Host":"o.example","Port":6697}`)
 	testenv.AddConnection(t, d, "o1", old, `{}`)
 	testenv.AddConnection(t, d, "n1", never, `{}`)
-	testenv.AddConnection(t, d, "orphan", "nouser", `{}`)
 	exec(t, d, `UPDATE connections SET liercd = 'next' WHERE id IN ('o2', 'r1')`)
 	exec(t, d, `UPDATE connections SET liercd = '' WHERE id = 'o1'`)
 
@@ -205,12 +203,8 @@ func TestListConnections(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// owner last_login nulls first (never's and the owner-less row, by user id), then oldest, then recent
-	first := map[string]bool{}
-	if len(all) == 5 {
-		first[all[0].ID], first[all[1].ID] = true, true
-	}
-	if got := cids(all); len(got) != 5 || !first["n1"] || !first["orphan"] || got[2] != "o1" || got[3] != "o2" || got[4] != "r1" {
+	// owner last_login nulls first, then oldest, then recent
+	if got := cids(all); !reflect.DeepEqual(got, []string{"n1", "o1", "o2", "r1"}) {
 		t.Fatalf("order = %v", got)
 	}
 	for _, r := range all {
@@ -227,10 +221,6 @@ func TestListConnections(t *testing.T) {
 			if r.Instance != "main" {
 				t.Errorf("n1 instance = %q", r.Instance)
 			}
-		case "orphan":
-			if r.Username != "" {
-				t.Errorf("orphan username = %q", r.Username)
-			}
 		}
 	}
 
@@ -239,12 +229,11 @@ func TestListConnections(t *testing.T) {
 		t.Errorf("next = %v, %v", cids(got), err)
 	}
 	got, err = d.ListConnections(ctx, db.ConnectionFilter{Instance: "main"})
-	if err != nil || len(got) != 3 {
+	if err != nil || !reflect.DeepEqual(cids(got), []string{"n1", "o1"}) {
 		t.Errorf("main = %v, %v", cids(got), err)
 	}
 	cutoff := time.Date(2021, 1, 1, 0, 0, 0, 0, time.UTC)
 	got, err = d.ListConnections(ctx, db.ConnectionFilter{InactiveSince: &cutoff})
-	// the owner-less connection isn't anyone's inactive one
 	if err != nil || !reflect.DeepEqual(cids(got), []string{"n1", "o1", "o2"}) {
 		t.Errorf("inactive = %v, %v", cids(got), err)
 	}
@@ -262,29 +251,14 @@ func TestListConnections(t *testing.T) {
 	}
 }
 
-func TestLastLogID(t *testing.T) {
-	d := testenv.Postgres(t)
-	ctx := context.Background()
-	if n, err := d.LastLogID(ctx); err != nil || n != 0 {
-		t.Fatalf("empty = %d, %v", n, err)
-	}
-	u := testenv.AddUser(t, d, "u")
-	testenv.AddConnection(t, d, "c", u, `{}`)
-	testenv.AddLog(t, d, 7, "c", u)
-	testenv.AddLog(t, d, 5, "c", u)
-	if n, err := d.LastLogID(ctx); err != nil || n != 7 {
-		t.Errorf("got %d, %v", n, err)
-	}
-}
-
 func TestStaleSeenCount(t *testing.T) {
 	d := testenv.Postgres(t)
 	ctx := context.Background()
 	u := testenv.AddUser(t, d, "u")
 	testenv.AddConnection(t, d, "c", u, `{}`)
-	exec(t, d, `INSERT INTO seen_markers (user_id, connection_id, channel, message_id) VALUES ('`+u+`', 'c', '#fresh', 1), ('`+u+`', 'gone', '#orphan', 1)`)
+	exec(t, d, `INSERT INTO seen_markers (user_id, connection_id, channel, message_id) VALUES ('`+u+`', 'c', '#fresh', 1)`)
 	exec(t, d, `INSERT INTO seen_markers (user_id, connection_id, channel, message_id, updated) VALUES ('`+u+`', 'c', '#old', 1, now() - interval '2 months')`)
-	if n, err := d.StaleSeenCount(ctx); err != nil || n != 2 {
+	if n, err := d.StaleSeenCount(ctx); err != nil || n != 1 {
 		t.Errorf("got %d, %v", n, err)
 	}
 }
@@ -345,9 +319,9 @@ func TestPruneStaleSeen(t *testing.T) {
 	ctx := context.Background()
 	u := testenv.AddUser(t, d, "u")
 	testenv.AddConnection(t, d, "c", u, `{}`)
-	exec(t, d, `INSERT INTO seen_markers (user_id, connection_id, channel, message_id) VALUES ('`+u+`', 'c', '#fresh', 1), ('`+u+`', 'gone', '#orphan', 1)`)
+	exec(t, d, `INSERT INTO seen_markers (user_id, connection_id, channel, message_id) VALUES ('`+u+`', 'c', '#fresh', 1)`)
 	exec(t, d, `INSERT INTO seen_markers (user_id, connection_id, channel, message_id, updated) VALUES ('`+u+`', 'c', '#old', 1, now() - interval '2 months')`)
-	if n, err := d.PruneStaleSeen(ctx); err != nil || n != 2 {
+	if n, err := d.PruneStaleSeen(ctx); err != nil || n != 1 {
 		t.Errorf("got %d, %v", n, err)
 	}
 	if n, _ := d.StaleSeenCount(ctx); n != 0 {
@@ -355,56 +329,69 @@ func TestPruneStaleSeen(t *testing.T) {
 	}
 }
 
-func TestSweepLateLogs(t *testing.T) {
+// rowsLeft counts the rows in every owned table matching user or conn.
+func rowsLeft(t *testing.T, d *db.DB, user, conn string) int {
+	t.Helper()
+	var n int
+	err := d.Pool.QueryRow(context.Background(), `SELECT
+		(SELECT count(*) FROM connections WHERE id = $2 OR user_id = $1) +
+		(SELECT count(*) FROM logs WHERE connection_id = $2 OR user_id = $1) +
+		(SELECT count(*) FROM log_archives WHERE connection_id = $2 OR user_id = $1) +
+		(SELECT count(*) FROM seen_markers WHERE connection_id = $2 OR user_id = $1) +
+		(SELECT count(*) FROM private_chats WHERE connection_id = $2) +
+		(SELECT count(*) FROM prefs WHERE user_id = $1) +
+		(SELECT count(*) FROM web_push_subscriptions WHERE user_id = $1) +
+		(SELECT count(*) FROM logins WHERE user_id = $1)`, user, conn).Scan(&n)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return n
+}
+
+// The delete removes only the connection's row; the keys take the rest.
+func TestDeleteConnectionDataCascades(t *testing.T) {
+	d := testenv.Postgres(t)
+	ctx := context.Background()
+	user, conn := seedCounts(t, d)
+	if _, _, err := d.DeleteConnectionData(ctx, conn); err != nil {
+		t.Fatal(err)
+	}
+	if n := rowsLeft(t, d, "nobody", conn); n != 0 {
+		t.Errorf("%d rows of %s left", n, conn)
+	}
+	if got, _ := d.UserCounts(ctx, user); got["connection"] != 1 || got["pref"] != 1 {
+		t.Errorf("the user's other rows: %v", got)
+	}
+}
+
+func TestDeleteUserDataCascades(t *testing.T) {
+	d := testenv.Postgres(t)
+	ctx := context.Background()
+	user, _ := seedCounts(t, d)
+	if _, _, err := d.DeleteUserData(ctx, user); err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range []string{"conn1", "conn2"} {
+		if n := rowsLeft(t, d, user, c); n != 0 {
+			t.Errorf("%d rows of %s/%s left", n, user, c)
+		}
+	}
+	if n := rowsLeft(t, d, "nobody", "otherc"); n != 4 { // connection, log, seen, private
+		t.Errorf("the other user's connection has %d rows, want 4", n)
+	}
+}
+
+func TestPruneSeenKeepsRecentRows(t *testing.T) {
 	d := testenv.Postgres(t)
 	ctx := context.Background()
 	u := testenv.AddUser(t, d, "u")
-	o := testenv.AddUser(t, d, "o")
-	testenv.AddLog(t, d, 5, "c1", u)    // not late
-	testenv.AddLog(t, d, 11, "c1", u)   // late
-	testenv.AddLog(t, d, 12, "c2", u)   // late, the user's other connection
-	testenv.AddLog(t, d, 13, "gone", u) // late, of a connection deleted before
-	testenv.AddLog(t, d, 14, "oc", o)   // late, someone else's
-	exec(t, d, `INSERT INTO log_archives (connection_id, user_id, channel, first_id, last_id, min_time, max_time, count, messages)
-	  VALUES ('c1', '`+u+`', '#a', 1, 1, now(), now(), 1, '[]'), ('oc', '`+o+`', '#a', 1, 1, now(), now(), 1, '[]')`)
-	remaining := func() []int64 {
-		rows, err := d.Pool.Query(ctx, `SELECT id FROM logs ORDER BY id`)
-		if err != nil {
-			t.Fatal(err)
-		}
-		defer rows.Close()
-		var ids []int64
-		for rows.Next() {
-			var id int64
-			rows.Scan(&id)
-			ids = append(ids, id)
-		}
-		return ids
+	testenv.AddConnection(t, d, "c", u, `{}`)
+	exec(t, d, `INSERT INTO seen_markers (user_id, connection_id, channel, message_id, updated)
+		VALUES ('`+u+`', 'c', '#fresh', 1, now() - interval '20 days'), ('`+u+`', 'c', '#old', 1, now() - interval '40 days')`)
+	if n, err := d.PruneStaleSeen(ctx); err != nil || n != 1 {
+		t.Fatalf("pruned %d, %v", n, err)
 	}
-
-	// a connection sweep: only c1's late rows
-	n, blocks, err := d.SweepLateLogs(ctx, "", []string{"c1"}, 10)
-	if err != nil || n != 1 || blocks != 1 {
-		t.Fatalf("connection sweep = %d rows, %d blocks, %v; want 1, 1", n, blocks, err)
-	}
-	if got := remaining(); !reflect.DeepEqual(got, []int64{5, 12, 13, 14}) {
-		t.Errorf("after connection sweep: %v", got)
-	}
-	// a user sweep: late rows of the user, including of a deleted connection
-	n, blocks, err = d.SweepLateLogs(ctx, u, []string{"c1", "c2"}, 10)
-	if err != nil || n != 2 || blocks != 0 {
-		t.Fatalf("user sweep = %d rows, %d blocks, %v; want 2, 0", n, blocks, err)
-	}
-	if got := remaining(); !reflect.DeepEqual(got, []int64{5, 14}) {
-		t.Errorf("after user sweep: %v", got)
-	}
-	var archived int
-	d.Pool.QueryRow(ctx, `SELECT count(*) FROM log_archives`).Scan(&archived)
-	if archived != 1 {
-		t.Errorf("log_archive rows = %d, want only the other user's", archived)
-	}
-	// after 0 sweeps everything of the connection
-	if n, blocks, err := d.SweepLateLogs(ctx, "", []string{"oc"}, 0); err != nil || n != 1 || blocks != 1 {
-		t.Errorf("after 0 = %d rows, %d blocks, %v; want 1, 1", n, blocks, err)
+	if got := one[string](t, d, `SELECT string_agg(channel, ',') FROM seen_markers`); got != "#fresh" {
+		t.Errorf("left %s", got)
 	}
 }

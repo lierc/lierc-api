@@ -21,7 +21,7 @@ func seedUser(h *harness, name string) string {
 	u := h.user(name)
 	h.conn(name+"1", u, `{"Host":"ergo","Port":6667,"Nick":"x"}`)
 	h.conn(name+"2", u, `{"Host":"ergo","Port":6667,"Nick":"y"}`)
-	h.exec(`INSERT INTO seen_markers (user_id, connection_id, channel, message_id) VALUES ($1, 'gone', '#a', 1)`, u)
+	h.exec(`INSERT INTO seen_markers (user_id, connection_id, channel, message_id) VALUES ($1, $2, '#x', 1)`, u, name+"1")
 	h.exec(`INSERT INTO prefs (user_id, name, value) VALUES ($1, 'theme', 'dark')`, u)
 	h.exec(`INSERT INTO web_push_subscriptions (endpoint, key, auth, user_id) VALUES ('https://push/x', 'k', 'a', $1)`, u)
 	return u
@@ -149,114 +149,6 @@ func TestDeleteUsersNeedsIDs(t *testing.T) {
 	}
 }
 
-// A QUIT the logger writes after a user's delete commits is swept up at the
-// end; the sweep only looks at rows newer than the command's start.
-func TestDeleteUsersSweepsLateLogRows(t *testing.T) {
-	h := newHarness(t)
-	u := seedUser(h, "ann")
-	// stands in for the logger: a log row for ann1 lands as ann's delete commits
-	h.exec(`CREATE FUNCTION late_quit() RETURNS trigger AS $$
-	  BEGIN
-	    INSERT INTO logs (connection_id, user_id, channel, time, message) VALUES ('ann1', OLD.id, 'status', now(), '{"Command":"QUIT"}');
-	    RETURN OLD;
-	  END $$ LANGUAGE plpgsql`)
-	h.exec(`CREATE TRIGGER late_quit AFTER DELETE ON users FOR EACH ROW EXECUTE FUNCTION late_quit()`)
-	if err := h.run("delete-users", "--delete", "--settle", "0", u); err != nil {
-		t.Fatal(err)
-	}
-	h.has(u+": deleted\n", u+": removed 1 late log row(s)\n", "deleted 1 user(s), skipped 0\n")
-	if n := h.count(`SELECT count(*) FROM logs WHERE connection_id IN ('ann1', 'ann2')`); n != 0 {
-		t.Errorf("%d log rows left", n)
-	}
-}
-
-func TestDeleteUsersArchiveAfterLog(t *testing.T) {
-	h := newHarness(t)
-	u := seedUser(h, "ann")
-	addOld(h, u, "ann1", "#a", 6)
-	// stands in for the archiver: a block lands in the archive just after the
-	// user's log rows are deleted (once), and every trigger notes its transaction
-	h.exec(`CREATE TABLE trace (kind text, tx bigint)`)
-	h.exec(`CREATE FUNCTION move_block() RETURNS trigger AS $$
-	  BEGIN
-	    IF NOT EXISTS (SELECT 1 FROM trace WHERE kind = 'moved') THEN
-	      INSERT INTO trace VALUES ('moved', txid_current());
-	      INSERT INTO log_archives (connection_id, user_id, channel, first_id, last_id, min_time, max_time, count, messages)
-	        VALUES ('ann1', '` + u + `', '#a', 1, 2, now(), now(), 2, '[]');
-	    END IF;
-	    RETURN NULL;
-	  END $$ LANGUAGE plpgsql`)
-	h.exec(`CREATE TRIGGER move_block AFTER DELETE ON logs FOR EACH STATEMENT EXECUTE FUNCTION move_block()`)
-	h.exec(`CREATE FUNCTION note_delete() RETURNS trigger AS $$
-	  BEGIN
-	    INSERT INTO trace VALUES ('deleted', txid_current());
-	    RETURN OLD;
-	  END $$ LANGUAGE plpgsql`)
-	h.exec(`CREATE TRIGGER note_delete BEFORE DELETE ON log_archives FOR EACH ROW EXECUTE FUNCTION note_delete()`)
-	if err := h.run("delete-users", "--delete", "--settle", "0", u); err != nil {
-		t.Fatal(err)
-	}
-	if n := h.count(`SELECT count(*) FROM log_archives`); n != 0 {
-		t.Errorf("%d archive rows left", n)
-	}
-	// the block must be deleted by the same transaction that deleted the log
-	// rows, after them, not by a later sweep
-	if n := h.count(`SELECT count(*) FROM trace d JOIN trace m ON m.kind = 'moved' AND m.tx = d.tx WHERE d.kind = 'deleted'`); n != 1 {
-		t.Errorf("the moved block was not deleted in the transaction that deleted the log rows (%d)", n)
-	}
-}
-
-// Logs and archive rows are also found by user id: a connection deleted
-// before the user (or never in the connection table) leaves rows whose
-// connection is gone but whose "user" is still theirs.
-func TestDeleteUsersLogsOfGoneConnections(t *testing.T) {
-	h := newHarness(t)
-	u := seedUser(h, "ann")
-	other := seedUser(h, "bob")
-	for owner, gone := range map[string]string{u: "gone-ann", other: "gone-bob"} {
-		h.exec(`INSERT INTO logs (connection_id, user_id, channel, time, message) VALUES ($1, $2, '#a', now(), '{}')`, gone, owner)
-		addArchive(h, owner, gone)
-	}
-	if err := h.run("delete-users", u); err != nil {
-		t.Fatal(err)
-	}
-	h.has(u + " (ann, ann@example.com): log=3 ")
-	if err := h.run("delete-users", "--delete", "--settle", "0", u); err != nil {
-		t.Fatal(err)
-	}
-	if n := h.count(`SELECT count(*) FROM logs WHERE user_id = $1`, u); n != 0 {
-		t.Errorf("%d log rows left with the deleted user's id", n)
-	}
-	if n := h.count(`SELECT count(*) FROM log_archives WHERE user_id = $1`, u); n != 0 {
-		t.Errorf("%d archive rows left with the deleted user's id", n)
-	}
-	if n := h.count(`SELECT count(*) FROM logs WHERE user_id = $1`, other); n != 3 {
-		t.Errorf("other user has %d log rows, want 3", n)
-	}
-	if n := h.count(`SELECT count(*) FROM log_archives WHERE user_id = $1`, other); n != 1 {
-		t.Errorf("other user has %d archive rows, want 1", n)
-	}
-}
-
-// The late sweep also goes by user id.
-func TestDeleteUsersSweepsLateRowsByUser(t *testing.T) {
-	h := newHarness(t)
-	u := seedUser(h, "ann")
-	h.exec(`CREATE FUNCTION late_row() RETURNS trigger AS $$
-	  BEGIN
-	    INSERT INTO logs (connection_id, user_id, channel, time, message) VALUES ('gone', OLD.id, 'status', now(), '{}');
-	    RETURN OLD;
-	  END $$ LANGUAGE plpgsql`)
-	h.exec(`CREATE TRIGGER late_row AFTER DELETE ON users FOR EACH ROW EXECUTE FUNCTION late_row()`)
-	if err := h.run("delete-users", "--delete", "--settle", "0", u); err != nil {
-		t.Fatal(err)
-	}
-	h.has(u + ": removed 1 late log row(s)\n")
-	if n := h.count(`SELECT count(*) FROM logs WHERE user_id = $1`, u); n != 0 {
-		t.Errorf("%d log rows left", n)
-	}
-}
-
 // Deleting a user announces each of their connections as deleted.
 func TestDeleteUsersNotifiesEachConnection(t *testing.T) {
 	h := newHarness(t)
@@ -310,23 +202,19 @@ func hangUp(w http.ResponseWriter) {
 	}
 }
 
-// With the admin server answering the lookups but not /admin/log/last, a
-// --delete stops before liercd is touched: nothing destroyed, nothing deleted.
+// With the admin server not answering the lookups, a --delete stops before
+// liercd is touched: nothing destroyed, nothing deleted.
 func TestDeleteUsersAdminDown(t *testing.T) {
 	h := newHarness(t)
 	u := seedUser(h, "ann")
 	interceptAdmin(h, func(w http.ResponseWriter, r *http.Request) bool {
-		if r.URL.Path == "/admin/log/last" {
-			hangUp(w)
-			return true
-		}
-		return false
+		hangUp(w)
+		return true
 	})
 	err := h.run("delete-users", "--delete", u)
 	if !errors.Is(err, ErrUnreachable) || !strings.HasSuffix(err.Error(), "); nothing was changed") {
 		t.Fatalf("got %v", err)
 	}
-	h.has(u + " (ann, ann@example.com): ") // the lookups were answered
 	if calls := h.liercd.Calls(); len(calls) != 0 {
 		t.Errorf("liercd was called: %v", calls)
 	}
@@ -345,8 +233,6 @@ func TestDeleteMayHaveFinished(t *testing.T) {
 		switch {
 		case r.Method == http.MethodDelete:
 			hangUp(w)
-		case r.URL.Path == "/admin/log/last":
-			w.Write([]byte(`{"id":7}`))
 		default:
 			return false
 		}

@@ -903,6 +903,18 @@ func TestLatestDroppedWithLastStream(t *testing.T) {
 	poll(t, "latest to be dropped", func() bool { _, ok := latest(); return !ok })
 }
 
+// A user with no connections still gets a connections snapshot: empty.
+func TestEmptyConnectionsSnapshot(t *testing.T) {
+	e := setup(t)
+	u := e.addUser("alice")
+	c := e.open(u)
+	lastID(t, c.next())
+	e.waitReplay()
+	if ev := c.next(); ev.typ != "connections" || ev.data != "[]" {
+		t.Fatalf("replay %+v, want an empty connections snapshot", ev)
+	}
+}
+
 func TestWakePing(t *testing.T) {
 	e := setup(t)
 	u := e.addUser("alice")
@@ -912,10 +924,9 @@ func TestWakePing(t *testing.T) {
 	lastID(t, c2.next())
 	e.waitReplay()
 	e.waitReplay()
-	// a user with no connections still gets an empty snapshot
 	for _, c := range []*client{c1, c2} {
-		if ev := c.next(); ev.typ != "connections" || ev.data != "[]" {
-			t.Fatalf("replay %+v, want an empty connections snapshot", ev)
+		if ev := c.next(); ev.typ != "connections" {
+			t.Fatalf("replay %+v, want the connections snapshot", ev)
 		}
 	}
 

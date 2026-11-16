@@ -10,6 +10,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/lierc/lierc-api/internal/auth"
+	"github.com/lierc/lierc-api/internal/db"
 	"github.com/lierc/lierc-api/internal/respond"
 )
 
@@ -89,7 +90,7 @@ func (a *api) setPreference(w http.ResponseWriter, r *http.Request, user string)
 	if !ok || tooLong(w, name, 128, "preference name is too long") || tooLong(w, value, 512, "preference value is too long") {
 		return
 	}
-	a.done(w, "set preference", a.db.SetPref(r.Context(), user, name, value))
+	a.doneUser(w, "set preference", a.db.SetPref(r.Context(), user, name, value))
 }
 
 // setSeen records the body's message id as the last one seen in
@@ -105,7 +106,7 @@ func (a *api) setSeen(w http.ResponseWriter, r *http.Request, user, id string) {
 		respond.Error(w, http.StatusBadRequest, "message id must be a number")
 		return
 	}
-	a.done(w, "set seen", a.db.SetSeen(r.Context(), user, id, channel, int32(msg)))
+	a.doneConn(w, "set seen", id, a.db.SetSeen(r.Context(), user, id, channel, int32(msg)))
 }
 
 func (a *api) addPrivate(w http.ResponseWriter, r *http.Request, user, id string) {
@@ -113,7 +114,7 @@ func (a *api) addPrivate(w http.ResponseWriter, r *http.Request, user, id string
 	if tooLong(w, nick, 32, "nick is too long") {
 		return
 	}
-	a.done(w, "add private", a.db.AddPrivate(r.Context(), id, nick))
+	a.doneConn(w, "add private", id, a.db.AddPrivate(r.Context(), id, nick))
 }
 
 func (a *api) deletePrivate(w http.ResponseWriter, r *http.Request, user, id string) {
@@ -133,4 +134,25 @@ func (a *api) done(w http.ResponseWriter, what string, err error) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// doneConn is done for a write to connection id: one deleted since owned()
+// checked it (db.ErrGone) is answered as owned() would answer now.
+func (a *api) doneConn(w http.ResponseWriter, what, id string, err error) {
+	if errors.Is(err, db.ErrGone) {
+		respond.Error(w, http.StatusUnauthorized, fmt.Sprintf("Invalid connection id '%s'", id))
+		return
+	}
+	a.done(w, what, err)
+}
+
+// doneUser is done for a write to the logged-in user: one deleted since the
+// login was checked (db.ErrGone) is answered as the login check would answer
+// now.
+func (a *api) doneUser(w http.ResponseWriter, what string, err error) {
+	if errors.Is(err, db.ErrGone) {
+		respond.Error(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	a.done(w, what, err)
 }

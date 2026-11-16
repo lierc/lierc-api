@@ -107,17 +107,17 @@ func TestAdminTimeoutSkipsDeletes(t *testing.T) {
 	a.Timeout = 50 * time.Millisecond
 	ctx := context.Background()
 
-	if _, err := a.DeleteUser(ctx, "u", 0); err != nil {
+	if _, err := a.DeleteUser(ctx, "u"); err != nil {
 		t.Errorf("DeleteUser: %v", err)
 	}
-	if _, err := a.DeleteConnection(ctx, "c", 0); err != nil {
+	if _, err := a.DeleteConnection(ctx, "c"); err != nil {
 		t.Errorf("DeleteConnection: %v", err)
 	}
 	// a read that runs out of time is the server not answering: nothing
 	// was changed
-	_, err := a.LastLogID(ctx)
+	_, err := a.StaleSeen(ctx)
 	if !errors.Is(err, ErrUnreachable) || !strings.Contains(err.Error(), "nothing was changed") {
-		t.Errorf("LastLogID: %v, want the unreachable error", err)
+		t.Errorf("StaleSeen: %v, want the unreachable error", err)
 	}
 	// a write that runs out of time may have been applied
 	_, err = a.PruneLogins(ctx)

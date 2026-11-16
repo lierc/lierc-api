@@ -243,11 +243,13 @@ func TestSleepCancelled(t *testing.T) {
 
 func TestPoolBegin(t *testing.T) {
 	d := testenv.Postgres(t)
+	u := testenv.AddUser(t, d, "u")
 	tx, err := d.Pool.Begin(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := tx.Exec(context.Background(), `INSERT INTO prefs (user_id, name, value) VALUES ('u', 'n', 'v')`); err != nil {
+	if _, err := tx.Exec(context.Background(), `INSERT INTO prefs (user_id, name, value) VALUES ($1, 'n', 'v')`, u); err != nil {
+		tx.Rollback(context.Background())
 		t.Fatal(err)
 	}
 	tx.Rollback(context.Background())
@@ -276,7 +278,7 @@ func TestReadIDsEmptyStdin(t *testing.T) {
 }
 
 func TestRemovedCommands(t *testing.T) {
-	names := []string{"fix-config-encoding", "convert-legacy-passwords", "move-connection", "move-connections", "check-connections", "reset"}
+	names := []string{"fix-config-encoding", "convert-legacy-passwords", "move-connection", "move-connections", "check-connections", "reset", "delete-orphan-logs"}
 	for _, name := range names {
 		var o out
 		if code := Main(context.Background(), []string{name}, o.sys("", true)); code != 2 {
@@ -344,7 +346,7 @@ func TestAdminGroup(t *testing.T) {
 		t.Fatalf("help: exit %d", code)
 	}
 	got := helpLines(o.stdout.String())
-	for _, n := range []string{"archive", "revive", "delete-orphan-logs", "admin"} {
+	for _, n := range []string{"archive", "revive", "admin"} {
 		if !got[n] {
 			t.Errorf("help is missing %s", n)
 		}
@@ -421,7 +423,7 @@ func TestPortedCommandsNeedNoDB(t *testing.T) {
 		t.Errorf("archive: exit %d, want 1 (stderr %q)", code, o.stderr.String())
 	}
 	for _, c := range append(append([]Command{}, Commands...), AdminCommands...) {
-		want := c.Name == "archive" || c.Name == "revive" || c.Name == "delete-orphan-logs"
+		want := c.Name == "archive" || c.Name == "revive"
 		if c.NeedsDB != want {
 			t.Errorf("%s: NeedsDB = %v, want %v", c.Name, c.NeedsDB, want)
 		}

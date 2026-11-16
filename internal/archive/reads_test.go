@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/lierc/lierc-api/internal/testenv"
 )
 
 // readSQL loads one of the channel read queries (internal/db/sql).
@@ -133,6 +134,7 @@ func readFixture(d *tdb) []int {
 		if err != nil {
 			d.t.Fatal(err)
 		}
+		testenv.EnsureConnection(d.t, d.db, m.conn, "u-"+m.conn)
 		d.exec(`INSERT INTO logs (id, connection_id, user_id, channel, command, highlight, self, time, message)
 			VALUES ($1, $2::text, 'u-' || $2::text, $3, 'PRIVMSG', $4, $5, $6::timestamp, $7)`,
 			id, m.conn, m.channel, id%3 == 0, i%5 == 0, m.at.Format("2006-01-02 15:04:05.999999"), string(msg))

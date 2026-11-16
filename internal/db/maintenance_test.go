@@ -57,56 +57,6 @@ func TestArchiveBlocks(t *testing.T) {
 	}
 }
 
-func TestOrphans(t *testing.T) {
-	d := testenv.Postgres(t)
-	ctx := context.Background()
-	a := testenv.AddUser(t, d, "alice")
-	testenv.AddConnection(t, d, "c1", a, "{}")
-	msgRow(t, d, 1, "c1", a, "#a", "x", false, false, "2020-01-01")
-	for i := int64(2); i <= 4; i++ {
-		msgRow(t, d, i, "gone", a, "#a", "x", false, false, "2020-01-01")
-	}
-	msgRow(t, d, 5, "c1", "ghost", "#a", "x", false, false, "2020-01-01")
-	exec(t, d, `INSERT INTO log_archives (connection_id, user_id, channel, first_id, last_id, min_time, max_time, count, messages)
-		VALUES ('gone', $1, '#a', 10, 11, now(), now(), 2, '[]'), ('c1', $1, '#a', 12, 13, now(), now(), 2, '[]')`, a)
-
-	cs, err := d.GoneConnections(ctx)
-	if err != nil || !reflect.DeepEqual(cs, []string{"gone"}) {
-		t.Errorf("GoneConnections = %v, %v", cs, err)
-	}
-	us, err := d.GoneUsers(ctx)
-	if err != nil || !reflect.DeepEqual(us, []string{"ghost"}) {
-		t.Errorf("GoneUsers = %v, %v", us, err)
-	}
-	if n, err := d.CountOrphanArchive(ctx); err != nil || n != 1 {
-		t.Errorf("CountOrphanArchive = %d, %v", n, err)
-	}
-
-	if n, err := d.DeleteGoneConnectionLogs(ctx, "gone", 2); err != nil || n != 2 {
-		t.Errorf("first batch = %d, %v", n, err)
-	}
-	if n, err := d.DeleteGoneConnectionLogs(ctx, "gone", 2); err != nil || n != 1 {
-		t.Errorf("second batch = %d, %v", n, err)
-	}
-	if n, err := d.DeleteGoneConnectionLogs(ctx, "c1", 5); err != nil || n != 0 {
-		t.Errorf("a live connection lost %d rows, %v", n, err)
-	}
-	if n, err := d.DeleteGoneUserLogs(ctx, a, 5); err != nil || n != 0 {
-		t.Errorf("a live user lost %d rows, %v", n, err)
-	}
-	if n, err := d.DeleteGoneUserLogs(ctx, "ghost", 5); err != nil || n != 1 {
-		t.Errorf("DeleteGoneUserLogs = %d, %v", n, err)
-	}
-	if n, err := d.DeleteOrphanArchive(ctx, 5); err != nil || n != 1 {
-		t.Errorf("DeleteOrphanArchive = %d, %v", n, err)
-	}
-	var left int
-	d.Pool.QueryRow(ctx, `SELECT (SELECT count(*) FROM logs) + (SELECT count(*) FROM log_archives)`).Scan(&left)
-	if left != 2 {
-		t.Errorf("%d rows left, want 2", left)
-	}
-}
-
 func TestReviveCandidates(t *testing.T) {
 	d := testenv.Postgres(t)
 	ctx := context.Background()
@@ -142,26 +92,6 @@ func TestReviveCandidates(t *testing.T) {
 	cs, _ := d.ReviveCandidates(ctx, 48*time.Hour, "main")
 	if len(cs) != 1 || !testenv.SameJSON(cs[0].Config, `{"x":1}`) {
 		t.Errorf("config = %+v", cs)
-	}
-}
-
-// An archive block whose connection still exists but whose user is gone is
-// an orphan too; a block of a live connection and user is not.
-func TestOrphanArchiveGoneUser(t *testing.T) {
-	d := testenv.Postgres(t)
-	ctx := context.Background()
-	a := testenv.AddUser(t, d, "alice")
-	testenv.AddConnection(t, d, "c1", a, "{}")
-	exec(t, d, `INSERT INTO log_archives (connection_id, user_id, channel, first_id, last_id, min_time, max_time, count, messages)
-		VALUES ('c1', 'ghost', '#a', 10, 11, now(), now(), 2, '[]'), ('c1', $1, '#a', 12, 13, now(), now(), 2, '[]')`, a)
-	if n, err := d.CountOrphanArchive(ctx); err != nil || n != 1 {
-		t.Errorf("CountOrphanArchive = %d, %v, want 1", n, err)
-	}
-	if n, err := d.DeleteOrphanArchive(ctx, 5); err != nil || n != 1 {
-		t.Errorf("DeleteOrphanArchive = %d, %v, want 1", n, err)
-	}
-	if u := one[string](t, d, `SELECT user_id FROM log_archives`); u != a {
-		t.Errorf("left the block of %s, want alice's", u)
 	}
 }
 

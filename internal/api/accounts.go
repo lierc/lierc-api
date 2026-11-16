@@ -3,6 +3,7 @@ package api
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"log"
 	"math"
 	"net/http"
@@ -13,6 +14,7 @@ import (
 	"github.com/lierc/lierc-api/internal/accounts"
 	"github.com/lierc/lierc-api/internal/auth"
 	"github.com/lierc/lierc-api/internal/config"
+	"github.com/lierc/lierc-api/internal/db"
 	"github.com/lierc/lierc-api/internal/login"
 	"github.com/lierc/lierc-api/internal/mail"
 	"github.com/lierc/lierc-api/internal/respond"
@@ -252,7 +254,8 @@ func (a *api) unsubscribe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if exists {
-		if err := a.db.SetPref(r.Context(), user, "email", "false"); err != nil {
+		// ErrGone: the account was deleted meanwhile, as good as unsubscribed
+		if err := a.db.SetPref(r.Context(), user, "email", "false"); err != nil && !errors.Is(err, db.ErrGone) {
 			respond.Internal(w, "unsubscribe", err)
 			return
 		}

@@ -2,6 +2,7 @@ package db_test
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/lierc/lierc-api/internal/db"
@@ -35,6 +36,7 @@ func TestSetSeen(t *testing.T) {
 	d := testenv.Postgres(t)
 	ctx := context.Background()
 	a := testenv.AddUser(t, d, "alice")
+	testenv.AddConnection(t, d, "c1", a, "{}")
 	if err := d.SetSeen(ctx, a, "c1", "#a", 5); err != nil {
 		t.Fatal(err)
 	}
@@ -50,6 +52,7 @@ func TestSetSeen(t *testing.T) {
 func TestPrivateAddDelete(t *testing.T) {
 	d := testenv.Postgres(t)
 	ctx := context.Background()
+	testenv.AddConnection(t, d, "c1", "u1", "{}")
 	if err := d.AddPrivate(ctx, "c1", "bob"); err != nil {
 		t.Fatal(err)
 	}
@@ -91,5 +94,26 @@ func TestWebPushSaveDelete(t *testing.T) {
 	}
 	if got := one[string](t, d, `SELECT string_agg(user_id, ',') FROM web_push_subscriptions`); got != b {
 		t.Errorf("left = %s, want only bob's", got)
+	}
+}
+
+// A write whose user or connection is gone (deleted after the API checked
+// it) returns ErrGone and writes nothing.
+func TestWritesForGoneOwners(t *testing.T) {
+	d := testenv.Postgres(t)
+	ctx := context.Background()
+	for name, err := range map[string]error{
+		"SetSeen":     d.SetSeen(ctx, "nouser", "noconn", "#a", 1),
+		"AddPrivate":  d.AddPrivate(ctx, "noconn", "bob"),
+		"SetPref":     d.SetPref(ctx, "nouser", "p", "v"),
+		"SaveWebPush": d.SaveWebPush(ctx, "nouser", "https://e", "k", "a"),
+	} {
+		if !errors.Is(err, db.ErrGone) {
+			t.Errorf("%s: err = %v, want ErrGone", name, err)
+		}
+	}
+	if n := one[int](t, d, `SELECT (SELECT count(*) FROM seen_markers) + (SELECT count(*) FROM private_chats)
+		+ (SELECT count(*) FROM prefs) + (SELECT count(*) FROM web_push_subscriptions)`); n != 0 {
+		t.Errorf("%d rows written", n)
 	}
 }

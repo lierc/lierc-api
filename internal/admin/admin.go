@@ -35,7 +35,6 @@ func New(s db.Store, announce func(context.Context, db.ConnectionChange)) http.H
 	a.userRoutes(mux)
 	a.connectionRoutes(mux)
 	a.writeRoutes(mux)
-	mux.HandleFunc("GET /admin/log/last", a.lastLog)
 	mux.HandleFunc("GET /admin/seen/stale", a.staleSeen)
 	return mux
 }
@@ -86,15 +85,6 @@ func utc(t *time.Time) *time.Time {
 	}
 	v := t.UTC().Truncate(time.Second)
 	return &v
-}
-
-func (a *api) lastLog(w http.ResponseWriter, r *http.Request) {
-	n, err := a.store.LastLogID(r.Context())
-	if err != nil {
-		internal(w, "last log id", err)
-		return
-	}
-	write(w, http.StatusOK, map[string]int64{"id": n})
 }
 
 func (a *api) staleSeen(w http.ResponseWriter, r *http.Request) {

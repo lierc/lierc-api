@@ -3,7 +3,6 @@ package admin
 import (
 	"context"
 	"errors"
-	"log"
 	"net/http"
 	"strconv"
 
@@ -14,14 +13,8 @@ import (
 // DeleteResult answers a user or connection delete.
 type DeleteResult struct {
 	Status string `json:"status"`
-	// Counts is the delete's own rows per table.
+	// Counts is the rows deleted per table.
 	Counts map[string]int64 `json:"counts"`
-	// Swept is the late log rows the sweep removed (0 without log_after),
-	// and SweptArchive the archive blocks; neither is in Counts.
-	Swept        int64 `json:"swept"`
-	SweptArchive int64 `json:"swept_archive"`
-	// SweepError is set when the delete committed but the sweep failed.
-	SweepError string `json:"sweep_error,omitempty"`
 }
 
 // EndedResult answers ending a user's logins: how many ended.
@@ -45,33 +38,13 @@ func (a *api) writeRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /admin/seen/prune", a.pruneSeen)
 }
 
-// logAfter reads the optional log_after, the highest log id before the
-// delete began. given is whether the parameter was present, so 0 (an empty
-// log) counts; ok is false after answering 400.
-func logAfter(w http.ResponseWriter, r *http.Request) (n int64, given, ok bool) {
-	if !r.URL.Query().Has("log_after") {
-		return 0, false, true
-	}
-	n, err := strconv.ParseInt(r.URL.Query().Get("log_after"), 10, 64)
-	if err != nil || n < 0 {
-		fail(w, http.StatusBadRequest, "log_after must be a non-negative integer")
-		return 0, false, false
-	}
-	return n, true, true
-}
-
 type deleteFunc func(ctx context.Context, id string) ([]db.ConnectionChange, map[string]int64, error)
 
 // remove runs a delete and, once it has committed, announces each deleted
-// connection, then sweeps late log rows if log_after was given. The work is
-// not tied to the request: a client that hangs up mid-way must not leave
-// the stream server unaware of a committed delete. A sweep failure after the
-// commit still answers 200, with sweep_error: the delete is done.
+// connection. The work is not tied to the request: a client that hangs up
+// mid-way must not leave the stream server unaware of a committed delete.
+// (An older lctl's log_after is ignored: the keys leave no late rows.)
 func (a *api) remove(w http.ResponseWriter, r *http.Request, del deleteFunc, what string) {
-	after, given, ok := logAfter(w, r)
-	if !ok {
-		return
-	}
 	id := r.PathValue("id")
 	ctx := context.WithoutCancel(r.Context())
 	changes, counts, err := del(ctx, id)
@@ -89,23 +62,6 @@ func (a *api) remove(w http.ResponseWriter, r *http.Request, del deleteFunc, wha
 		}
 	}
 	res := DeleteResult{Status: "ok", Counts: counts}
-	if given {
-		user := ""
-		conns := make([]string, 0, len(changes))
-		for _, c := range changes {
-			conns = append(conns, c.Connection)
-		}
-		if what == "user" {
-			user = id
-		}
-		n, blocks, err := a.store.SweepLateLogs(ctx, user, conns, after)
-		if err != nil {
-			log.Printf("admin: sweep late logs of %s: %v", what, err)
-			res.SweepError = "internal error"
-		} else {
-			res.Swept, res.SweptArchive = n, blocks
-		}
-	}
 	write(w, http.StatusOK, res)
 }
 

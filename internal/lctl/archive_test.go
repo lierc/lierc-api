@@ -274,3 +274,27 @@ func TestArchiveStarStatus(t *testing.T) {
 		t.Errorf("%d archive rows from *status", n)
 	}
 }
+
+// A connection deleted while the archive runs (its block fails the key
+// check, or deadlocks with the delete's cascade) is skipped, and the run
+// goes on with the others.
+func TestArchiveSkipsDeletedConnection(t *testing.T) {
+	h := newHarness(t)
+	seedArchive(h)
+	// stands in for c1's delete committing between the candidates and its block
+	h.exec(`CREATE FUNCTION deleted_meanwhile() RETURNS trigger AS $$
+	  BEGIN
+	    IF NEW.connection_id = 'c1' THEN
+	      RAISE foreign_key_violation USING MESSAGE = 'c1 was deleted';
+	    END IF;
+	    RETURN NEW;
+	  END $$ LANGUAGE plpgsql`)
+	h.exec(`CREATE TRIGGER deleted_meanwhile BEFORE INSERT ON log_archives FOR EACH ROW EXECUTE FUNCTION deleted_meanwhile()`)
+	if err := h.run("archive", "--move", "--keep", "3", "--block", "2"); err != nil {
+		t.Fatal(err)
+	}
+	h.has("skipped c1 #a: deleted meanwhile\n", "c2 #a 11-12 2\n")
+	if n := h.count(`SELECT count(*) FROM log_archives WHERE connection_id = 'c2'`); n != 3 {
+		t.Errorf("c2 has %d blocks, want 3", n)
+	}
+}

@@ -87,19 +87,12 @@ func TestDeleteUser(t *testing.T) {
 	a := e.seedUser("alice", "c1", "c2")
 	b := e.seedUser("bob", "b1")
 	testenv.AddLog(t, e.d, 1, "c1", a)
-	testenv.AddLog(t, e.d, 2, "gone", a) // a connection deleted before the user
-	// the earlier-deleted connection's archive and seen rows carry alice's id
-	e.exec(`INSERT INTO log_archives (connection_id, user_id, channel, first_id, last_id, min_time, max_time, count, messages)
-		VALUES ('gone', '` + a + `', '#a', 3, 4, now(), now(), 2, '[]')`)
-	e.exec(`INSERT INTO seen_markers (user_id, connection_id, channel, message_id) VALUES ('` + a + `', 'gone', '#a', 1)`)
 	testenv.AddLog(t, e.d, 3, "b1", b)
 	testenv.Login(t, e.d, a)
 	testenv.Login(t, e.d, b)
-	// rows that arrived after log_after, for the user's connections
 	testenv.AddLog(t, e.d, 50, "c2", a)
-	testenv.AddLog(t, e.d, 51, "c1", "")
 
-	code, body := e.send("DELETE", "/admin/users/"+a+"?log_after=10")
+	code, body := e.send("DELETE", "/admin/users/"+a)
 	if code != 200 {
 		t.Fatalf("%d %s", code, body)
 	}
@@ -110,7 +103,7 @@ func TestDeleteUser(t *testing.T) {
 	if err := json.Unmarshal([]byte(body), &res); err != nil || res.Status != "ok" {
 		t.Fatalf("body = %s", body)
 	}
-	if res.Counts["connection"] != 2 || res.Counts["log_archive"] != 3 || res.Counts["seen"] != 3 || res.Counts["private"] != 2 ||
+	if res.Counts["connection"] != 2 || res.Counts["log_archive"] != 2 || res.Counts["seen"] != 2 || res.Counts["private"] != 2 ||
 		res.Counts["pref"] != 1 || res.Counts["web_push"] != 1 || res.Counts["login"] != 1 || res.Counts["log"] < 2 {
 		t.Errorf("counts = %v", res.Counts)
 	}
@@ -124,8 +117,6 @@ func TestDeleteUser(t *testing.T) {
 		`SELECT count(*) FROM prefs WHERE user_id = '` + a + `'`,
 		`SELECT count(*) FROM web_push_subscriptions WHERE user_id = '` + a + `'`,
 		`SELECT count(*) FROM logins WHERE user_id = '` + a + `'`,
-		`SELECT count(*) FROM log_archives WHERE connection_id = 'gone'`,
-		`SELECT count(*) FROM seen_markers WHERE connection_id = 'gone'`,
 	} {
 		if n := e.count(q); n != 0 {
 			t.Errorf("%s = %d, want 0", q, n)
@@ -163,18 +154,13 @@ func TestDeleteUser(t *testing.T) {
 	}
 }
 
-func TestDeleteLogAfterParam(t *testing.T) {
+// An lctl from before the keys sends log_after; it's ignored.
+func TestDeleteIgnoresLogAfter(t *testing.T) {
 	e, _ := newWriteEnv(t)
-	a := e.seedUser("alice", "c1")
-	// log_after is optional; a malformed one is refused
-	if code, _ := e.send("DELETE", "/admin/users/"+a+"?log_after=x"); code != 400 {
-		t.Errorf("bad log_after: %d", code)
-	}
-	if code, _ := e.send("DELETE", "/admin/connections/c1?log_after=-1"); code != 400 {
-		t.Errorf("negative log_after: %d", code)
-	}
-	if code, body := e.send("DELETE", "/admin/users/"+a); code != 200 {
-		t.Errorf("no log_after: %d %s", code, body)
+	e.seedUser("alice", "c1")
+	code, body := e.send("DELETE", "/admin/connections/c1?log_after=5")
+	if code != 200 || !strings.Contains(body, `"counts"`) || strings.Contains(body, "swept") {
+		t.Errorf("%d %s", code, body)
 	}
 }
 
@@ -200,8 +186,8 @@ func TestDeleteConnection(t *testing.T) {
 	a := e.seedUser("alice", "c1", "c2")
 	testenv.AddLog(t, e.d, 1, "c1", a)
 	testenv.AddLog(t, e.d, 2, "c2", a)
-	testenv.AddLog(t, e.d, 60, "c1", a) // late
-	code, body := e.send("DELETE", "/admin/connections/c1?log_after=10")
+	testenv.AddLog(t, e.d, 60, "c1", a)
+	code, body := e.send("DELETE", "/admin/connections/c1")
 	if code != 200 {
 		t.Fatalf("%d %s", code, body)
 	}
@@ -386,10 +372,10 @@ func TestPruneSeen(t *testing.T) {
 	e, _ := newWriteEnv(t)
 	u := testenv.AddUser(t, e.d, "u")
 	testenv.AddConnection(t, e.d, "c", u, `{}`)
-	e.exec(`INSERT INTO seen_markers (user_id, connection_id, channel, message_id) VALUES ('` + u + `', 'c', '#fresh', 1), ('` + u + `', 'gone', '#orphan', 1)`)
+	e.exec(`INSERT INTO seen_markers (user_id, connection_id, channel, message_id) VALUES ('` + u + `', 'c', '#fresh', 1)`)
 	e.exec(`INSERT INTO seen_markers (user_id, connection_id, channel, message_id, updated) VALUES ('` + u + `', 'c', '#old', 1, now() - interval '2 months')`)
 	code, body := e.send("POST", "/admin/seen/prune")
-	if code != 200 || body != `{"status":"ok","pruned":2}` {
+	if code != 200 || body != `{"status":"ok","pruned":1}` {
 		t.Errorf("%d %s", code, body)
 	}
 	if n := e.count(`SELECT count(*) FROM seen_markers`); n != 1 {
@@ -462,103 +448,6 @@ func TestStreamGetsDelete(t *testing.T) {
 			}
 		case <-deadline:
 			t.Fatal("no connection:delete")
-		}
-	}
-}
-
-// sweepFails is a Store whose late-log sweep fails.
-type sweepFails struct{ db.Store }
-
-func (sweepFails) SweepLateLogs(context.Context, string, []string, int64) (int64, int64, error) {
-	return 0, 0, errors.New("boom")
-}
-
-func TestSweepFailureStillAnnounces(t *testing.T) {
-	d := testenv.Postgres(t)
-	e := &env{t, d, nil}
-	a := e.seedUser("alice", "c1")
-	rec := &recorder{}
-	h := admin.New(sweepFails{d}, rec.announce)
-	w := httptest.NewRecorder()
-	h.ServeHTTP(w, httptest.NewRequest("DELETE", "/admin/connections/c1?log_after=3", nil))
-	var res struct {
-		Status     string
-		Counts     map[string]int64
-		Swept      int64
-		SweepError string `json:"sweep_error"`
-	}
-	if err := json.Unmarshal(w.Body.Bytes(), &res); err != nil || w.Code != 200 || res.Status != "ok" ||
-		res.SweepError != "internal error" || res.Counts["connection"] != 1 {
-		t.Errorf("%d %s", w.Code, w.Body)
-	}
-	if got := rec.all(); len(got) != 1 || got[0].User != a || got[0].Connection != "c1" {
-		t.Errorf("announced %v", got)
-	}
-	if n := e.count(`SELECT count(*) FROM connections WHERE id = 'c1'`); n != 0 {
-		t.Errorf("connection remains")
-	}
-}
-
-// sweeps records the sweeps asked for.
-type sweeps struct {
-	db.Store
-	calls []int64
-}
-
-func (s *sweeps) SweepLateLogs(ctx context.Context, user string, conns []string, after int64) (int64, int64, error) {
-	s.calls = append(s.calls, after)
-	return s.Store.SweepLateLogs(ctx, user, conns, after)
-}
-
-// log_after=0 is given (an empty log has last id 0); only its absence skips the sweep.
-func TestLogAfterZeroSweeps(t *testing.T) {
-	d := testenv.Postgres(t)
-	e := &env{t, d, nil}
-	e.seedUser("alice", "c1", "c2")
-	s := &sweeps{Store: d}
-	h := admin.New(s, nil)
-	for _, path := range []string{"/admin/connections/c1", "/admin/connections/c2?log_after=0"} {
-		w := httptest.NewRecorder()
-		h.ServeHTTP(w, httptest.NewRequest("DELETE", path, nil))
-		if w.Code != 200 {
-			t.Fatalf("%s: %d %s", path, w.Code, w.Body)
-		}
-	}
-	if len(s.calls) != 1 || s.calls[0] != 0 {
-		t.Errorf("sweeps = %v, want one with after 0", s.calls)
-	}
-}
-
-// sweepsTwo is a Store whose late-log sweep removes 2 rows.
-type sweepsTwo struct{ db.Store }
-
-func (sweepsTwo) SweepLateLogs(context.Context, string, []string, int64) (int64, int64, error) {
-	return 2, 1, nil
-}
-
-// swept reports the sweep's rows apart from the delete's own counts; it is 0
-// without log_after.
-func TestDeleteReportsSwept(t *testing.T) {
-	d := testenv.Postgres(t)
-	e := &env{t, d, nil}
-	e.seedUser("alice", "c1", "c2")
-	testenv.AddLog(t, d, 10, "c1", "x")
-	h := admin.New(sweepsTwo{d}, nil)
-	for path, want := range map[string]int64{"/admin/connections/c1?log_after=30": 2, "/admin/connections/c2": 0} {
-		w := httptest.NewRecorder()
-		h.ServeHTTP(w, httptest.NewRequest("DELETE", path, nil))
-		var res struct {
-			Counts       map[string]int64
-			Swept        *int64
-			SweptArchive *int64 `json:"swept_archive"`
-		}
-		wantBlocks := want / 2 // sweepsTwo sweeps 2 rows and 1 block; no sweep, none
-		if err := json.Unmarshal(w.Body.Bytes(), &res); err != nil || w.Code != 200 || res.Swept == nil || *res.Swept != want ||
-			res.SweptArchive == nil || *res.SweptArchive != wantBlocks {
-			t.Fatalf("%s: %d %s", path, w.Code, w.Body)
-		}
-		if strings.Contains(path, "log_after") && res.Counts["log"] != 1 {
-			t.Errorf("counts = %v, want the transaction's own log count", res.Counts)
 		}
 	}
 }

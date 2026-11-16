@@ -1,6 +1,6 @@
 // Command lctl runs lierc-api's admin commands (lctl help lists them). The
-// admin ones talk to lierc-api's admin listener; archive, revive and
-// delete-orphan-logs use the database directly.
+// admin ones talk to lierc-api's admin listener; archive and revive use
+// the database directly.
 package main
 
 import (

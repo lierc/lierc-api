@@ -20,8 +20,7 @@ liercd can't be reached or refuses (anything but 200, or 404 for a
 connection that isn't running), that connection is skipped. Destroying
 makes it QUIT, and that message reaches the log through NSQ a moment
 later, so the command waits --settle seconds, then deletes each
-connection's rows in one transaction, and finally sweeps log rows that
-arrived late.`
+connection, with all its rows, in one transaction.`
 
 func deleteConnections(ctx context.Context, env *Env, args []string) error {
 	fs := NewFlags(env, "delete-connections", deleteConnectionsUsage)

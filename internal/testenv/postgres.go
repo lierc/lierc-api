@@ -176,19 +176,46 @@ func AddUser(t testing.TB, d *db.DB, name string) string {
 	return id
 }
 
-// AddConnection inserts a connection owned by user, on the main liercd
+// AddConnection inserts a connection owned by user (added if missing), on the main liercd
 // (liercd NULL; the column's default is 'next').
 func AddConnection(t testing.TB, d *db.DB, id, user, config string) {
 	t.Helper()
+	ensureUser(t, d, user)
 	if _, err := d.Pool.Exec(context.Background(),
 		`INSERT INTO connections (id, user_id, config, liercd) VALUES ($1, $2, $3, NULL)`, id, user, config); err != nil {
 		t.Fatal(err)
 	}
 }
 
-// AddLog inserts a log row with the given id for user's connection conn.
+// EnsureConnection adds connection conn, owned by user, and the user,
+// unless they exist: rows inserted by hand need their owners
+// (logs_connection_id_fkey and the other keys of migration 3).
+func EnsureConnection(t testing.TB, d *db.DB, conn, user string) {
+	t.Helper()
+	ensureUser(t, d, user)
+	if _, err := d.Pool.Exec(context.Background(),
+		`INSERT INTO connections (id, user_id, config) VALUES ($1, $2, '{}') ON CONFLICT (id) DO NOTHING`, conn, user); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// ensureUser adds a user with id (named after it) unless one exists, so
+// fixtures can name an owner without creating it: every connection needs
+// its user (connections_user_id_fkey).
+func ensureUser(t testing.TB, d *db.DB, id string) {
+	t.Helper()
+	if _, err := d.Pool.Exec(context.Background(),
+		`INSERT INTO users (id, username, email, verified, last_login)
+		 VALUES ($1::text, 'u_' || left(md5($1::text), 24), md5($1::text) || '@example.com', true, now()) ON CONFLICT (id) DO NOTHING`, id); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// AddLog inserts a log row with the given id for user's connection conn
+// (both added if missing).
 func AddLog(t testing.TB, d *db.DB, id int64, conn, user string) {
 	t.Helper()
+	EnsureConnection(t, d, conn, user)
 	if _, err := d.Pool.Exec(context.Background(),
 		`INSERT INTO logs (id, connection_id, user_id, channel, time, message) VALUES ($1, $2, $3, '#a', now(), '{}')`,
 		id, conn, user); err != nil {

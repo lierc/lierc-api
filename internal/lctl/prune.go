@@ -6,7 +6,7 @@ import (
 )
 
 func pruneSeen(ctx context.Context, env *Env, args []string) error {
-	fs := NewFlags(env, "prune-seen", "prune-seen [--delete]\n\nCounts, or with --delete deletes, seen rows whose connection no longer\nexists or that weren't updated in a month.")
+	fs := NewFlags(env, "prune-seen", "prune-seen [--delete]\n\nCounts, or with --delete deletes, seen rows that weren't updated in a\nmonth. (A deleted connection's rows go with it.)")
 	del := fs.Bool("delete", false, "delete the rows")
 	if err := Parse(fs, args); err != nil {
 		return err

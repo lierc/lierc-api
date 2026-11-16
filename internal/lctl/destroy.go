@@ -14,16 +14,10 @@ var connectionTables = []string{"log", "seen", "private", "connection"}
 
 // destroyAndDelete destroys each connection in liercd (200 or 404 is fine,
 // anything else skips it), waits settle for QUIT messages to reach the log,
-// then has the API delete each connection's rows, which also sweeps log
-// rows that arrived late. The log's last id is read first: that is the
-// sweep's starting point, and it fails, before liercd is touched, if the
-// admin server is down.
+// then has the API delete each connection with its rows. The caller has
+// already reached the admin server (looking the connections up).
 func destroyAndDelete(ctx context.Context, env *Env, ids []string, settle time.Duration) (deleted, skipped int, err error) {
 	out := env.Stdout
-	logAfter, err := env.Admin.LastLogID(ctx)
-	if err != nil {
-		return 0, 0, err
-	}
 	var ready []string
 	for _, id := range ids {
 		if problem := destroy(ctx, env, id); problem != "" {
@@ -40,12 +34,11 @@ func destroyAndDelete(ctx context.Context, env *Env, ids []string, settle time.D
 		return 0, skipped, err
 	}
 
-	var late, lateBlocks int64
 	for _, id := range ready {
 		if err := ctx.Err(); err != nil {
 			return deleted, skipped, err
 		}
-		res, err := env.Admin.DeleteConnection(ctx, id, logAfter)
+		res, err := env.Admin.DeleteConnection(ctx, id)
 		if errors.Is(err, ErrMaybeDone) {
 			return deleted, skipped, err
 		}
@@ -61,21 +54,12 @@ func destroyAndDelete(ctx context.Context, env *Env, ids []string, settle time.D
 			continue
 		}
 		counts := res.Counts
-		late += res.Swept
-		lateBlocks += res.SweptArchive
-		warnSweep(env, id, res)
 		parts := make([]string, len(connectionTables))
 		for i, t := range connectionTables {
 			parts[i] = fmt.Sprintf("%s=%d", t, counts[t])
 		}
 		fmt.Fprintf(out, "%s: deleted (%s)\n", id, strings.Join(parts, " "))
 		deleted++
-	}
-	if late > 0 {
-		fmt.Fprintf(out, "removed %d late log row(s)\n", late)
-	}
-	if lateBlocks > 0 {
-		fmt.Fprintf(out, "removed %d late archive block(s)\n", lateBlocks)
 	}
 	return deleted, skipped, nil
 }
@@ -91,11 +75,4 @@ func destroy(ctx context.Context, env *Env, id string) string {
 		return ""
 	}
 	return statusLine(res.Status)
-}
-
-// warnSweep says on stderr that a delete committed but its sweep failed.
-func warnSweep(env *Env, id string, res Deleted) {
-	if res.SweepError != "" {
-		fmt.Fprintf(env.Stderr, "%s: deleted, but late log rows weren't swept (%s)\n", id, res.SweepError)
-	}
 }

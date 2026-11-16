@@ -317,24 +317,12 @@ func TestLoginsList(t *testing.T) {
 	}
 }
 
-func TestLastLogID(t *testing.T) {
-	e := newEnv(t)
-	if _, body := e.get("/admin/log/last"); body != `{"id":0}` {
-		t.Errorf("empty: %s", body)
-	}
-	a := testenv.AddUser(t, e.d, "alice")
-	testenv.AddConnection(t, e.d, "c1", a, `{}`)
-	testenv.AddLog(t, e.d, 42, "c1", a)
-	if _, body := e.get("/admin/log/last"); body != `{"id":42}` {
-		t.Errorf("got %s", body)
-	}
-}
-
 func TestStaleSeen(t *testing.T) {
 	e := newEnv(t)
 	a := testenv.AddUser(t, e.d, "alice")
 	testenv.AddConnection(t, e.d, "c1", a, `{}`)
-	e.exec(`INSERT INTO seen_markers (user_id, connection_id, channel, message_id) VALUES ('` + a + `', 'c1', '#a', 1), ('` + a + `', 'gone', '#a', 1)`)
+	e.exec(`INSERT INTO seen_markers (user_id, connection_id, channel, message_id) VALUES ('` + a + `', 'c1', '#a', 1)`)
+	e.exec(`INSERT INTO seen_markers (user_id, connection_id, channel, message_id, updated) VALUES ('` + a + `', 'c1', '#b', 1, now() - interval '2 months')`)
 	if _, body := e.get("/admin/seen/stale"); body != `{"count":1}` {
 		t.Errorf("got %s", body)
 	}

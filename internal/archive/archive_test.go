@@ -27,11 +27,12 @@ type tdb struct {
 	t     *testing.T
 	pool  *pgxpool.Pool
 	store db.Store
+	db    *db.DB
 }
 
 func newDB(t *testing.T) *tdb {
 	d := testenv.Postgres(t)
-	return &tdb{t: t, pool: d.Pool.Pool, store: d}
+	return &tdb{t: t, pool: d.Pool.Pool, store: d, db: d}
 }
 
 func (d *tdb) exec(sql string, args ...any) {
@@ -54,6 +55,7 @@ func (d *tdb) count(sql string, args ...any) int {
 func (d *tdb) insert(id int, conn, channel string, at time.Time) {
 	d.t.Helper()
 	msg := fmt.Sprintf(`{"Command":"PRIVMSG","Params":[%q,"message %d"],"Prefix":{"Name":"nick"}}`, channel, id)
+	testenv.EnsureConnection(d.t, d.db, conn, "u-"+conn)
 	d.exec(`INSERT INTO logs (id, connection_id, user_id, channel, command, highlight, time, message)
 		VALUES ($1, $2, $3, $4, 'PRIVMSG', $5, $6::timestamp, $7)`,
 		id, conn, "u-"+conn, channel, id%3 == 0, at.Format("2006-01-02 15:04:05.999999"), msg)
@@ -270,6 +272,7 @@ func TestMoveElements(t *testing.T) {
 		"2026-09-01 00:00:00",
 		"2026-09-01 23:59:59.999999",
 	}
+	testenv.EnsureConnection(t, d.db, "c1", "u1")
 	for i, ts := range times {
 		d.exec(`INSERT INTO logs (id, connection_id, user_id, channel, command, highlight, time, message)
 			VALUES ($1, 'c1', 'u1', '#chan', 'PRIVMSG', $2, $3::timestamp, $4)`,

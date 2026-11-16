@@ -2,10 +2,12 @@ package lctl
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/lierc/lierc-api/internal/archive"
 )
 
@@ -137,6 +139,10 @@ loop:
 			} else {
 				b, more, err = archive.MoveBlock(ctx, env.Store, c, o)
 			}
+			if deletedMeanwhile(err) {
+				fmt.Fprintf(out, "skipped %s %s: deleted meanwhile\n", c.Connection, c.Channel)
+				break
+			}
 			if err != nil {
 				fmt.Fprintf(out, "stopped at %s %s: %v\n", c.Connection, c.Channel, err)
 				totals()
@@ -173,4 +179,12 @@ loop:
 	}
 	totals()
 	return stopErr
+}
+
+// deletedMeanwhile reports whether err is a block's connection being
+// deleted while the archive ran: the block fails its key check (23503), or
+// deadlocks with the delete's cascade (40P01).
+func deletedMeanwhile(err error) bool {
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr) && (pgErr.Code == "23503" || pgErr.Code == "40P01")
 }

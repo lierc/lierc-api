@@ -85,7 +85,7 @@ func (a *api) subscribe(w http.ResponseWriter, r *http.Request, user string) {
 		respond.Error(w, http.StatusBadRequest, msg)
 		return
 	}
-	a.done(w, "save web push", a.db.SaveWebPush(r.Context(), user, endpoint, key, auth))
+	a.doneUser(w, "save web push", a.db.SaveWebPush(r.Context(), user, endpoint, key, auth))
 }
 
 // unsubscribePush forgets one subscription. The endpoint is in the query,
