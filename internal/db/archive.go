@@ -40,8 +40,8 @@ below AS (
 	ORDER BY id LIMIT $5::int
 )`
 
-// pairsAll walks the distinct (connection, channel) pairs of log with a
-// loose index scan over log (connection, channel, id DESC).
+// pairsAll walks the distinct (connection_id, channel) pairs of logs with a
+// loose index scan over logs (connection_id, channel, id DESC).
 const pairsAll = `
 pairs AS (
 	(SELECT connection_id, channel FROM logs ORDER BY connection_id, channel LIMIT 1)
@@ -96,7 +96,7 @@ CROSS JOIN LATERAL (
 WHERE m.n > 0
 ORDER BY p.connection_id, p.channel`
 
-// ArchiveCandidates counts, for each (connection, channel) of log (of conns,
+// ArchiveCandidates counts, for each (connection_id, channel) of logs (of conns,
 // when not empty), the messages below the cutoff, up to block: all but the
 // newest keep messages, and no newer than the newest older than cutoff.
 func (d *DB) ArchiveCandidates(ctx context.Context, keep int, cutoff time.Time, block int, conns []string) ([]ChannelCount, error) {

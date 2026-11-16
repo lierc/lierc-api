@@ -1,5 +1,5 @@
 -- channel.date: the messages of connection $1, channel $2 from date $3
--- through date $4, oldest first, from log and log_archive; when $5 is not
+-- through date $4, oldest first, from logs and log_archives; when $5 is not
 -- NULL, only those whose text matches $5 (websearch_to_tsquery: plain words,
 -- "phrases", or, -word; never a syntax error), and when $6 is not
 -- NULL, only those sent by $6.

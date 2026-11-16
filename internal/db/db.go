@@ -144,8 +144,8 @@ func (d *DB) LookupOwner(ctx context.Context, id string) (string, bool, error) {
 
 // LatestMessageID is the id of user's newest log row, or 0 if there is none.
 // It takes the max for each highlight value, so each is one probe of
-// log_user_highlight ("user", highlight, id DESC); a plain max(id) for the
-// user can instead scan the primary key back through every newer row.
+// logs_user_id_highlight_idx (user_id, highlight, id DESC); a plain max(id)
+// for the user can instead scan the primary key back through every newer row.
 func (d *DB) LatestMessageID(ctx context.Context, user string) (int64, error) {
 	var id int64
 	err := d.Pool.QueryRow(ctx, `SELECT GREATEST(

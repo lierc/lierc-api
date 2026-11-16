@@ -1,5 +1,5 @@
 -- channel.logs: the newest $3 messages of channel $1 on connection $2,
--- newest first, from log and then from log_archive.
+-- newest first, from logs and then from log_archives.
 --
 -- Archived ids are all below the ids left in log for a channel, so the
 -- archive is read only when log has fewer than $3 rows, and then only the

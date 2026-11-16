@@ -105,3 +105,22 @@ func TestMigrateRecordedNameMismatch(t *testing.T) {
 		t.Errorf("recorded %v", got)
 	}
 }
+
+// A LockTimeout under a millisecond still times out: '0ms' would mean
+// waiting forever.
+func TestMigrateSubMillisecondLockTimeout(t *testing.T) {
+	d := testenv.EmptyPostgres(t)
+	if err := d.Migrate(ctx, db.MigrateOptions{FS: files("0001_t.sql", tableT)}); err != nil {
+		t.Fatal(err)
+	}
+	lockT(t, d)
+	err := d.Migrate(ctx, db.MigrateOptions{
+		FS:          files("0001_t.sql", tableT, "0002_add.sql", "ALTER TABLE t ADD COLUMN b int"),
+		LockTimeout: time.Microsecond,
+		Wait:        500 * time.Millisecond,
+	})
+	var pgErr *pgconn.PgError
+	if !errors.As(err, &pgErr) || pgErr.Code != "55P03" {
+		t.Fatalf("err = %v, want a lock timeout", err)
+	}
+}

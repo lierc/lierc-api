@@ -28,7 +28,7 @@ var embedded embed.FS
 const migrateLockKey int64 = 0x6c69657263
 
 // schemaMigrationsDDL creates the table recording applied migrations, one
-// row each. The production baseline file (baseline.sql) creates the same.
+// row each.
 const schemaMigrationsDDL = `CREATE TABLE IF NOT EXISTS schema_migrations (
   version    int PRIMARY KEY,
   name       text NOT NULL,
@@ -199,7 +199,9 @@ func apply(ctx context.Context, c *pgxpool.Conn, m migration, sql string, lockTi
 		return err
 	}
 	defer tx.Rollback(context.Background())
-	if _, err := tx.Exec(ctx, fmt.Sprintf("SET LOCAL lock_timeout = '%dms'", lockTimeout.Milliseconds())); err != nil {
+	// At least 1ms: lock_timeout 0 means no timeout at all.
+	ms := max(lockTimeout.Milliseconds(), 1)
+	if _, err := tx.Exec(ctx, fmt.Sprintf("SET LOCAL lock_timeout = '%dms'", ms)); err != nil {
 		return err
 	}
 	// No arguments: the simple protocol, so the file may hold many statements.

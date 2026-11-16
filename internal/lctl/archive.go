@@ -12,7 +12,7 @@ import (
 const archiveUsage = `archive [--move] [--keep N] [--block N] [--min-age DURATION] [--connection ID[,ID...]]
         [--pause DURATION (1s)] [--budget DURATION (30m)] [--max-blocks N]
 
-Moves old log rows into compressed archive blocks (log_archive). Per
+Moves old log rows into compressed archive blocks (log_archives). Per
 connection and channel it keeps the newest --keep (default 1000) messages and everything
 newer than --min-age (default 7d; days such as 7d, or a Go duration such as 168h), and
 moves the rest, oldest first, in full blocks of --block messages; fewer than

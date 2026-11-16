@@ -1,5 +1,5 @@
 -- channel.logs_id: the newest $4 messages of channel $1 on connection $2
--- with ids below $3, newest first, from log and then from log_archive.
+-- with ids below $3, newest first, from logs and then from log_archives.
 --
 -- Archived ids are all below the ids left in log for a channel, so the
 -- archive is read only when log has fewer than $4 rows below $3, and then

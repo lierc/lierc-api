@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-// The template database is built by the migrations. log_archive.messages
+// The template database is built by the migrations. log_archives.messages
 // asks for lz4, which production and the dev stack's Postgres have; the
 // embedded Postgres the tests run is built without it, so the template
 // leaves the compression method out.
