@@ -23,6 +23,10 @@ import (
 
 const templateDB = "lierc_template"
 
+// pgVersion is the PostgreSQL the tests run (production runs 18; the
+// library's newest is 17).
+const pgVersion = embeddedpg.V17
+
 var (
 	pgOnce   sync.Once
 	pgErr    error
@@ -62,14 +66,22 @@ func startPostgres() error {
 	if err != nil {
 		return err
 	}
+	bin, release, err := pgBinaries(pgBinariesRoot(), string(pgVersion))
+	if err != nil {
+		return err
+	}
 	cfg := embeddedpg.DefaultConfig().
+		Version(pgVersion).
 		Port(pgPort).
 		RuntimePath(filepath.Join(pgDir, "run")).
 		DataPath(filepath.Join(pgDir, "data")).
+		BinariesPath(bin).
 		StartTimeout(120 * time.Second).
 		Logger(nil)
 	pgServer = embeddedpg.NewDatabase(cfg)
-	if err := pgServer.Start(); err != nil {
+	err = pgServer.Start()
+	release(err == nil)
+	if err != nil {
 		pgServer = nil
 		return err
 	}
