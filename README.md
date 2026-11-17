@@ -1,6 +1,9 @@
 lierc-api
 =========
 
+Part of [relaychat](https://relaychat.party/), a web IRC client that stays
+connected when you close the tab. Try it at <https://relaychat.party/>.
+
 relaychat's HTTP API, in Go: accounts and login, a user's IRC connection
 settings (and driving `liercd` to run them), the event stream (server-sent
 events) that delivers each user's IRC traffic to the browser, history and
