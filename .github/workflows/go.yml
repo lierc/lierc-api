@@ -16,6 +16,15 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
+      # The unpacked Postgres the tests run (internal/testenv: pgBinaries),
+      # so they neither download it from Maven nor unpack it. The version
+      # is pgVersion in postgres.go; a directory without its .complete
+      # marker is unpacked again.
+      - name: Cache test Postgres
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/lierc-api-tests
+          key: test-postgres-${{ runner.os }}-${{ hashFiles('internal/testenv/postgres.go') }}
       - name: Vet
         run: go vet ./...
       - name: Test (race)
