@@ -45,20 +45,23 @@ func TestUserListTable(t *testing.T) {
 	h.conn("b1", "b0b", `{"Host":"a.com","Port":6667,"Nick":"b"}`)
 	h.user("al")
 	h.exec(`UPDATE users SET id = 'a1', last_login = NULL, verified = false WHERE username = 'al'`)
+	h.user("cy")
+	h.exec(`UPDATE users SET id = 'c1', last_login = NULL, verified = NULL WHERE username = 'cy'`)
 
 	if err := h.run("user-list"); err != nil {
 		t.Fatal(err)
 	}
-	want := "┌─────┬──────────┬─────────────────┬────────────┬─────────────────────────┬──────────────────────────┬─────────────┐\n" +
-		"│ ID  │ USERNAME │ EMAIL           │ VERIFIED   │ LAST LOGIN              │ REGISTERED               │ CONNECTIONS │\n" +
-		"├─────┼──────────┼─────────────────┼────────────┼─────────────────────────┼──────────────────────────┼─────────────┤\n" +
-		"│ a1  │ al       │ al@example.com  │ unverified │ never                   │ unknown                  │ 0           │\n" +
-		"│ b0b │ bob      │ bob@example.com │ verified   │ 2026-10-30 (3 days ago) │ 2026-10-03 (30 days ago) │ 1           │\n" +
-		"└─────┴──────────┴─────────────────┴────────────┴─────────────────────────┴──────────────────────────┴─────────────┘\n"
+	want := "┌─────┬──────────┬─────────────────┬──────────┬─────────────────┬──────────────────┐\n" +
+		"│ ID  │ USERNAME │ EMAIL           │ VERIFIED │ LAST LOGIN      │ REGISTERED       │\n" +
+		"├─────┼──────────┼─────────────────┼──────────┼─────────────────┼──────────────────┤\n" +
+		"│ a1  │ al       │ al@example.com  │ false    │ never           │ unknown          │\n" +
+		"│ b0b │ bob      │ bob@example.com │ true     │ 2026-10-30 (3d) │ 2026-10-03 (30d) │\n" +
+		"│ c1  │ cy       │ cy@example.com  │ -        │ never           │ unknown          │\n" +
+		"└─────┴──────────┴─────────────────┴──────────┴─────────────────┴──────────────────┘\n"
 	if h.out() != want {
 		t.Fatalf("stdout:\n%s\nwant:\n%s", h.out(), want)
 	}
-	if got := h.stderr.String(); got != "2 user(s)\n" {
+	if got := h.stderr.String(); got != "3 user(s)\n" {
 		t.Errorf("stderr %q", got)
 	}
 }
@@ -68,5 +71,22 @@ func TestUserListUsage(t *testing.T) {
 	var u *UsageError
 	if err := h.run("user-list", "extra"); !asUsage(err, &u) {
 		t.Errorf("got %v, want a usage error", err)
+	}
+}
+
+func TestAgoShort(t *testing.T) {
+	now := time.Date(2026, 11, 2, 12, 0, 0, 0, time.UTC)
+	for d, want := range map[time.Duration]string{
+		-time.Minute:         "future",
+		0:                    "0m",
+		59 * time.Minute:     "59m",
+		time.Hour:            "1h",
+		47 * time.Hour:       "47h",
+		48 * time.Hour:       "2d",
+		400 * 24 * time.Hour: "400d",
+	} {
+		if got := agoShort(now, now.Add(-d)); got != want {
+			t.Errorf("%v: %q, want %q", d, got, want)
+		}
 	}
 }
