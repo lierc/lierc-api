@@ -3,12 +3,9 @@ package api
 import (
 	"encoding/base64"
 	"encoding/json"
-	"errors"
-	"mime"
 	"net/http"
 	"regexp"
 	"strings"
-	"unicode/utf8"
 
 	"github.com/lierc/lierc-api/internal/respond"
 )
@@ -85,30 +82,19 @@ type pushSubscription struct {
 	} `json:"keys"`
 }
 
-// subscribe saves the subscription in the body: PushSubscription.toJSON()
-// as JSON, or the form (endpoint, key, auth) the UI sent before it.
-// TODO: drop the form a while after the UI sending JSON is deployed, once
-// tabs opened before it have reloaded.
+// subscribe saves the subscription in the body, PushSubscription.toJSON()
+// as the browser gives it.
 func (a *api) subscribe(w http.ResponseWriter, r *http.Request, user string) {
-	var endpoint, key, auth string
-	if t, _, _ := mime.ParseMediaType(r.Header.Get("Content-Type")); t == "application/json" {
-		body, ok := readBody(w, r)
-		if !ok {
-			return
-		}
-		var sub pushSubscription
-		if err := json.Unmarshal([]byte(body), &sub); err != nil {
-			respond.Error(w, http.StatusBadRequest, "request body isn't a push subscription")
-			return
-		}
-		endpoint, key, auth = sub.Endpoint, sub.Keys.P256dh, sub.Keys.Auth
-	} else {
-		param, ok := formParams(w, r)
-		if !ok {
-			return
-		}
-		endpoint, key, auth = param("endpoint"), param("key"), param("auth")
+	body, ok := readBody(w, r)
+	if !ok {
+		return
 	}
+	var sub pushSubscription
+	if err := json.Unmarshal([]byte(body), &sub); err != nil {
+		respond.Error(w, http.StatusBadRequest, "request body isn't a push subscription")
+		return
+	}
+	endpoint, key, auth := sub.Endpoint, sub.Keys.P256dh, sub.Keys.Auth
 	if msg := checkSubscription(endpoint, key, auth); msg != "" {
 		respond.Error(w, http.StatusBadRequest, msg)
 		return
@@ -126,29 +112,4 @@ func (a *api) unsubscribePush(w http.ResponseWriter, r *http.Request, user strin
 		return
 	}
 	a.done(w, "delete web push", a.db.DeleteWebPush(r.Context(), user, endpoint))
-}
-
-// formParams reads the form body, and answers a function giving a field
-// from it; the query isn't read. Over maxBody, or not valid UTF-8, it
-// answers 400 and reports false.
-func formParams(w http.ResponseWriter, r *http.Request) (func(string) string, bool) {
-	r.Body = http.MaxBytesReader(w, r.Body, maxBody)
-	if err := r.ParseForm(); err != nil {
-		var tooBig *http.MaxBytesError
-		if errors.As(err, &tooBig) {
-			respond.Error(w, http.StatusBadRequest, "request body is too large")
-		} else {
-			respond.Error(w, http.StatusBadRequest, "could not read the request body")
-		}
-		return nil, false
-	}
-	for _, vs := range r.PostForm {
-		for _, v := range vs {
-			if !utf8.ValidString(v) {
-				invalidUTF8(w)
-				return nil, false
-			}
-		}
-	}
-	return r.PostForm.Get, true
 }

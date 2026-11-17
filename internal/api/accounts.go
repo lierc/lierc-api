@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/lierc/lierc-api/internal/accounts"
 	"github.com/lierc/lierc-api/internal/auth"
@@ -274,4 +275,29 @@ func unsubscribePage(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Location", loc)
 	w.WriteHeader(http.StatusSeeOther)
+}
+
+// formParams reads the form body, and answers a function giving a field
+// from it; the query isn't read. Over maxBody, or not valid UTF-8, it
+// answers 400 and reports false.
+func formParams(w http.ResponseWriter, r *http.Request) (func(string) string, bool) {
+	r.Body = http.MaxBytesReader(w, r.Body, maxBody)
+	if err := r.ParseForm(); err != nil {
+		var tooBig *http.MaxBytesError
+		if errors.As(err, &tooBig) {
+			respond.Error(w, http.StatusBadRequest, "request body is too large")
+		} else {
+			respond.Error(w, http.StatusBadRequest, "could not read the request body")
+		}
+		return nil, false
+	}
+	for _, vs := range r.PostForm {
+		for _, v := range vs {
+			if !utf8.ValidString(v) {
+				invalidUTF8(w)
+				return nil, false
+			}
+		}
+	}
+	return r.PostForm.Get, true
 }

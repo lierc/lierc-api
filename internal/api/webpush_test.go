@@ -69,38 +69,33 @@ func TestWebPushRoutes(t *testing.T) {
 	e := setup(t)
 	a := testenv.AddUser(t, e.db, "alice")
 	const ep = "https://fcm.googleapis.com/fcm/send/abc"
-	form := "application/x-www-form-urlencoded; charset=UTF-8"
-	post := func(query, body string) (int, string) {
-		return e.send("POST", "/notification/web_push"+query, a, body, "Content-Type", form)
+	post := func(query, endpoint, key, auth string) (int, string) {
+		body := `{"endpoint":"` + endpoint + `","keys":{"p256dh":"` + key + `","auth":"` + auth + `"}}`
+		return e.send("POST", "/notification/web_push"+query, a, body, "Content-Type", "application/json")
 	}
-	body := url.Values{"endpoint": {ep}, "key": {goodKey}, "auth": {goodAuth}}.Encode()
-	if c, b := post("", body); c != 204 {
+	if c, b := post("", ep, goodKey, goodAuth); c != 204 {
 		t.Fatalf("subscribe: %d %s", c, b)
 	}
 	if v := e.row(`SELECT endpoint || ' ' || key || ' ' || auth FROM web_push_subscriptions WHERE user_id=$1`, a); v != ep+" "+goodKey+" "+goodAuth {
 		t.Errorf("row = %s", v)
 	}
-	if c, b := post("", url.Values{"endpoint": {"http://fcm.googleapis.com/x"}, "key": {goodKey}, "auth": {goodAuth}}.Encode()); c != 400 || b != `{"status":"error","error":"endpoint must be an https URL"}` {
+	if c, b := post("", "http://fcm.googleapis.com/x", goodKey, goodAuth); c != 400 || b != `{"status":"error","error":"endpoint must be an https URL"}` {
 		t.Errorf("http endpoint: %d %s", c, b)
 	}
-	ep2 := ep + "2"
-	if c, b := post("?key="+url.QueryEscape(goodKey), url.Values{"endpoint": {ep2}, "auth": {goodAuth}}.Encode()); c != 400 || b != `{"status":"error","error":"key is required"}` {
+	if c, b := post("?key="+url.QueryEscape(goodKey), ep+"2", "", goodAuth); c != 400 || b != `{"status":"error","error":"key is required"}` {
 		t.Errorf("key in query isn't read: %d %s", c, b)
-	}
-	if c, b := post("?key="+url.QueryEscape(goodKey), url.Values{"endpoint": {ep2}, "key": {"not base64!"}, "auth": {goodAuth}}.Encode()); c != 400 || b != `{"status":"error","error":"key is not base64url"}` {
-		t.Errorf("body key wins: %d %s", c, b)
 	}
 	e.sendWant("DELETE", "/notification/web_push?endpoint="+url.QueryEscape(ep), a, "", 204, "")
 	if v := e.row(`SELECT count(*)::text FROM web_push_subscriptions WHERE endpoint=$1`, ep); v != "0" {
 		t.Errorf("%s rows left", v)
 	}
 	e.sendWant("DELETE", "/notification/web_push", a, "", 400, `{"status":"error","error":"endpoint is required"}`)
-	e.sendWant("POST", "/notification/web_push", "", body, 401, `{"status":"error","error":"unauthorized"}`)
+	e.sendWant("POST", "/notification/web_push", "", "{}", 401, `{"status":"error","error":"unauthorized"}`)
 	e.sendWant("DELETE", "/notification/web_push?endpoint=x", "", "", 401, `{"status":"error","error":"unauthorized"}`)
 }
 
-// The UI sends PushSubscription.toJSON() as it is; tabs still on the old
-// UI send the form, which keeps working until it's removed.
+// The UI sends PushSubscription.toJSON() as it is; the form it sent
+// before is refused.
 func TestWebPushJSON(t *testing.T) {
 	e := setup(t)
 	a := testenv.AddUser(t, e.db, "alice")
@@ -125,9 +120,8 @@ func TestWebPushJSON(t *testing.T) {
 			t.Errorf("%s: %d %s, want %q", c.body, code, b, c.msg)
 		}
 	}
-	// still a form when the type says so (and with no type, as before)
 	form := url.Values{"endpoint": {ep + "2"}, "key": {goodKey}, "auth": {goodAuth}}.Encode()
-	if c, b := e.send("POST", "/notification/web_push", a, form, "Content-Type", "application/x-www-form-urlencoded"); c != 204 {
+	if c, b := e.send("POST", "/notification/web_push", a, form, "Content-Type", "application/x-www-form-urlencoded"); c != 400 || b != `{"status":"error","error":"request body isn't a push subscription"}` {
 		t.Errorf("form: %d %s", c, b)
 	}
 }
