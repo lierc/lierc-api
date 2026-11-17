@@ -18,8 +18,8 @@ import (
 type UserRow struct {
 	ID, Username, Email string
 	Verified            *bool      // NULL: an account from before signups had to verify
-	LastLogin           *time.Time // NULL on some old accounts; UTC
-	Registered          *time.Time // NULL for accounts from before the column; UTC
+	LastLogin           *time.Time // NULL on some old accounts; in time.Local as scanned (the admin layer converts to UTC)
+	Registered          *time.Time // NULL for accounts from before the column; likewise
 	Connections         int
 	Password            string // "bcrypt", or "none" for an account that has to reset it
 }
@@ -55,8 +55,7 @@ func (d *DB) userRows(ctx context.Context, where sq.Sqlizer) ([]UserRow, error) 
 }
 
 // ListUsers lists the users matching f, never-logged-in first, then the
-// oldest login, then by id. last_login is a timestamp without a zone,
-// stored in UTC.
+// oldest login, then by id.
 func (d *DB) ListUsers(ctx context.Context, f UserFilter) ([]UserRow, error) {
 	where := sq.And{}
 	if f.InactiveSince != nil {
@@ -312,9 +311,9 @@ const deadlockTries = 3
 
 // retryDeadlock runs f again, 100ms later, when it lost a deadlock.
 func retryDeadlock(ctx context.Context, f func() error) error {
-	var err error
-	for i := 0; i < deadlockTries; i++ {
-		if err = f(); !isCode(err, "40P01") {
+	for try := 1; ; try++ {
+		err := f()
+		if !isCode(err, "40P01") || try == deadlockTries {
 			return err
 		}
 		select {
@@ -323,7 +322,6 @@ func retryDeadlock(ctx context.Context, f func() error) error {
 		case <-time.After(100 * time.Millisecond):
 		}
 	}
-	return err
 }
 
 // isCode reports whether err is a PostgreSQL error with SQLSTATE code.

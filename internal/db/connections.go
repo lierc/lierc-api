@@ -51,10 +51,14 @@ func (d *DB) SaveConnection(ctx context.Context, id, user string, config []byte)
 	return err
 }
 
-// DeleteConnection deletes connection id's row.
+// DeleteConnection deletes connection id's row (its logs, archives and
+// seen markers cascade). The cascade can lose a deadlock to writes on the
+// same rows (the logger's inserts, the archiver), so it is retried.
 func (d *DB) DeleteConnection(ctx context.Context, id string) error {
-	_, err := exec(ctx, d.Pool, psql.Delete("connections").Where(sq.Eq{"id": id}))
-	return err
+	return retryDeadlock(ctx, func() error {
+		_, err := exec(ctx, d.Pool, psql.Delete("connections").Where(sq.Eq{"id": id}))
+		return err
+	})
 }
 
 // MergeConfig merges fields, a JSON object, into the connection's saved

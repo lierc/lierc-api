@@ -291,8 +291,8 @@ func TestAdminRoutesMounted(t *testing.T) {
 	if c := status(a[1], "/stats"); c != 200 {
 		t.Errorf("admin /stats = %d, want 200", c)
 	}
-	if c := status(a[0], "/admin/log/last"); c != 404 {
-		t.Errorf("public /admin/log/last = %d, want 404", c)
+	if c := status(a[0], "/admin/seen/stale"); c != 404 {
+		t.Errorf("public /admin/seen/stale = %d, want 404", c)
 	}
 	cancel()
 	select {

@@ -202,13 +202,14 @@ func AddConnection(t testing.TB, d *db.DB, id, user, config string) {
 }
 
 // EnsureConnection adds connection conn, owned by user, and the user,
-// unless they exist: rows inserted by hand need their owners
-// (logs_connection_id_fkey and the other keys of migration 3).
+// unless they exist, on the main liercd like AddConnection: log, archive
+// and seen rows inserted by hand need their connection, and their user_id
+// must be its owner (the (connection_id, user_id) keys of migration 4).
 func EnsureConnection(t testing.TB, d *db.DB, conn, user string) {
 	t.Helper()
 	ensureUser(t, d, user)
 	if _, err := d.Pool.Exec(context.Background(),
-		`INSERT INTO connections (id, user_id, config) VALUES ($1, $2, '{}') ON CONFLICT (id) DO NOTHING`, conn, user); err != nil {
+		`INSERT INTO connections (id, user_id, config, liercd) VALUES ($1, $2, '{}', 'main') ON CONFLICT (id) DO NOTHING`, conn, user); err != nil {
 		t.Fatal(err)
 	}
 }
