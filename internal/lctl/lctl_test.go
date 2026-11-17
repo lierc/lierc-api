@@ -299,7 +299,7 @@ func TestRemovedCommands(t *testing.T) {
 	}
 }
 
-var portedNames = []string{"users", "user-info", "inactive-users", "delete-users", "connection-list", "connection-info", "reconnect", "stop-inactive", "delete-connections", "logins", "end-login", "prune-logins", "prune-seen", "stats"}
+var portedNames = []string{"users", "user-info", "user-list", "inactive-users", "delete-users", "connection-list", "connection-info", "reconnect", "stop-inactive", "delete-connections", "logins", "end-login", "prune-logins", "prune-seen", "stats"}
 
 // helpLines is the command names a help text lists.
 func helpLines(s string) map[string]bool {
@@ -332,7 +332,7 @@ func TestAdminGroup(t *testing.T) {
 		}
 		got := helpLines(o.stdout.String())
 		if len(got) != len(portedNames) {
-			t.Errorf("%v lists %v, want the %d ported commands", args, got, len(portedNames))
+			t.Errorf("%v lists %v, want the %d admin commands", args, got, len(portedNames))
 		}
 		for _, n := range portedNames {
 			if !got[n] {

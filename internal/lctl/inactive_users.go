@@ -6,6 +6,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/lierc/lierc-api/internal/admin"
 )
 
 const inactiveUsersUsage = `inactive-users --since DURATION
@@ -44,16 +46,23 @@ func inactiveUsers(ctx context.Context, env *Env, args []string) error {
 		return err
 	}
 	for _, u := range list {
-		email := u.Email
-		if state := verifiedState(u.Verified); state != "verified" {
-			email += " (" + state + ")"
-		}
-		fmt.Fprintf(env.Stdout, "%s  %s  %s  last login %s  registered %s  %d connections\n", u.ID, u.Username, email,
-			when(env.now(), u.LastLogin, "never"), when(env.now(), u.Registered, "unknown"), u.Connections)
+		printUser(env, u)
 	}
 	n := len(list)
 	fmt.Fprintf(env.Stderr, "%d user(s) haven't logged in since %s UTC (%s)\n", n, cutoff.Format("2006-01-02 15:04"), *since)
 	return nil
+}
+
+// printUser prints u as inactive-users and user-list list it, id first:
+// username, email (with its state unless verified), last login, when
+// they registered and how many connections they have.
+func printUser(env *Env, u admin.User) {
+	email := u.Email
+	if state := verifiedState(u.Verified); state != "verified" {
+		email += " (" + state + ")"
+	}
+	fmt.Fprintf(env.Stdout, "%s  %s  %s  last login %s  registered %s  %d connections\n", u.ID, u.Username, email,
+		when(env.now(), u.LastLogin, "never"), when(env.now(), u.Registered, "unknown"), u.Connections)
 }
 
 // parseSince reads a positive duration: whole days ("90d") or a Go

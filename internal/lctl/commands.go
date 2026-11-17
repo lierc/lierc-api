@@ -11,6 +11,7 @@ var Commands = []Command{
 // lists them. They go through the API's admin server and liercd.
 var AdminCommands = []Command{
 	{Name: "user-info", Summary: "Show a user: email, last login, password storage, connections", Run: userInfo},
+	{Name: "user-list", Summary: "List every user, one line each: id, username, email, last login, registered, connections", Run: userList},
 	{Name: "inactive-users", Summary: "List users who haven't logged in within --since (e.g. 90d)", Run: inactiveUsers},
 	{Name: "stop-inactive", Summary: "Stop the running liercd connections of users who haven't logged in within --since; dry run unless --stop", Run: stopInactive},
 	{Name: "connection-info", Summary: "Show a connection: owner, saved config, validity, and its live state in liercd", Run: connectionInfo},
