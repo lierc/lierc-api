@@ -32,7 +32,12 @@ const shutdownTimeout = 10 * time.Second
 func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
 	defer stop()
-	os.Exit(run(ctx, os.Args[1:], os.Getenv, os.Stderr, nil))
+	getenv, err := config.WithFiles(os.Environ(), os.Getenv)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "config: %v\n", err)
+		os.Exit(1)
+	}
+	os.Exit(run(ctx, os.Args[1:], getenv, os.Stderr, nil))
 }
 
 // run runs the server and returns the process exit code; any argument is a
