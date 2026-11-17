@@ -2,7 +2,9 @@ package api
 
 import (
 	"encoding/base64"
+	"encoding/json"
 	"errors"
+	"mime"
 	"net/http"
 	"regexp"
 	"strings"
@@ -74,13 +76,39 @@ func checkSubscription(endpoint, key, auth string) string {
 	return ""
 }
 
-// subscribe saves the subscription in the form body.
+// pushSubscription is the browser's PushSubscription.toJSON().
+type pushSubscription struct {
+	Endpoint string `json:"endpoint"`
+	Keys     struct {
+		P256dh string `json:"p256dh"`
+		Auth   string `json:"auth"`
+	} `json:"keys"`
+}
+
+// subscribe saves the subscription in the body: PushSubscription.toJSON()
+// as JSON, or the form (endpoint, key, auth) the UI sent before it.
+// TODO: drop the form a while after the UI sending JSON is deployed, once
+// tabs opened before it have reloaded.
 func (a *api) subscribe(w http.ResponseWriter, r *http.Request, user string) {
-	param, ok := formParams(w, r)
-	if !ok {
-		return
+	var endpoint, key, auth string
+	if t, _, _ := mime.ParseMediaType(r.Header.Get("Content-Type")); t == "application/json" {
+		body, ok := readBody(w, r)
+		if !ok {
+			return
+		}
+		var sub pushSubscription
+		if err := json.Unmarshal([]byte(body), &sub); err != nil {
+			respond.Error(w, http.StatusBadRequest, "request body isn't a push subscription")
+			return
+		}
+		endpoint, key, auth = sub.Endpoint, sub.Keys.P256dh, sub.Keys.Auth
+	} else {
+		param, ok := formParams(w, r)
+		if !ok {
+			return
+		}
+		endpoint, key, auth = param("endpoint"), param("key"), param("auth")
 	}
-	endpoint, key, auth := param("endpoint"), param("key"), param("auth")
 	if msg := checkSubscription(endpoint, key, auth); msg != "" {
 		respond.Error(w, http.StatusBadRequest, msg)
 		return

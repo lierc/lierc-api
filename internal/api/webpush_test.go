@@ -98,3 +98,36 @@ func TestWebPushRoutes(t *testing.T) {
 	e.sendWant("POST", "/notification/web_push", "", body, 401, `{"status":"error","error":"unauthorized"}`)
 	e.sendWant("DELETE", "/notification/web_push?endpoint=x", "", "", 401, `{"status":"error","error":"unauthorized"}`)
 }
+
+// The UI sends PushSubscription.toJSON() as it is; tabs still on the old
+// UI send the form, which keeps working until it's removed.
+func TestWebPushJSON(t *testing.T) {
+	e := setup(t)
+	a := testenv.AddUser(t, e.db, "alice")
+	const ep = "https://fcm.googleapis.com/fcm/send/json"
+	post := func(body string) (int, string) {
+		return e.send("POST", "/notification/web_push", a, body, "Content-Type", "application/json")
+	}
+	sub := `{"endpoint":"` + ep + `","expirationTime":null,"keys":{"p256dh":"` + goodKey + `","auth":"` + goodAuth + `"}}`
+	if c, b := post(sub); c != 204 {
+		t.Fatalf("subscribe: %d %s", c, b)
+	}
+	if v := e.row(`SELECT endpoint || ' ' || key || ' ' || auth FROM web_push_subscriptions WHERE user_id=$1`, a); v != ep+" "+goodKey+" "+goodAuth {
+		t.Errorf("row = %s", v)
+	}
+	for _, c := range []struct{ body, msg string }{
+		{`{"endpoint":"` + ep + `","keys":{"auth":"` + goodAuth + `"}}`, "key is required"},
+		{`{"endpoint":"http://fcm.googleapis.com/x","keys":{"p256dh":"` + goodKey + `","auth":"` + goodAuth + `"}}`, "endpoint must be an https URL"},
+		{`{"endpoint":`, "request body isn't a push subscription"},
+		{`{"endpoint":1}`, "request body isn't a push subscription"},
+	} {
+		if code, b := post(c.body); code != 400 || b != `{"status":"error","error":"`+c.msg+`"}` {
+			t.Errorf("%s: %d %s, want %q", c.body, code, b, c.msg)
+		}
+	}
+	// still a form when the type says so (and with no type, as before)
+	form := url.Values{"endpoint": {ep + "2"}, "key": {goodKey}, "auth": {goodAuth}}.Encode()
+	if c, b := e.send("POST", "/notification/web_push", a, form, "Content-Type", "application/x-www-form-urlencoded"); c != 204 {
+		t.Errorf("form: %d %s", c, b)
+	}
+}
