@@ -48,6 +48,29 @@ func TestConnectionList(t *testing.T) {
 	m.calledNothing()
 }
 
+func TestConnectionListTable(t *testing.T) {
+	m := newInstancesHarness(t)
+	listSetup(m)
+	m.env.StdoutIsTerminal = true
+	if err := m.run("connection-list"); err != nil {
+		t.Fatal(err)
+	}
+	want := "┌────┬──────────┬───────┬──────────────────────────┐\n" +
+		"│ ID │ INSTANCE │ OWNER │ HOST:PORT                │\n" +
+		"├────┼──────────┼───────┼──────────────────────────┤\n" +
+		"│ a1 │ main     │ alice │ irc.libera.chat:6697     │\n" +
+		"│ a2 │ main     │ alice │ irc.oftc.net:6667        │\n" +
+		"│ b1 │ next     │ alice │ ?                        │\n" +
+		"│ c1 │ next     │ bob   │ irc.relaychat.party:6697 │\n" +
+		"└────┴──────────┴───────┴──────────────────────────┘\n"
+	if got := m.out(); got != want {
+		t.Errorf("output:\n%s\nwant:\n%s", got, want)
+	}
+	if got := m.stderr.String(); got != "4 connection(s)\n" {
+		t.Errorf("stderr = %q", got)
+	}
+}
+
 func TestConnectionListInstance(t *testing.T) {
 	m := newInstancesHarness(t)
 	listSetup(m)

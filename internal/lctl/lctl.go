@@ -32,6 +32,9 @@ type System struct {
 	Stdout, Stderr  io.Writer
 	StdinIsTerminal bool
 	StdinFd         int
+	// StdoutIsTerminal: list commands draw tables instead of lines that
+	// pipe into other commands.
+	StdoutIsTerminal bool
 }
 
 // OSSystem is the real process's System. The host wrapper sets
@@ -43,6 +46,7 @@ func OSSystem() System {
 	return System{
 		Getenv: os.Getenv, Stdin: os.Stdin, Stdout: os.Stdout, Stderr: os.Stderr,
 		StdinIsTerminal: term.IsTerminal(fd) || os.Getenv("LCTL_STDIN_TTY") == "1", StdinFd: fd,
+		StdoutIsTerminal: term.IsTerminal(int(os.Stdout.Fd())),
 	}
 }
 
@@ -57,6 +61,9 @@ type Env struct {
 	Stdin           io.Reader
 	Stdout, Stderr  io.Writer
 	StdinIsTerminal bool
+	// StdoutIsTerminal: user-list and connection-list draw tables; piped,
+	// they print lines that start with the id.
+	StdoutIsTerminal bool
 	// ReadPassword reads a password from the terminal without echo.
 	ReadPassword func() (string, error)
 	// Resolve resolves host names for the connection address check.
@@ -212,7 +219,8 @@ func OpenEnv(ctx context.Context, sys System, needsDB bool) (*Env, func(), error
 	env := &Env{
 		Config: cfg, Getenv: sys.Getenv, Liercd: liercd.NewRouted(liercd.Instances{Main: cfg.LiercdHost, Next: cfg.LiercdNextHost}, adm.instanceOf), Admin: adm, StatsURL: stats,
 		Stdin: sys.Stdin, Stdout: sys.Stdout, Stderr: sys.Stderr, StdinIsTerminal: sys.StdinIsTerminal,
-		Resolve: connconfig.SystemResolver, Sleep: sleepCtx,
+		StdoutIsTerminal: sys.StdoutIsTerminal,
+		Resolve:          connconfig.SystemResolver, Sleep: sleepCtx,
 		ReadPassword: func() (string, error) {
 			if !term.IsTerminal(sys.StdinFd) {
 				return "", errors.New("can't prompt for a password without a terminal (over ssh, use ssh -t); or give it as one line on stdin")

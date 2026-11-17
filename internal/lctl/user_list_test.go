@@ -32,6 +32,37 @@ func TestUserList(t *testing.T) {
 	}
 }
 
+// On a terminal it's a table: the verified state has its own column, and
+// times are dates.
+func TestUserListTable(t *testing.T) {
+	h := newHarness(t)
+	now := time.Date(2026, 11, 2, 12, 0, 0, 0, time.UTC)
+	h.env.Now = func() time.Time { return now }
+	h.env.StdoutIsTerminal = true
+	h.user("bob") // fixed ids, for a fixed column width
+	h.exec(`UPDATE users SET id = 'b0b', last_login = $1, registered = $2 WHERE username = 'bob'`,
+		now.Add(-3*24*time.Hour), now.Add(-30*24*time.Hour))
+	h.conn("b1", "b0b", `{"Host":"a.com","Port":6667,"Nick":"b"}`)
+	h.user("al")
+	h.exec(`UPDATE users SET id = 'a1', last_login = NULL, verified = false WHERE username = 'al'`)
+
+	if err := h.run("user-list"); err != nil {
+		t.Fatal(err)
+	}
+	want := "┌─────┬──────────┬─────────────────┬────────────┬─────────────────────────┬──────────────────────────┬─────────────┐\n" +
+		"│ ID  │ USERNAME │ EMAIL           │ VERIFIED   │ LAST LOGIN              │ REGISTERED               │ CONNECTIONS │\n" +
+		"├─────┼──────────┼─────────────────┼────────────┼─────────────────────────┼──────────────────────────┼─────────────┤\n" +
+		"│ a1  │ al       │ al@example.com  │ unverified │ never                   │ unknown                  │ 0           │\n" +
+		"│ b0b │ bob      │ bob@example.com │ verified   │ 2026-10-30 (3 days ago) │ 2026-10-03 (30 days ago) │ 1           │\n" +
+		"└─────┴──────────┴─────────────────┴────────────┴─────────────────────────┴──────────────────────────┴─────────────┘\n"
+	if h.out() != want {
+		t.Fatalf("stdout:\n%s\nwant:\n%s", h.out(), want)
+	}
+	if got := h.stderr.String(); got != "2 user(s)\n" {
+		t.Errorf("stderr %q", got)
+	}
+}
+
 func TestUserListUsage(t *testing.T) {
 	h := newHarness(t)
 	var u *UsageError
