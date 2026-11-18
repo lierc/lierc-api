@@ -88,7 +88,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, stderr 
 	srv.RegisterOnShutdown(s.CloseStreams)
 	adminMux := http.NewServeMux()
 	adminMux.Handle("GET /stats", s.Admin())
-	adminMux.Handle("/admin/", adminapi.New(d, s.ConnectionChanged))
+	adminMux.Handle("/admin/", adminapi.New(d, s.ConnectionChanged, adminapi.Streaming(s.HasStreams)))
 	admin := newServer(proxy.AccessLog(adminMux), serverTimeouts)
 
 	ln, err := net.Listen("tcp", cfg.Listen)

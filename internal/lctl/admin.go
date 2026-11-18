@@ -121,6 +121,14 @@ func (a *Admin) Users(ctx context.Context, inactiveSince *time.Time) ([]admin.Us
 	return out, a.do(ctx, http.MethodGet, "/admin/users", sinceQuery(inactiveSince), &out)
 }
 
+// UnverifiedUsers lists the users who haven't confirmed their email and
+// registered before t.
+func (a *Admin) UnverifiedUsers(ctx context.Context, t time.Time) ([]admin.User, error) {
+	var out []admin.User
+	q := url.Values{"unverified_registered_before": {t.UTC().Format(time.RFC3339)}}
+	return out, a.do(ctx, http.MethodGet, "/admin/users", q, &out)
+}
+
 // UsersByID lists the users with these ids (those that exist).
 func (a *Admin) UsersByID(ctx context.Context, ids []string) ([]admin.User, error) {
 	var out []admin.User
@@ -166,6 +174,15 @@ func (a *Admin) Connections(ctx context.Context, instance string, inactiveSince 
 		q.Set("instance", instance)
 	}
 	var out []admin.Connection
+	return out, a.do(ctx, http.MethodGet, "/admin/connections", q, &out)
+}
+
+// UnverifiedIdleConnections lists the connections of users who haven't
+// confirmed their email and haven't had a stream since t, leaving out any
+// with a stream open now.
+func (a *Admin) UnverifiedIdleConnections(ctx context.Context, t time.Time) ([]admin.Connection, error) {
+	var out []admin.Connection
+	q := url.Values{"unverified_idle_since": {t.UTC().Format(time.RFC3339)}}
 	return out, a.do(ctx, http.MethodGet, "/admin/connections", q, &out)
 }
 

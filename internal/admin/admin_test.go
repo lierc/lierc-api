@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/lierc/lierc-api/internal/admin"
 	"github.com/lierc/lierc-api/internal/db"
@@ -367,6 +368,60 @@ func TestConnectionConfigError(t *testing.T) {
 	for _, c := range list {
 		if (c["id"] == "bad") != (c["config_error"] != nil) {
 			t.Errorf("list item %v", c)
+		}
+	}
+}
+
+// unverifiedUsers: u1 and u2 unverified, registered and last streaming
+// 5 days ago; v verified, the same; g from before verification (NULL).
+func unverifiedUsers(e *env) (u1, u2, v, g string) {
+	u1, u2 = testenv.AddUser(e.t, e.d, "u1"), testenv.AddUser(e.t, e.d, "u2")
+	v, g = testenv.AddUser(e.t, e.d, "v"), testenv.AddUser(e.t, e.d, "g")
+	e.exec(`UPDATE users SET registered = now() - interval '5 days', last_login = now() - interval '5 days'`)
+	e.exec(`UPDATE users SET verified = false WHERE username IN ('u1', 'u2')`)
+	e.exec(`UPDATE users SET verified = NULL WHERE username = 'g'`)
+	for _, id := range []string{u1, u2, v, g} {
+		testenv.AddConnection(e.t, e.d, id+"c", id, `{}`)
+	}
+	return
+}
+
+func TestListUsersUnverifiedRegisteredBefore(t *testing.T) {
+	e := newEnv(t)
+	u1, u2, _, _ := unverifiedUsers(e)
+	var users []admin.User
+	e.getJSON("/admin/users?unverified_registered_before="+time.Now().Add(-72*time.Hour).UTC().Format(time.RFC3339), &users)
+	got := map[string]bool{}
+	for _, u := range users {
+		got[u.ID] = true
+	}
+	if len(users) != 2 || !got[u1] || !got[u2] {
+		t.Errorf("users = %+v, want u1 and u2", users)
+	}
+}
+
+// A user with a stream open now isn't idle, whatever last_login says: it
+// is written as a stream opens, so a stream open for hours looks old.
+func TestListConnectionsUnverifiedIdleSince(t *testing.T) {
+	d := testenv.Postgres(t)
+	e := &env{t, d, nil}
+	u1, u2, _, _ := unverifiedUsers(e)
+	e.h = admin.New(d, nil, admin.Streaming(func(user string) bool { return user == u2 }))
+	var cs []admin.Connection
+	e.getJSON("/admin/connections?unverified_idle_since="+time.Now().Add(-3*time.Hour).UTC().Format(time.RFC3339), &cs)
+	if len(cs) != 1 || cs[0].ID != u1+"c" {
+		t.Errorf("connections = %+v, want only %sc", cs, u1)
+	}
+}
+
+func TestUnverifiedParamsMustBeTimes(t *testing.T) {
+	e := newEnv(t)
+	for _, path := range []string{
+		"/admin/users?unverified_registered_before=junk",
+		"/admin/connections?unverified_idle_since=junk",
+	} {
+		if code, body := e.get(path); code != 400 {
+			t.Errorf("%s: %d %s", path, code, body)
 		}
 	}
 }

@@ -28,6 +28,9 @@ func (s *Server) sendToUser(user string, ev []byte) {
 	}
 }
 
+// HasStreams reports whether user has a stream open now.
+func (s *Server) HasStreams(user string) bool { return s.hasStreams(user) }
+
 func (s *Server) hasStreams(user string) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()

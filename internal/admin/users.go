@@ -55,6 +55,9 @@ func (a *api) listUsers(w http.ResponseWriter, r *http.Request) {
 	if f.InactiveSince, ok = sinceParam(w, r); !ok {
 		return
 	}
+	if f.UnverifiedRegisteredBefore, ok = timeParam(w, r, "unverified_registered_before"); !ok {
+		return
+	}
 	if r.URL.Query().Has("ids") {
 		f.IDs = []string{}
 		if s := r.URL.Query().Get("ids"); s != "" {

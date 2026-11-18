@@ -309,7 +309,7 @@ func TestRegister(t *testing.T) {
 	if len(m) != 1 || m[0].To != "new@example.com" || m[0].Subject != "Confirm your relaychat.party email address" {
 		t.Fatalf("mail = %+v", m)
 	}
-	token := MakeToken(secret, "verify", u.ID, "new@example.com", now.Unix()+VerifyLifetime)
+	token := MakeToken(secret, "verify", u.ID, "new@example.com", now.Unix()+3*86400) // the link lasts as long as the account: delete-unverified removes it after 3 days
 	want := "Hello NewUser,\n\nThanks for signing up with relaychat.party! Please confirm your email\naddress by opening this link:\n" +
 		siteURL + "/verify/#" + token + "\n\nHappy chatting!"
 	if m[0].Body != want {

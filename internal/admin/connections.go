@@ -76,6 +76,12 @@ func (a *api) listConnections(w http.ResponseWriter, r *http.Request) {
 	if f.InactiveSince, ok = sinceParam(w, r); !ok {
 		return
 	}
+	// owners who haven't confirmed their email and haven't had a stream
+	// since; one with a stream open now is left out, since last_login is
+	// written as a stream opens and a long-open one looks idle
+	if f.UnverifiedIdleSince, ok = timeParam(w, r, "unverified_idle_since"); !ok {
+		return
+	}
 	switch f.Instance = r.URL.Query().Get("instance"); f.Instance {
 	case "", "main", "next":
 	default:
@@ -89,6 +95,9 @@ func (a *api) listConnections(w http.ResponseWriter, r *http.Request) {
 	}
 	out := make([]Connection, 0, len(rows))
 	for _, c := range rows {
+		if f.UnverifiedIdleSince != nil && a.streaming != nil && a.streaming(c.User) {
+			continue
+		}
 		out = append(out, connectionOf(c))
 	}
 	write(w, http.StatusOK, out)

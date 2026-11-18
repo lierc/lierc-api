@@ -20,14 +20,27 @@ type Error struct {
 }
 
 type api struct {
-	store    db.Store
-	announce func(context.Context, db.ConnectionChange)
+	store     db.Store
+	announce  func(context.Context, db.ConnectionChange)
+	streaming func(user string) bool
+}
+
+// Option is a setting for New.
+type Option func(*api)
+
+// Streaming gives the admin API the stream server's word on whether a user
+// has a stream open now. Without it, no one does.
+func Streaming(f func(user string) bool) Option {
+	return func(a *api) { a.streaming = f }
 }
 
 // New builds the admin routes on s. announce tells the stream server of a
 // connection change; it may be nil.
-func New(s db.Store, announce func(context.Context, db.ConnectionChange)) http.Handler {
+func New(s db.Store, announce func(context.Context, db.ConnectionChange), opts ...Option) http.Handler {
 	a := &api{store: s, announce: announce}
+	for _, o := range opts {
+		o(a)
+	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/admin/", func(w http.ResponseWriter, r *http.Request) {
 		fail(w, http.StatusNotFound, "not found")
@@ -66,13 +79,19 @@ func internal(w http.ResponseWriter, what string, err error) {
 // sinceParam reads an optional RFC 3339 inactive_since; ok is false after
 // answering 400.
 func sinceParam(w http.ResponseWriter, r *http.Request) (t *time.Time, ok bool) {
-	s := r.URL.Query().Get("inactive_since")
+	return timeParam(w, r, "inactive_since")
+}
+
+// timeParam reads the optional RFC 3339 time parameter name; ok is false
+// after answering 400.
+func timeParam(w http.ResponseWriter, r *http.Request, name string) (t *time.Time, ok bool) {
+	s := r.URL.Query().Get(name)
 	if s == "" {
 		return nil, true
 	}
 	v, err := time.Parse(time.RFC3339, s)
 	if err != nil {
-		fail(w, http.StatusBadRequest, "inactive_since must be an RFC 3339 time")
+		fail(w, http.StatusBadRequest, name+" must be an RFC 3339 time")
 		return nil, false
 	}
 	return &v, true

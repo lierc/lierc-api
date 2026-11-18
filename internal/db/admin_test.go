@@ -395,3 +395,73 @@ func TestPruneSeenKeepsRecentRows(t *testing.T) {
 		t.Errorf("left %s", got)
 	}
 }
+
+// unverifiedSeed: five users, by when they registered and last had a
+// stream (last_login, NULL for never), relative to now.
+//
+//	fresh     unverified, registered 1h ago, no stream
+//	idle      unverified, registered 5h ago, stream ended 4h ago
+//	quiet     unverified, registered 5h ago, no stream
+//	stale     unverified, registered 4 days ago, stream ended 4 days ago
+//	verified  verified,   registered 4 days ago, stream ended 4 days ago
+//	grand     verified NULL (from before verification), same times
+func unverifiedSeed(t *testing.T, d *db.DB) map[string]string {
+	ids := map[string]string{}
+	set := func(name, verified, registered, lastLogin string) {
+		ids[name] = testenv.AddUser(t, d, name)
+		exec(t, d, `UPDATE users SET verified = `+verified+`, registered = now() - interval '`+registered+`',
+			last_login = `+lastLogin+` WHERE id = $1`, ids[name])
+	}
+	set("fresh", "false", "1 hour", "NULL")
+	set("idle", "false", "5 hours", "now() - interval '4 hours'")
+	set("quiet", "false", "5 hours", "NULL")
+	set("stale", "false", "4 days", "now() - interval '4 days'")
+	set("verified", "true", "4 days", "now() - interval '4 days'")
+	set("grand", "NULL", "4 days", "now() - interval '4 days'")
+	for name, id := range ids {
+		testenv.AddConnection(t, d, name+"1", id, `{}`)
+	}
+	return ids
+}
+
+func TestListUsersUnverifiedRegisteredBefore(t *testing.T) {
+	d := testenv.Postgres(t)
+	ids := unverifiedSeed(t, d)
+	cutoff := time.Now().Add(-72 * time.Hour)
+	got, err := d.ListUsers(context.Background(), db.UserFilter{UnverifiedRegisteredBefore: &cutoff})
+	if err != nil || !reflect.DeepEqual(userIDs(got), []string{ids["stale"]}) {
+		t.Errorf("got %v, %v; want only stale %s", userIDs(got), err, ids["stale"])
+	}
+}
+
+func TestListConnectionsUnverifiedIdleSince(t *testing.T) {
+	d := testenv.Postgres(t)
+	unverifiedSeed(t, d)
+	cutoff := time.Now().Add(-3 * time.Hour)
+	got, err := d.ListConnections(context.Background(), db.ConnectionFilter{UnverifiedIdleSince: &cutoff})
+	// never had a stream: idle since registering, so quiet (5h) is and
+	// fresh (1h) isn't; verified and grandfathered users never match
+	want := []string{"quiet1", "idle1", "stale1"}
+	if err != nil || !sameSet(cids(got), want) {
+		t.Errorf("got %v, %v; want %v", cids(got), err, want)
+	}
+}
+
+func sameSet(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	m := map[string]int{}
+	for _, s := range a {
+		m[s]++
+	}
+	for _, s := range b {
+		m[s]--
+	}
+	for _, n := range m {
+		if n != 0 {
+			return false
+		}
+	}
+	return true
+}

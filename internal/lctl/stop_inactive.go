@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"net/http"
 	"time"
+
+	"github.com/lierc/lierc-api/internal/admin"
 )
 
 const stopInactiveUsage = `stop-inactive --since DURATION [--stop]
@@ -53,52 +55,15 @@ func stopInactive(ctx context.Context, env *Env, args []string) error {
 	if err != nil {
 		return err
 	}
-	type conn struct{ id, instance, config, user, username string }
-	var conns []conn
-	for _, c := range list {
-		conns = append(conns, conn{c.ID, c.Instance, string(c.Config), c.User, c.Username})
+	stopped, users, failed, err := stopConnections(ctx, env, list, *stop)
+	if err != nil {
+		return err
 	}
-
 	out := env.Stdout
-	stopped, failed := 0, 0
-	users := map[string]bool{}
-	for _, c := range conns {
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-		lc, err := env.Liercd.For(c.instance)
-		if err != nil {
-			fmt.Fprintf(out, "%s: %v\n", c.id, err)
-			failed++
-			continue
-		}
-		method, path := http.MethodGet, c.id+"/status"
-		if *stop {
-			method, path = http.MethodPost, c.id+"/destroy"
-		}
-		res, err := lc.Do(ctx, method, path, nil)
-		if err != nil {
-			fmt.Fprintf(out, "%s: liercd %s isn't reachable: %v\n", c.id, c.instance, err)
-			failed++
-			continue
-		}
-		switch res.Status {
-		case http.StatusOK:
-			fmt.Fprintf(out, "%s  %s  %s  %s\n", c.id, c.username, hostPort(c.config), c.instance)
-			stopped++
-			users[c.user] = true
-		case http.StatusNotFound:
-			// not running: nothing to stop
-		default:
-			fmt.Fprintf(out, "%s: liercd said %s\n", c.id, statusLine(res.Status))
-			failed++
-		}
-	}
-
 	if *stop {
-		fmt.Fprintf(out, "stopped %d connection(s) of %d inactive user(s)\n", stopped, len(users))
+		fmt.Fprintf(out, "stopped %d connection(s) of %d inactive user(s)\n", stopped, users)
 	} else {
-		fmt.Fprintf(out, "would stop %d connection(s) of %d inactive user(s)\n", stopped, len(users))
+		fmt.Fprintf(out, "would stop %d connection(s) of %d inactive user(s)\n", stopped, users)
 		if stopped > 0 {
 			fmt.Fprintln(out, "run again with --stop to stop them")
 		}
@@ -107,4 +72,48 @@ func stopInactive(ctx context.Context, env *Env, args []string) error {
 		return fmt.Errorf("%d connection(s) couldn't be checked or stopped", failed)
 	}
 	return nil
+}
+
+// stopConnections destroys each connection in list that liercd is running,
+// on its instance, printing a line for each (id, username, host:port,
+// instance); with stop false it only asks liercd which are running. It
+// returns how many were (or would be) stopped, of how many users, and how
+// many liercd couldn't answer for, which are reported as it goes. Its error
+// is only the context's.
+func stopConnections(ctx context.Context, env *Env, list []admin.Connection, stop bool) (stopped, users, failed int, err error) {
+	out := env.Stdout
+	owners := map[string]bool{}
+	for _, c := range list {
+		if err := ctx.Err(); err != nil {
+			return stopped, len(owners), failed, err
+		}
+		lc, err := env.Liercd.For(c.Instance)
+		if err != nil {
+			fmt.Fprintf(out, "%s: %v\n", c.ID, err)
+			failed++
+			continue
+		}
+		method, path := http.MethodGet, c.ID+"/status"
+		if stop {
+			method, path = http.MethodPost, c.ID+"/destroy"
+		}
+		res, err := lc.Do(ctx, method, path, nil)
+		if err != nil {
+			fmt.Fprintf(out, "%s: liercd %s isn't reachable: %v\n", c.ID, c.Instance, err)
+			failed++
+			continue
+		}
+		switch res.Status {
+		case http.StatusOK:
+			fmt.Fprintf(out, "%s  %s  %s  %s\n", c.ID, c.Username, hostPort(string(c.Config)), c.Instance)
+			stopped++
+			owners[c.User] = true
+		case http.StatusNotFound:
+			// not running: nothing to stop
+		default:
+			fmt.Fprintf(out, "%s: liercd said %s\n", c.ID, statusLine(res.Status))
+			failed++
+		}
+	}
+	return stopped, len(owners), failed, nil
 }

@@ -29,6 +29,10 @@ type UserRow struct {
 type UserFilter struct {
 	InactiveSince *time.Time // never logged in, or last login before this
 	IDs           []string
+	// UnverifiedRegisteredBefore matches users who haven't confirmed their
+	// email (verified false: not those from before verification, NULL)
+	// and registered before this.
+	UnverifiedRegisteredBefore *time.Time
 }
 
 // userRows lists the users matching where, in inactive-users' order: never
@@ -63,6 +67,9 @@ func (d *DB) ListUsers(ctx context.Context, f UserFilter) ([]UserRow, error) {
 	}
 	if f.IDs != nil {
 		where = append(where, sq.Expr("u.id = ANY(?)", f.IDs))
+	}
+	if f.UnverifiedRegisteredBefore != nil {
+		where = append(where, sq.Eq{"u.verified": false}, sq.Lt{"u.registered": *f.UnverifiedRegisteredBefore})
 	}
 	return d.userRows(ctx, where)
 }
@@ -138,6 +145,11 @@ type ConnectionFilter struct {
 	User          string     // the owner's id
 	Instance      string     // "main" or "next"
 	InactiveSince *time.Time // owner never logged in, or last login before this; connections without an owner don't match
+	// UnverifiedIdleSince matches connections whose owner hasn't confirmed
+	// their email (verified false) and last had a stream before this:
+	// last_login, which a stream sets as it opens and as it closes, or
+	// when they registered if they never had one.
+	UnverifiedIdleSince *time.Time
 }
 
 // ListConnections lists the connections matching f, by their owner's last
@@ -157,6 +169,10 @@ func (d *DB) ListConnections(ctx context.Context, f ConnectionFilter) ([]Connect
 	}
 	if f.InactiveSince != nil {
 		q = q.Where(sq.NotEq{"u.id": nil}).Where(inactiveSince(*f.InactiveSince))
+	}
+	if f.UnverifiedIdleSince != nil {
+		q = q.Where(sq.Eq{"u.verified": false}).
+			Where(sq.Expr("coalesce(u.last_login, u.registered) < ?", *f.UnverifiedIdleSince))
 	}
 	rows, err := query(ctx, d.Pool, q)
 	if err != nil {

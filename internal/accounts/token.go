@@ -15,10 +15,12 @@ import (
 // "<user>:<expires>:<mac>"; the mac is the hex HMAC-SHA256 of
 // "purpose|user|expires|fingerprint" keyed by the secret.
 
-// Token lifetimes in seconds.
+// Token lifetimes in seconds. A confirmation link lasts 3 days, as long as
+// an unconfirmed account does: the nightly lctl admin delete-unverified
+// --since 3d deletes it then.
 const (
 	ResetLifetime  = 3600
-	VerifyLifetime = 30 * 86400
+	VerifyLifetime = 3 * 86400
 )
 
 var (

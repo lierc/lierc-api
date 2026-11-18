@@ -299,7 +299,7 @@ func TestRemovedCommands(t *testing.T) {
 	}
 }
 
-var portedNames = []string{"users", "user-info", "user-list", "inactive-users", "delete-users", "connection-list", "connection-info", "reconnect", "stop-inactive", "delete-connections", "logins", "end-login", "prune-logins", "prune-seen", "stats"}
+var portedNames = []string{"users", "user-info", "user-list", "inactive-users", "delete-users", "connection-list", "connection-info", "reconnect", "stop-inactive", "stop-unverified", "delete-unverified", "delete-connections", "logins", "end-login", "prune-logins", "prune-seen", "stats"}
 
 // helpLines is the command names a help text lists.
 func helpLines(s string) map[string]bool {
