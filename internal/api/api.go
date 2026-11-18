@@ -29,8 +29,9 @@ type api struct {
 	// logins are connected
 	streams *stream.Server
 
-	// per-account limits on failed logins and reset emails
-	loginLimit, resetLimit *ratelimit.Limiter
+	// per-account limits on failed logins and reset emails, and a
+	// per-address one on new accounts
+	loginLimit, resetLimit, signupLimit *ratelimit.Limiter
 }
 
 // New routes the stream server's routes and the ported ones, and
@@ -43,6 +44,8 @@ func New(cfg config.Config, s db.Store, streams *stream.Server, lc *liercd.Clien
 		streams:    streams,
 		loginLimit: ratelimit.New(10, 15*time.Minute),
 		resetLimit: ratelimit.New(3, time.Hour),
+		// a few, for a household or office sharing one address
+		signupLimit: ratelimit.New(3, time.Hour),
 	}
 	a.conns = &connections.Service{
 		DB:               s,

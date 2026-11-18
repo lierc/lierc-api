@@ -6,7 +6,9 @@ import (
 	"errors"
 	"log"
 	"math"
+	"net"
 	"net/http"
+	"net/netip"
 	"strconv"
 	"strings"
 	"time"
@@ -153,13 +155,43 @@ func limitKey(s string) string {
 // maxKeyLen is the longest email address allowed (RFC 5321).
 const maxKeyLen = 254
 
+const msgTooManySignups = "Too many new accounts from your address — try again later"
+
+// signupKey is the signup limit's key for a client's address (RemoteAddr,
+// already the client's own after proxy.Wrap): the IPv4 address, or the
+// /64 of an IPv6 one, since one household or host usually has a whole /64.
+func signupKey(remoteAddr string) string {
+	host, _, err := net.SplitHostPort(remoteAddr)
+	if err != nil {
+		host = remoteAddr
+	}
+	ip, err := netip.ParseAddr(host)
+	if err != nil {
+		return limitKey(host)
+	}
+	ip = ip.Unmap().WithZone("")
+	if ip.Is6() {
+		p, _ := ip.Prefix(64)
+		return p.String()
+	}
+	return ip.String()
+}
+
 func (a *api) register(w http.ResponseWriter, r *http.Request) {
 	param, ok := formParams(w, r)
 	if !ok {
 		return
 	}
+	key := signupKey(r.RemoteAddr)
+	if allowed, retry := a.signupLimit.Take(key); !allowed {
+		w.Header().Set("Retry-After", strconv.Itoa(max(1, int(math.Ceil(retry.Seconds())))))
+		respond.Error(w, http.StatusTooManyRequests, msgTooManySignups)
+		return
+	}
 	u, err := a.acct.Register(r.Context(), param("username"), param("email"), param("pass"))
 	if err != nil {
+		// only an account made counts
+		a.signupLimit.Return(key)
 		accountFailed(w, "register", err)
 		return
 	}

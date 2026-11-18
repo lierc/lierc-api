@@ -193,3 +193,73 @@ func TestLimitKeyBounded(t *testing.T) {
 		t.Errorf("short key %q, want it as typed, trimmed and lowercased", got)
 	}
 }
+
+const tooManySignups = `{"status":"error","error":"Too many new accounts from your address — try again later"}`
+
+func (e *env) signup(name string) (*http.Response, string) {
+	e.t.Helper()
+	res, body := e.form("POST", "/register", "", url.Values{"username": {name}, "email": {name + "@example.com"}, "pass": {"s3cret"}})
+	return res, strings.TrimSpace(body)
+}
+
+func TestSignupLimit(t *testing.T) {
+	e, _ := mailEnv(t)
+	for _, name := range []string{"one", "two", "three"} {
+		if res, body := e.signup(name); res.StatusCode != 200 {
+			t.Fatalf("signup %s: %d %s", name, res.StatusCode, body)
+		}
+	}
+	res, body := e.signup("four")
+	if res.StatusCode != 429 || body != tooManySignups || chatsCookie(res) != nil {
+		t.Fatalf("4th signup: %d %s, want 429 %s", res.StatusCode, body, tooManySignups)
+	}
+	n, err := strconv.Atoi(res.Header.Get("Retry-After"))
+	if err != nil || n < 1 || n > 3600 {
+		t.Errorf("Retry-After %q, want 1..3600", res.Header.Get("Retry-After"))
+	}
+	var exists bool
+	e.db.Pool.QueryRow(context.Background(), `SELECT EXISTS (SELECT 1 FROM users WHERE username = 'four')`).Scan(&exists)
+	if exists {
+		t.Error("the refused signup made an account")
+	}
+}
+
+func TestSignupFailureNotCounted(t *testing.T) {
+	e, _ := mailEnv(t)
+	if res, body := e.signup("taken"); res.StatusCode != 200 {
+		t.Fatalf("signup: %d %s", res.StatusCode, body)
+	}
+	for i := 0; i < 5; i++ {
+		if res, body := e.signup("taken"); res.StatusCode != 400 {
+			t.Fatalf("taken name %d: %d %s, want 400", i+1, res.StatusCode, body)
+		}
+		if res, body := e.signup("bad name"); res.StatusCode != 400 {
+			t.Fatalf("bad name %d: %d %s, want 400", i+1, res.StatusCode, body)
+		}
+	}
+	for _, name := range []string{"two", "three"} {
+		if res, body := e.signup(name); res.StatusCode != 200 {
+			t.Fatalf("signup %s after failures: %d %s", name, res.StatusCode, body)
+		}
+	}
+}
+
+func TestSignupKey(t *testing.T) {
+	for _, c := range []struct {
+		a, b string
+		same bool
+	}{
+		{"192.0.2.1:1234", "192.0.2.1:5678", true},
+		{"192.0.2.1:1234", "192.0.2.2:1234", false},
+		{"[2001:db8:1:2::1]:443", "[2001:db8:1:2:ffff::9]:80", true}, // one /64
+		{"[2001:db8:1:2::1]:443", "[2001:db8:1:3::1]:443", false},
+		{"[::ffff:192.0.2.1]:1", "192.0.2.1:2", true},
+	} {
+		if got := signupKey(c.a) == signupKey(c.b); got != c.same {
+			t.Errorf("signupKey(%q) == signupKey(%q) is %v, want %v", c.a, c.b, got, c.same)
+		}
+	}
+	if signupKey("192.0.2.1:1") == "" {
+		t.Error("empty key")
+	}
+}
