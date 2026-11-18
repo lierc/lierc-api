@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/lierc/lierc/pkg/ircwire"
-	"github.com/lierc/lierc/pkg/logger"
+	"github.com/lierc/lierc-api/internal/logger"
 )
 
 func TestNotify(t *testing.T) {

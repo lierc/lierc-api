@@ -14,13 +14,19 @@ route for route; that code is in this repository's git history, and the
 JSON fixtures in `testdata/fixtures` record its behaviour, which the Go tests
 check against.
 
-The image also carries `lctl`, the admin command (`lctl help`), a binary of
-its own.
+The image also carries two binaries of their own: `lctl`, the admin
+command (`lctl help`), and `lierc-logger`, which logs IRC traffic to
+Postgres and sends the highlight notifications (web push and email). The
+logger runs as its own process, from `docker run --entrypoint
+/lierc-logger`; it moved here from the lierc repo, with its history.
 
 Layout
 ------
 
 - `cmd/lierc-api`: the server (`lierc-api`, no arguments).
+- `cmd/lierc-logger`, `internal/logger`, `internal/notify`,
+  `internal/envfile`: the logger and the notifier it runs. They read
+  liercd's messages with lierc's `pkg/ircwire` (the lierc module).
 - `cmd/lctl`, `internal/lctl`: the admin command; `internal/admin`: the
   admin JSON API it talks to.
 - `internal/api`: the HTTP routes, behind a same-origin check.
@@ -64,7 +70,7 @@ number, lower case and underscores), plain SQL. No `BEGIN` or `COMMIT`:
 each file already runs in one transaction. Never edit a file once it has
 been deployed; fix it with another.
 
-The previous lierc-api, and the logger (lierc repo), keep running against
+The previous lierc-api, and the logger (its own process), keep running against
 the new schema until they restart. So add things (tables, nullable
 columns, indexes) in one deploy, and drop them in a later one, once no
 running code uses them. lierc-api starts against a database with

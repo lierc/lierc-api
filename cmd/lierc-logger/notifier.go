@@ -4,7 +4,7 @@ import (
 	"database/sql"
 	"log"
 
-	"github.com/lierc/lierc/pkg/notify"
+	"github.com/lierc/lierc-api/internal/notify"
 )
 
 // newNotifier builds the notifier from the environment, sharing db. A

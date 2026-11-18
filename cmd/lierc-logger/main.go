@@ -8,8 +8,8 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/lierc/lierc/pkg/envfile"
-	"github.com/lierc/lierc/pkg/logger"
+	"github.com/lierc/lierc-api/internal/envfile"
+	"github.com/lierc/lierc-api/internal/logger"
 	"github.com/lierc/lierc/pkg/metrics"
 )
 

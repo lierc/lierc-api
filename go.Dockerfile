@@ -5,10 +5,12 @@ COPY go.mod go.sum ./
 RUN go mod download
 COPY cmd/ cmd/
 COPY internal/ internal/
-RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -trimpath -ldflags="-s -w" -o /out/ ./cmd/lierc-api ./cmd/lctl
+RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -trimpath -ldflags="-s -w" -o /out/ ./cmd/lierc-api ./cmd/lctl ./cmd/lierc-logger
 
 FROM gcr.io/distroless/static
-COPY --from=build /out/lierc-api /out/lctl /
+COPY --from=build /out/lierc-api /out/lctl /out/lierc-logger /
 EXPOSE 5003
-# the server; the admin command is /lctl (docker run --entrypoint /lctl)
+# the server; the admin command is /lctl (docker run --entrypoint /lctl), and
+# the logger, which also sends the notifications, /lierc-logger
+# (docker run --entrypoint /lierc-logger)
 ENTRYPOINT ["/lierc-api"]

@@ -4,8 +4,13 @@ go 1.27
 
 require (
 	github.com/Masterminds/squirrel v1.5.4
+	github.com/SherClockHolmes/webpush-go v1.4.0
+	github.com/VictoriaMetrics/metrics v1.44.1
+	github.com/ergochat/irc-go v0.7.0
 	github.com/fergusstrange/embedded-postgres v1.32.0
 	github.com/jackc/pgx/v5 v5.7.6
+	github.com/lib/pq v1.12.3
+	github.com/lierc/lierc v0.0.0-20261118222513-710a340f360e
 	github.com/nsqio/go-nsq v1.1.0
 	github.com/olekukonko/tablewriter v1.1.5
 	github.com/wneessen/go-mail v0.8.2
@@ -13,6 +18,7 @@ require (
 	golang.org/x/net v0.62.0
 	golang.org/x/term v0.47.0
 	golang.org/x/text v0.43.0
+	golang.org/x/time v0.16.0
 )
 
 require (
@@ -23,7 +29,8 @@ require (
 	github.com/clipperhouse/displaywidth v0.10.0 // indirect
 	github.com/clipperhouse/uax29/v2 v2.6.0 // indirect
 	github.com/fatih/color v1.18.0 // indirect
-	github.com/golang/snappy v0.0.4 // indirect
+	github.com/golang-jwt/jwt/v5 v5.3.1 // indirect
+	github.com/golang/snappy v1.0.0 // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect
 	github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 // indirect
 	github.com/jackc/puddle/v2 v2.2.2 // indirect
@@ -31,7 +38,6 @@ require (
 	github.com/julienschmidt/httprouter v1.3.0 // indirect
 	github.com/lann/builder v0.0.0-20180802200727-47ae307949d0 // indirect
 	github.com/lann/ps v0.0.0-20150810152359-62de8c46ede0 // indirect
-	github.com/lib/pq v1.10.9 // indirect
 	github.com/mattn/go-colorable v0.1.14 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/mattn/go-runewidth v0.0.19 // indirect
@@ -41,6 +47,8 @@ require (
 	github.com/olekukonko/cat v0.0.0-20250911104152-50322a0618f6 // indirect
 	github.com/olekukonko/errors v1.2.0 // indirect
 	github.com/olekukonko/ll v0.1.6 // indirect
+	github.com/valyala/fastrand v1.1.0 // indirect
+	github.com/valyala/histogram v1.2.0 // indirect
 	github.com/xi2/xz v0.0.0-20171230120015-48954b6210f8 // indirect
 	golang.org/x/sync v0.24.0 // indirect
 	golang.org/x/sys v0.49.0 // indirect

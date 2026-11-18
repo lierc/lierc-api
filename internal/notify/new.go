@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/lierc/lierc/pkg/logger"
+	"github.com/lierc/lierc-api/internal/logger"
 	"golang.org/x/time/rate"
 )
 
