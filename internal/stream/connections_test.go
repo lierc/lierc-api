@@ -37,17 +37,18 @@ func TestConnectionChangedCreateUpdateDelete(t *testing.T) {
 	e.liveConn("c1", u)
 	c := e.openReplayed(u)
 
-	e.addConn("c2", u, `{"Host":"irc.two","Alias":"Two","Nick":"me2"}`)
+	// the server (Host, Port) comes along, for the UI's share links
+	e.addConn("c2", u, `{"Host":"irc.two","Port":6697,"Alias":"Two","Nick":"me2"}`)
 	changed(e, u, "c2", "create")
-	if ev := nextConnEvent(c); ev.typ != "connection:create" || ev.data != `{"Id":"c2","Name":"Two","Nick":"me2"}` || ev.hasID {
+	if ev := nextConnEvent(c); ev.typ != "connection:create" || ev.data != `{"Id":"c2","Name":"Two","Nick":"me2","Host":"irc.two","Port":6697}` || ev.hasID {
 		t.Errorf("create: %+v", ev)
 	}
 
-	if _, err := e.db.Pool.Exec(context.Background(), `UPDATE connections SET config = '{"Host":"irc.deux","Alias":"","Nick":"me2"}' WHERE id = 'c2'`); err != nil {
+	if _, err := e.db.Pool.Exec(context.Background(), `UPDATE connections SET config = '{"Host":"irc.deux","Port":6667,"Alias":"","Nick":"me2"}' WHERE id = 'c2'`); err != nil {
 		t.Fatal(err)
 	}
 	changed(e, u, "c2", "update")
-	if ev := nextConnEvent(c); ev.typ != "connection:update" || ev.data != `{"Id":"c2","Name":"irc.deux"}` {
+	if ev := nextConnEvent(c); ev.typ != "connection:update" || ev.data != `{"Id":"c2","Name":"irc.deux","Host":"irc.deux","Port":6667}` {
 		t.Errorf("update: %+v", ev)
 	}
 

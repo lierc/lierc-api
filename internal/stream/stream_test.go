@@ -542,14 +542,14 @@ func TestReplayOrder(t *testing.T) {
 	nj, _ := json.Marshal(n)
 	e.addConn("c1", u, `{"Host":"irc.one"}`)
 	e.fake.Respond("GET", "/c1/status", 200, statusJSON("c1", "me1", true, true, `,
-		"Config":{"Alias":"Net1","Host":"irc.one"},
+		"Config":{"Alias":"Net1","Host":"irc.one","Port":6697},
 		"Isupport":["A=1","B=2"],"CapsAcked":["sasl","multi-prefix"],
 		"Channels":[
 			{"Name":"#a","Mode":"+nt","Topic":{"Topic":"hello","User":"bob!b@h","Time":1700000000},"Nicks":`+string(nj)+`},
 			{"Name":"#b","Mode":"","Topic":{"Topic":"","User":"","Time":0},"Nicks":["x","y","z"]}]`))
 	e.addConn("c2", u, `{"Host":"irc.two"}`)
 	e.fake.Respond("GET", "/c2/status", 200, statusJSON("c2", "me2", true, false, `,
-		"Config":{"Alias":"","Host":"irc.two"},"Isupport":[],
+		"Config":{"Alias":"","Host":"irc.two","Port":6667},"Isupport":[],
 		"Channels":[{"Name":"#c","Mode":"+s","Topic":{"Topic":"t2","User":"carol","Time":1700000001}}]`))
 	e.addConn("c3", u, `{"Host":"irc.three"}`)
 	e.fake.Respond("GET", "/c3/status", 200, statusJSON("c3", "me3", false, true, `,
@@ -559,9 +559,11 @@ func TestReplayOrder(t *testing.T) {
 	c := e.open(u)
 	evs := e.replayEvents(c)
 	checkSnapshot(t, evs[0], map[string]string{
-		"c1": `{"Id":"c1","Name":"Net1","Nick":"me1","Connected":true}`,
-		"c2": `{"Id":"c2","Name":"irc.two","Nick":"me2","Connected":false}`,
-		"c3": `{"Id":"c3","Name":"irc.three","Nick":"me3","Connected":true}`,
+		// the server (Host, Port) comes along, for the UI's share links;
+		// a status without a port leaves Port out
+		"c1": `{"Id":"c1","Name":"Net1","Nick":"me1","Connected":true,"Host":"irc.one","Port":6697}`,
+		"c2": `{"Id":"c2","Name":"irc.two","Nick":"me2","Connected":false,"Host":"irc.two","Port":6667}`,
+		"c3": `{"Id":"c3","Name":"irc.three","Nick":"me3","Connected":true,"Host":"irc.three"}`,
 	})
 	evs = evs[1:]
 
@@ -656,7 +658,7 @@ func TestReplayRecreates(t *testing.T) {
 		t.Fatalf("events = %v", evs)
 	}
 	checkSnapshot(t, evs[0], map[string]string{
-		"c4": `{"Id":"c4","Name":"irc.x","Nick":"n4","Connected":false}`,
+		"c4": `{"Id":"c4","Name":"irc.x","Nick":"n4","Connected":false,"Host":"irc.x"}`,
 	})
 	var created bool
 	for _, call := range e.fake.Calls() {

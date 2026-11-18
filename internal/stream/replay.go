@@ -32,7 +32,10 @@ const (
 type status struct {
 	Id     string
 	Nick   string
-	Config *struct{ Alias, Host string }
+	Config *struct {
+		Alias, Host string
+		Port        int
+	}
 	Status *struct{ Connected bool }
 
 	Registered bool
@@ -234,26 +237,28 @@ func (s *Server) saveChannels(ctx context.Context, user string) {
 type snapshotEntry struct {
 	Id, Name, Nick string
 	Connected      bool
+	Host           string `json:",omitempty"`
+	Port           int    `json:",omitempty"`
 }
 
 // snapshotEvent is the replay's connections event: each connection's id,
-// network name (its alias, else its host), current nick and whether it's
-// connected, as liercd's status says.
+// network name (its alias, else its host), current nick, whether it's
+// connected, and its server (host and port), as liercd's status says.
 func snapshotEvent(statuses []*status) []byte {
 	list := make([]snapshotEntry, 0, len(statuses))
 	for _, stat := range statuses {
-		var name string
+		e := snapshotEntry{Id: stat.Id, Nick: stat.Nick, Connected: stat.Status != nil && stat.Status.Connected}
 		if stat.Config != nil {
-			name = stat.Config.Alias
-			if name == "" {
-				name = stat.Config.Host
+			e.Name, e.Host, e.Port = stat.Config.Alias, stat.Config.Host, stat.Config.Port
+			if e.Name == "" {
+				e.Name = stat.Config.Host
 			}
 		}
-		list = append(list, snapshotEntry{stat.Id, name, stat.Nick, stat.Status != nil && stat.Status.Connected})
+		list = append(list, e)
 	}
 	b, err := respond.Marshal(list)
 	if err != nil {
-		panic(err) // strings and bools always marshal
+		panic(err) // strings, bools and ints always marshal
 	}
 	return sseEvent("connections", b, "")
 }

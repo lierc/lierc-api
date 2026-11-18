@@ -11,12 +11,15 @@ import (
 	"github.com/lierc/lierc-api/internal/db"
 )
 
-// connEvent is a connection event's data. Name and Nick are left out where
-// the event doesn't carry them.
+// connEvent is a connection event's data. Name, Nick, Host and Port are
+// left out where the event doesn't carry them. Host and Port are the
+// server, which the UI matches against its network presets (share links).
 type connEvent struct {
 	Id   string
 	Name string `json:",omitempty"`
 	Nick string `json:",omitempty"`
+	Host string `json:",omitempty"`
+	Port int    `json:",omitempty"`
 }
 
 // sendToUser offers ev to every stream user has open.
@@ -46,8 +49,8 @@ func connEventBytes(typ string, c connEvent) []byte {
 }
 
 // ConnectionChanged sends a connection change to the owner's streams:
-// create and update with the row's name (and nick), delete with just the
-// id, since the row is already gone. The API and the admin API call it
+// create and update with the row's name, server (and, for create, nick),
+// delete with just the id, since the row is already gone. The API and the admin API call it
 // for their changes.
 func (s *Server) ConnectionChanged(ctx context.Context, c db.ConnectionChange) {
 	if !s.hasStreams(c.User) {
@@ -67,9 +70,12 @@ func (s *Server) ConnectionChanged(ctx context.Context, c db.ConnectionChange) {
 		if !ok {
 			return // deleted since; its delete follows
 		}
-		var conf struct{ Alias, Host, Nick string }
+		var conf struct {
+			Alias, Host, Nick string
+			Port              int
+		}
 		json.Unmarshal(cfg, &conf) // a field of another type is left empty
-		ev := connEvent{Id: c.Connection, Name: conf.Alias}
+		ev := connEvent{Id: c.Connection, Name: conf.Alias, Host: conf.Host, Port: conf.Port}
 		if ev.Name == "" {
 			ev.Name = conf.Host
 		}
