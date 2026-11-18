@@ -44,12 +44,12 @@ func (a *api) accounts(mux *http.ServeMux) {
 		DefaultNetwork: a.cfg.DefaultNetwork,
 		After:          func(f func()) { go f() },
 	}
-	mux.Handle("GET /auth", a.users.RequireAny(a.showUser))
+	mux.Handle("GET /auth", a.users.Require(a.showUser))
 	mux.HandleFunc("POST /auth", a.login)
 	mux.HandleFunc("POST /register", a.register)
 	mux.HandleFunc("POST /logout", a.logout)
 	mux.HandleFunc("POST /verify", a.verify)
-	mux.Handle("POST /verify/resend", a.users.RequireAny(a.resend))
+	mux.Handle("POST /verify/resend", a.users.Require(a.resend))
 	mux.HandleFunc("POST /reset", a.reset)
 	mux.HandleFunc("POST /reset/confirm", a.resetConfirm)
 	// POST /unsubscribe is routed in New, outside sameOrigin.

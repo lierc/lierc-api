@@ -167,10 +167,9 @@ func TestLoginsNeedLogin(t *testing.T) {
 	u := testenv.AddUser(t, e.db, "newbie")
 	e.exec(`UPDATE users SET verified = false WHERE id = $1`, u)
 	tok := testenv.Login(t, e.db, u)
-	for _, rq := range [][2]string{{"GET", "/logins"}, {"DELETE", "/login/1"}} {
-		if code, _ := e.tokenReq(rq[0], rq[1], tok); code != 403 {
-			t.Errorf("%s %s unverified: %d, want 403", rq[0], rq[1], code)
-		}
+	// an unconfirmed signup is let in
+	if code, _ := e.tokenReq("GET", "/logins", tok); code != 200 {
+		t.Errorf("GET /logins unverified: %d, want 200", code)
 	}
 }
 

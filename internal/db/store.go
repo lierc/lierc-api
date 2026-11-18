@@ -33,7 +33,6 @@ type Store interface {
 	AccountAuthByEmail(ctx context.Context, email string) (AccountAuth, bool, error)
 	AccountAuthByID(ctx context.Context, id string) (AccountAuth, bool, error)
 	InsertUser(ctx context.Context, id, username, email, hash string) error
-	UserHasConnection(ctx context.Context, user string) (bool, error)
 	ClaimVerifyResend(ctx context.Context, id string, minSeconds float64) (bool, error)
 	ReplacePasswordHash(ctx context.Context, id, hash string, oldHash *string) (bool, error)
 	MarkVerified(ctx context.Context, id string) (bool, error)

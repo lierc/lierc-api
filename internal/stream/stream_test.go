@@ -428,7 +428,9 @@ func TestUnauthorized(t *testing.T) {
 	}
 }
 
-func TestUnverifiedForbidden(t *testing.T) {
+// Signups use relaychat before confirming their email: unconfirmed,
+// confirmed and grandfathered (NULL) users all get a stream.
+func TestUnverifiedAllowed(t *testing.T) {
 	e := setup(t)
 	u := e.addUser("newbie")
 	setVerified := func(v any) {
@@ -436,25 +438,12 @@ func TestUnverifiedForbidden(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	setVerified(false)
-	res := e.get("/events", u)
-	if res.StatusCode != 403 {
-		res.Body.Close() // a stream: don't read it
-		t.Fatalf("unverified: %d, want 403", res.StatusCode)
-	}
-	body, _ := io.ReadAll(res.Body)
-	res.Body.Close()
-	if string(body) != `{"status":"error","error":"Confirm your email address first","unverified":true}` {
-		t.Errorf("unverified: %s", body)
-	}
-
-	// verified, and grandfathered (NULL), are let in
-	for _, v := range []any{true, nil} {
+	for _, v := range []any{false, true, nil} {
 		setVerified(v)
-		res = e.get("/events", u)
-		res.Body.Close()
+		res := e.get("/events", u)
+		res.Body.Close() // a stream: don't read it
 		if res.StatusCode != 200 {
-			t.Errorf("verified %v: %d", v, res.StatusCode)
+			t.Errorf("verified %v: %d, want 200", v, res.StatusCode)
 		}
 	}
 }

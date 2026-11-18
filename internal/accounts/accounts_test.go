@@ -283,6 +283,28 @@ func TestLoginSeveralRows(t *testing.T) {
 	}
 }
 
+// Registering with liercd failing, or no default network configured, still
+// registers: with the connection saved, or none.
+func TestRegisterDefaultNetworkProblems(t *testing.T) {
+	h := setup(t)
+	h.fake.Respond("POST", "/*/create", 500, "boom")
+	u, err := h.s.Register(ctx, "fail", "fail@example.com", "p")
+	if err != nil {
+		t.Fatalf("Register with liercd failing = %v", err)
+	}
+	if n := len(h.connections(u.ID)); n != 1 {
+		t.Errorf("liercd failing: %d connections, want the saved one", n)
+	}
+	h.s.DefaultNetwork = nil
+	u, err = h.s.Register(ctx, "none", "none@example.com", "p")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := len(h.connections(u.ID)); n != 0 {
+		t.Errorf("no default network: %d connections", n)
+	}
+}
+
 func TestRegister(t *testing.T) {
 	h := setup(t)
 	now := time.Unix(1800000000, 0)
@@ -301,8 +323,17 @@ func TestRegister(t *testing.T) {
 	if c, _ := bcrypt.Cost([]byte(hash)); email != "new@example.com" || c != passwords.Cost() || !sent || !registered || !passwords.Check("a password", hash) {
 		t.Errorf("row: email %q hash %q sent %v registered %v", email, hash, sent, registered)
 	}
-	if n := len(h.connections(u.ID)); n != 0 {
-		t.Errorf("register added %d connections", n)
+	// signups use relaychat before confirming: the default network comes now
+	conns := h.connections(u.ID)
+	if len(conns) != 1 {
+		t.Fatalf("connections = %v, want the default network", conns)
+	}
+	wantConn := `{"Channels":[],"Highlight":["NewUser"],"Host":"irc.example","Nick":"NewUser","Port":6697,"Ssl":true,"User":"NewUser"}`
+	if got, _ := json.Marshal(conns[0]); string(got) != wantConn {
+		t.Errorf("config = %s\nwant %s", got, wantConn)
+	}
+	if c := h.fake.Calls(); len(c) != 1 || !strings.HasSuffix(c[0].Path, "/create") {
+		t.Errorf("liercd calls = %v", c)
 	}
 
 	m := h.mail.all()
@@ -368,63 +399,27 @@ func TestVerify(t *testing.T) {
 	if v := h.verified(id); v == nil || !*v {
 		t.Errorf("verified = %v", v)
 	}
-	conns := h.connections(id)
-	if len(conns) != 1 {
-		t.Fatalf("connections = %v", conns)
+	// the default network came at signup; confirming adds nothing, so a
+	// signup who removed it doesn't get it back
+	if n := len(h.connections(id)); n != 0 {
+		t.Errorf("verify added %d connections", n)
 	}
-	want := `{"Channels":[],"Highlight":["New_User1"],"Host":"irc.example","Nick":"New_User1","Port":6697,"Ssl":true,"User":"New_User1"}`
-	if got, _ := json.Marshal(conns[0]); string(got) != want {
-		t.Errorf("config = %s\nwant %s", got, want)
-	}
-	if c := h.fake.Calls(); len(c) != 1 || !strings.HasSuffix(c[0].Path, "/create") {
+	if c := h.fake.Calls(); len(c) != 0 {
 		t.Errorf("liercd calls = %v", c)
 	}
 
-	// the same token again: ok, no second network
+	// the same token again: ok
 	if err := h.s.Verify(ctx, token); err != nil {
 		t.Error(err)
 	}
-	if n := len(h.connections(id)); n != 1 {
-		t.Errorf("re-verify: %d connections", n)
-	}
 
-	// a NULL verified becomes true, but isn't a first verification
+	// a NULL verified becomes true
 	old := h.addUser("old", "old@example.com", "p", nil)
 	if err := h.s.Verify(ctx, MakeToken(secret, "verify", old, "old@example.com", time.Now().Unix()+60)); err != nil {
 		t.Error(err)
 	}
 	if v := h.verified(old); v == nil || !*v || len(h.connections(old)) != 0 {
 		t.Errorf("NULL user: verified %v, connections %v", v, h.connections(old))
-	}
-
-	// a user with a connection already gets none
-	has := h.addUser("has", "has@example.com", "p", ptr(false))
-	testenv.AddConnection(t, h.d, "existing", has, `{"Host":"other.example"}`)
-	if err := h.s.Verify(ctx, MakeToken(secret, "verify", has, "has@example.com", time.Now().Unix()+60)); err != nil {
-		t.Error(err)
-	}
-	if n := len(h.connections(has)); n != 1 || !*h.verified(has) {
-		t.Errorf("user with a connection: %d connections", n)
-	}
-
-	// liercd failing: still ok, and the row stays
-	h.fake.Respond("POST", "/*/create", 500, "boom")
-	fail := h.addUser("fail", "fail@example.com", "p", ptr(false))
-	if err := h.s.Verify(ctx, MakeToken(secret, "verify", fail, "fail@example.com", time.Now().Unix()+60)); err != nil {
-		t.Errorf("Verify with liercd failing = %v", err)
-	}
-	if n := len(h.connections(fail)); n != 1 || !*h.verified(fail) {
-		t.Errorf("liercd failing: %d connections", n)
-	}
-
-	// no default network configured: nothing added
-	h.s.DefaultNetwork = nil
-	none := h.addUser("none", "none@example.com", "p", ptr(false))
-	if err := h.s.Verify(ctx, MakeToken(secret, "verify", none, "none@example.com", time.Now().Unix()+60)); err != nil {
-		t.Error(err)
-	}
-	if n := len(h.connections(none)); n != 0 || !*h.verified(none) {
-		t.Errorf("no default network: %d connections", n)
 	}
 
 	// bad tokens
@@ -553,7 +548,8 @@ func TestResetConfirm(t *testing.T) {
 	if _, err := h.s.Login(ctx, "forgot", "old pw"); err == nil {
 		t.Error("old password still works")
 	}
-	if n := len(h.connections(id)); n != 1 {
+	// the default network comes at signup, not at confirmation
+	if n := len(h.connections(id)); n != 0 {
 		t.Errorf("first verification by reset: %d connections", n)
 	}
 	wantError(t, nil2(h.s.ResetConfirm(ctx, token, "again")), 400, "This reset link has expired or was already used. Request a new one.")
@@ -605,9 +601,6 @@ func TestResetConfirmConcurrent(t *testing.T) {
 	}
 	if ok != 1 || expired != 1 {
 		t.Errorf("%d ok, %d expired: %v", ok, expired, errs)
-	}
-	if n := len(h.connections(id)); n != 1 {
-		t.Errorf("%d connections", n)
 	}
 }
 
@@ -693,31 +686,19 @@ func cancellingLiercd(t *testing.T, cancel func()) (*liercd.Client, func() []str
 	}
 }
 
-// Once verified=true is committed, a disconnect mustn't cost the user the
-// signup network: a re-verify isn't a first verification.
+// Once the user row is committed, a disconnect mustn't cost the signup its
+// default network.
 func TestFirstNetworkSurvivesCancel(t *testing.T) {
 	h := setup(t)
-	id := h.addUser("leaver", "leaver@example.com", "p", ptr(false))
 	c, cancel := context.WithCancel(context.Background())
 	var calls func() []string
 	h.s.Conns.Liercd, calls = cancellingLiercd(t, cancel)
-	if err := h.s.Verify(c, MakeToken(secret, "verify", id, "leaver@example.com", time.Now().Unix()+60)); err != nil {
-		t.Errorf("Verify = %v", err)
+	u, err := h.s.Register(c, "leaver", "leaver@example.com", "p")
+	if err != nil {
+		t.Fatalf("Register = %v", err)
 	}
-	if n := len(h.connections(id)); n != 1 || len(calls()) != 1 {
-		t.Errorf("verify: %d connections, liercd calls %v", n, calls())
-	}
-
-	id = h.addUser("leaver2", "leaver2@example.com", "old", ptr(false))
-	var hash string
-	h.d.Pool.QueryRow(ctx, `SELECT password_hash FROM users WHERE id=$1`, id).Scan(&hash)
-	c, cancel = context.WithCancel(context.Background())
-	h.s.Conns.Liercd, calls = cancellingLiercd(t, cancel)
-	if u, err := h.s.ResetConfirm(c, MakeToken(secret, "reset", id, hash, time.Now().Unix()+60), "new"); err != nil || u.ID != id {
-		t.Errorf("ResetConfirm = %+v, %v", u, err)
-	}
-	if n := len(h.connections(id)); n != 1 || len(calls()) != 1 {
-		t.Errorf("reset confirm: %d connections, liercd calls %v", n, calls())
+	if n := len(h.connections(u.ID)); n != 1 || len(calls()) != 1 {
+		t.Errorf("register: %d connections, liercd calls %v", n, calls())
 	}
 }
 

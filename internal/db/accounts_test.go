@@ -55,19 +55,6 @@ func TestAccountLookups(t *testing.T) {
 	}
 }
 
-func TestUserHasConnection(t *testing.T) {
-	d := testenv.Postgres(t)
-	ctx := context.Background()
-	a := testenv.AddUser(t, d, "alice")
-	if has, err := d.UserHasConnection(ctx, a); has || err != nil {
-		t.Fatalf("has = %v %v", has, err)
-	}
-	testenv.AddConnection(t, d, "c1", a, `{}`)
-	if has, err := d.UserHasConnection(ctx, a); !has || err != nil {
-		t.Fatalf("has = %v %v", has, err)
-	}
-}
-
 func TestClaimVerifyResend(t *testing.T) {
 	d := testenv.Postgres(t)
 	ctx := context.Background()

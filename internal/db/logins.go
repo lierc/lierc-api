@@ -15,12 +15,11 @@ import (
 // live is the condition for a login that has not expired.
 const live = `last_used > now() - interval '7 days'`
 
-// Login is a live login and its user's standing.
+// Login is a live login.
 type Login struct {
-	ID         int64
-	User       string
-	Unverified bool
-	LastUsed   time.Time
+	ID       int64
+	User     string
+	LastUsed time.Time
 }
 
 // LoginInfo describes a login for the user's list of sessions.
@@ -42,10 +41,10 @@ func (d *DB) InsertLogin(ctx context.Context, tokenHash []byte, user, userAgent,
 // LoginByHash finds the live login for tokenHash.
 func (d *DB) LoginByHash(ctx context.Context, tokenHash []byte) (Login, bool, error) {
 	var l Login
-	err := queryRow(ctx, d.Pool, psql.Select("l.id", "l.user_id", "u.verified IS NOT DISTINCT FROM false", "l.last_used").
+	err := queryRow(ctx, d.Pool, psql.Select("l.id", "l.user_id", "l.last_used").
 		From("logins l").Join(`users u ON u.id = l.user_id`).
 		Where(sq.Eq{"l.token_hash": tokenHash}).Where("l."+live)).
-		Scan(&l.ID, &l.User, &l.Unverified, &l.LastUsed)
+		Scan(&l.ID, &l.User, &l.LastUsed)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Login{}, false, nil
 	}

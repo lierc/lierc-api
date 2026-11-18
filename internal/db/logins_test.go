@@ -19,15 +19,11 @@ func TestLoginInsertLookupTouch(t *testing.T) {
 		t.Error("empty ip not stored as NULL")
 	}
 	l, ok, err := d.LoginByHash(ctx, h)
-	if err != nil || !ok || l.User != a || l.Unverified {
+	if err != nil || !ok || l.User != a {
 		t.Fatalf("lookup = %+v %v %v", l, ok, err)
 	}
 	if _, ok, err := d.LoginByHash(ctx, []byte("other")); ok || err != nil {
 		t.Errorf("unknown hash: %v %v", ok, err)
-	}
-	exec(t, d, `UPDATE users SET verified=false`)
-	if l, _, _ := d.LoginByHash(ctx, h); !l.Unverified {
-		t.Error("unverified user not shown")
 	}
 	exec(t, d, `UPDATE logins SET last_used='2000-01-01'`)
 	if _, ok, _ := d.LoginByHash(ctx, h); ok {

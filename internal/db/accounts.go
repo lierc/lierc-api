@@ -94,16 +94,6 @@ func (d *DB) InsertUser(ctx context.Context, id, username, email, hash string) e
 	return err
 }
 
-// UserHasConnection reports whether user has any connection.
-func (d *DB) UserHasConnection(ctx context.Context, user string) (bool, error) {
-	var has int
-	err := queryRow(ctx, d.Pool, psql.Select("1").From("connections").Where(sq.Eq{"user_id": user}).Limit(1)).Scan(&has)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return false, nil
-	}
-	return err == nil, err
-}
-
 // ClaimVerifyResend records that a confirmation email is being sent to
 // user now, if it is unverified and none was sent within the last
 // minSeconds; it reports whether it was claimed. The update both checks and

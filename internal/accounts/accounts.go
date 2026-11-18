@@ -230,8 +230,9 @@ func (s *Service) rehash(ctx context.Context, r db.AccountAuth, pass string) err
 	return err
 }
 
-// Register adds a user and queues
-// the confirmation email. The default network comes at confirmation.
+// Register adds a user, gives it the default network and queues the
+// confirmation email. Signups use relaychat before confirming; one that
+// doesn't confirm within 3 days is deleted (lctl admin delete-unverified).
 func (s *Service) Register(ctx context.Context, name, email, pass string) (User, error) {
 	for _, f := range []struct{ field, value string }{{"username", name}, {"email", email}, {"pass", pass}} {
 		if !nonSpace.MatchString(f.value) {
@@ -270,6 +271,13 @@ func (s *Service) Register(ctx context.Context, name, email, pass string) (User,
 	if err != nil {
 		return User{}, err
 	}
+	// a failure to add the network is logged and doesn't fail the signup:
+	// the user can add one
+	nctx, cancel := detached(ctx)
+	defer cancel()
+	if err := s.addDefaultNetwork(nctx, id, name); err != nil {
+		log.Printf("Unable to add default network for %s: %v", name, err)
+	}
 	s.after(func() { s.sendVerifyEmail(id, name, email) })
 	return u, nil
 }
@@ -302,34 +310,9 @@ func (s *Service) Verify(ctx context.Context, token string) error {
 	if !TokenValid(s.Secret, "verify", token, u.Email, s.now().Unix()) {
 		return userError(400, msgVerifyBad)
 	}
-	first, err := s.Store.MarkVerified(ctx, u.ID)
-	if err != nil {
-		return err
-	}
-	if first {
-		ctx, cancel := detached(ctx)
-		defer cancel()
-		return s.addFirstNetwork(ctx, u.ID, u.Username)
-	}
-	return nil
-}
-
-// addFirstNetwork adds the default network unless the user has a
-// connection already: an account that signed up before verifying was
-// required got the network then. A failure to add it is logged and doesn't
-// fail the verification.
-func (s *Service) addFirstNetwork(ctx context.Context, user, name string) error {
-	has, err := s.Store.UserHasConnection(ctx, user)
-	if err != nil {
-		return err
-	}
-	if has {
-		return nil
-	}
-	if err := s.addDefaultNetwork(ctx, user, name); err != nil {
-		log.Printf("Unable to add default network for %s: %v", name, err)
-	}
-	return nil
+	// the default network came at signup
+	_, err = s.Store.MarkVerified(ctx, u.ID)
+	return err
 }
 
 // addDefaultNetwork creates the configured default network for user, with the user's name as nick, username and highlight.
@@ -435,7 +418,7 @@ func (s *Service) ResetConfirm(ctx context.Context, token, pass string) (User, e
 	if !ok {
 		return User{}, userError(400, msgResetExpired)
 	}
-	uid, name, hash := acct.ID, acct.Username, acct.PasswordHash
+	uid, hash := acct.ID, acct.PasswordHash
 	if !TokenValid(s.Secret, "reset", token, resetFingerprint(hash), s.now().Unix()) {
 		return User{}, userError(400, msgResetExpired)
 	}
@@ -448,20 +431,16 @@ func (s *Service) ResetConfirm(ctx context.Context, token, pass string) (User, e
 	if err != nil {
 		return User{}, err
 	}
-	changed, first, err := s.Store.ReplacePasswordAndVerify(ctx, uid, newHash, hash)
+	changed, _, err := s.Store.ReplacePasswordAndVerify(ctx, uid, newHash, hash)
 	if err != nil {
 		return User{}, err
 	}
 	if !changed {
 		return User{}, userError(400, msgResetExpired)
 	}
-	// the password has changed: finish even if the browser goes away
+	// the password has changed: finish even if the browser goes away (the
+	// default network came at signup)
 	ctx, cancel := detached(ctx)
 	defer cancel()
-	if first {
-		if err := s.addFirstNetwork(ctx, uid, name); err != nil {
-			return User{}, err
-		}
-	}
 	return s.Show(ctx, uid)
 }

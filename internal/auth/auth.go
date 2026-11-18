@@ -29,15 +29,9 @@ type Users struct {
 // Handler serves a request for a logged-in user.
 type Handler func(w http.ResponseWriter, r *http.Request, user string)
 
-type unverifiedBody struct {
-	Status     string `json:"status"`
-	Error      string `json:"error"`
-	Unverified bool   `json:"unverified"`
-}
-
 type loginKey struct{}
 
-// LoginID returns the id of the login that Require or RequireAny accepted
+// LoginID returns the id of the login that Require accepted
 // for the request in ctx.
 func LoginID(ctx context.Context) (int64, bool) {
 	id, ok := ctx.Value(loginKey{}).(int64)
@@ -55,24 +49,11 @@ func Client(r *http.Request) (userAgent, ip string) {
 }
 
 // Require runs h for the existing user logged in by r's "chats" cookie,
-// renewing the login when it has gone unused for a while.
-// Otherwise it answers 401, or 403 for a signup that hasn't confirmed its
-// email address yet (verified NULL, from before signups had to verify, is
-// let in).
-func (u Users) Require(h Handler) http.Handler { return u.require(h, false) }
-
-// RequireAny is Require, but lets in a signup that hasn't confirmed its
-// email address yet (GET /auth, POST /verify/resend).
-func (u Users) RequireAny(h Handler) http.Handler { return u.require(h, true) }
-
-func (u Users) clock() time.Time {
-	if u.now != nil {
-		return u.now()
-	}
-	return time.Now()
-}
-
-func (u Users) require(h Handler, any bool) http.Handler {
+// renewing the login when it has gone unused for a while; otherwise it
+// answers 401. A signup that hasn't confirmed its email address yet is let
+// in: it can use relaychat while it confirms, and is deleted if it doesn't
+// (lctl admin delete-unverified).
+func (u Users) Require(h Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 		c, err := r.Cookie(login.CookieName)
@@ -85,17 +66,20 @@ func (u Users) require(h Handler, any bool) http.Handler {
 			respond.Internal(w, "check login", err)
 			return
 		}
-		switch {
-		case !ok:
+		if !ok {
 			login.ExpireCookie(w, u.Secure)
 			respond.Error(w, http.StatusUnauthorized, "unauthorized")
-		case l.Unverified && !any:
-			// not a 401, so the UI doesn't take it for logged out
-			respond.JSON(w, http.StatusForbidden, unverifiedBody{"error", "Confirm your email address first", true})
-		default:
-			h(w, r.WithContext(context.WithValue(ctx, loginKey{}, l.ID)), l.User)
+			return
 		}
+		h(w, r.WithContext(context.WithValue(ctx, loginKey{}, l.ID)), l.User)
 	})
+}
+
+func (u Users) clock() time.Time {
+	if u.now != nil {
+		return u.now()
+	}
+	return time.Now()
 }
 
 // check finds the login for the cookie value v, renewing it and setting the

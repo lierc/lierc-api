@@ -20,21 +20,17 @@ func TestMain(m *testing.M) { testenv.Main(m) }
 const (
 	secret       = "testsecret"
 	unauthorized = `{"status":"error","error":"unauthorized"}`
-	unverified   = `{"status":"error","error":"Confirm your email address first","unverified":true}`
 	// perl is session.WritePerl("perlvictim0000000000aa", "testsecret",
 	// "1792769372.78598"), a Perl-format cookie made before the Perl code was
 	// deleted
 	perl = "1792769372.78598%3ABQsDAAAAAQoWcGVybHZpY3RpbTAwMDAwMDAwMDBhYQAAAAR1c2Vy%3A954572711b8433fb5cc3b3b98fb26f6d1f58ba5a"
 )
 
-// run serves one request through users.Require (or RequireAny) around a
-// handler that writes the user; cookie "" with has false sends no cookie.
-func run(users Users, any bool, cookie *string, tweak func(*http.Request)) *httptest.ResponseRecorder {
+// run serves one request through users.Require around a handler that
+// writes the user; a nil cookie sends none.
+func run(users Users, cookie *string, tweak func(*http.Request)) *httptest.ResponseRecorder {
 	hf := func(w http.ResponseWriter, r *http.Request, user string) { io.WriteString(w, "user="+user) }
 	h := users.Require(hf)
-	if any {
-		h = users.RequireAny(hf)
-	}
 	req := httptest.NewRequest("GET", "/", nil)
 	if cookie != nil {
 		req.AddCookie(&http.Cookie{Name: "chats", Value: *cookie})
@@ -49,7 +45,7 @@ func run(users Users, any bool, cookie *string, tweak func(*http.Request)) *http
 
 func serve(t *testing.T, d *db.DB, cookie string) *httptest.ResponseRecorder {
 	t.Helper()
-	return run(Users{DB: d}, false, &cookie, nil)
+	return run(Users{DB: d}, &cookie, nil)
 }
 
 func setCookies(w *httptest.ResponseRecorder) []*http.Cookie {
@@ -94,7 +90,7 @@ func TestRequireRenews(t *testing.T) {
 	token := testenv.Login(t, d, u)
 
 	setLastUsed(t, d, token, 2*time.Hour)
-	w := run(Users{DB: d, Secure: true}, false, &token, nil)
+	w := run(Users{DB: d, Secure: true}, &token, nil)
 	cs := setCookies(w)
 	if w.Code != 200 || len(cs) != 1 || cs[0].Name != "chats" || cs[0].Value != token || !cs[0].Secure {
 		t.Fatalf("%d %v", w.Code, w.Header()["Set-Cookie"])
@@ -140,13 +136,13 @@ func TestRequireBadCookies(t *testing.T) {
 			t.Errorf("%s: cookie not expired: %v", name, w.Header()["Set-Cookie"])
 		}
 	}
-	w := run(Users{DB: d}, false, nil, nil)
+	w := run(Users{DB: d}, nil, nil)
 	if w.Code != 401 || w.Body.String() != unauthorized || len(w.Header()["Set-Cookie"]) != 0 {
 		t.Errorf("no cookie: %d %s %v", w.Code, w.Body, w.Header()["Set-Cookie"])
 	}
 }
 
-func TestRequireUnverified(t *testing.T) {
+func TestRequireLetsUnverifiedIn(t *testing.T) {
 	d := testenv.Postgres(t)
 	u := testenv.AddUser(t, d, "newbie")
 	token := testenv.Login(t, d, u)
@@ -155,14 +151,9 @@ func TestRequireUnverified(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	set(false)
-	if w := serve(t, d, token); w.Code != 403 || w.Body.String() != unverified || len(w.Header()["Set-Cookie"]) != 0 {
-		t.Errorf("unverified: %d %s %v", w.Code, w.Body, w.Header()["Set-Cookie"])
-	}
-	if w := run(Users{DB: d}, true, &token, nil); w.Code != 200 || w.Body.String() != "user="+u {
-		t.Errorf("RequireAny unverified: %d %s", w.Code, w.Body)
-	}
-	for _, v := range []any{true, nil} {
+	// signups use relaychat before confirming their email: every state is
+	// let in
+	for _, v := range []any{false, true, nil} {
 		set(v)
 		if w := serve(t, d, token); w.Code != 200 || w.Body.String() != "user="+u {
 			t.Errorf("verified %v: %d %s", v, w.Code, w.Body)
@@ -201,7 +192,7 @@ func TestRenewFailureLetsRequestThrough(t *testing.T) {
 	token := testenv.Login(t, d, u)
 	setLastUsed(t, d, token, 2*time.Hour)
 	users := Users{DB: d, touch: func(context.Context, int64) error { return errors.New("boom") }}
-	w := run(users, false, &token, nil)
+	w := run(users, &token, nil)
 	if w.Code != 200 || w.Body.String() != "user="+u {
 		t.Errorf("%d %s", w.Code, w.Body)
 	}

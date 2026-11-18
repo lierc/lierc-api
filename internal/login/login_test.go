@@ -63,7 +63,7 @@ func TestCreateLookup(t *testing.T) {
 	if err != nil || !ok {
 		t.Fatalf("Lookup: %v %v", ok, err)
 	}
-	if l.User != u || l.Unverified || l.ID <= 0 {
+	if l.User != u || l.ID <= 0 {
 		t.Errorf("login = %+v", l)
 	}
 	sum := sha256.Sum256([]byte(tok))
@@ -75,14 +75,6 @@ func TestCreateLookup(t *testing.T) {
 	}
 	if _, ok, _ := login.Lookup(ctx, d, strings.Repeat("a", 43)); ok {
 		t.Error("unknown token found")
-	}
-	exec(t, d, `UPDATE users SET verified = false WHERE id = $1`, u)
-	if l, _, _ := login.Lookup(ctx, d, tok); !l.Unverified {
-		t.Error("unverified user not reported")
-	}
-	exec(t, d, `UPDATE users SET verified = NULL WHERE id = $1`, u)
-	if l, _, _ := login.Lookup(ctx, d, tok); l.Unverified {
-		t.Error("NULL verified (legacy user) reported as unverified")
 	}
 }
 
