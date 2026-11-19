@@ -60,7 +60,7 @@ type Store interface {
 	ChannelLogs(ctx context.Context, conn, channel string, limit int) ([]Message, error)
 	ChannelLogsBefore(ctx context.Context, conn, channel string, before int32, limit int) ([]Message, error)
 	ChannelLast(ctx context.Context, conn, channel string, query *string, limit int) ([]Message, error)
-	ChannelDate(ctx context.Context, conn, channel, from, to string, text, sender *string, each func(Message) error) error
+	ChannelDate(ctx context.Context, conn, channel, from, to string, text, sender *string, limit int) ([]Message, error)
 
 	// preferences, private chats, seen, web push
 	Prefs(ctx context.Context, user string) ([]Pref, error)

@@ -3,7 +3,6 @@ package db_test
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"testing"
 
@@ -141,7 +140,8 @@ func TestChannelLast(t *testing.T) {
 	}
 }
 
-func TestChannelDateEach(t *testing.T) {
+// ChannelDate returns at most limit messages, the oldest.
+func TestChannelDateLimit(t *testing.T) {
 	d := testenv.Postgres(t)
 	ctx := context.Background()
 	a := testenv.AddUser(t, d, "alice")
@@ -149,21 +149,12 @@ func TestChannelDateEach(t *testing.T) {
 	for i := int64(1); i <= 3; i++ {
 		msgRow(t, d, i, "c1", a, "#a", "x", false, false, "2026-01-02 10:00")
 	}
-	var seen []int64
-	err := d.ChannelDate(ctx, "c1", "#a", "2026-01-01", "2026-01-03", nil, nil, func(m db.Message) error {
-		seen = append(seen, m.MessageId)
-		return nil
-	})
-	if err != nil || !eq(seen, []int64{1, 2, 3}) {
-		t.Errorf("each = %v, %v", seen, err)
+	got, err := d.ChannelDate(ctx, "c1", "#a", "2026-01-01", "2026-01-03", nil, nil, 10)
+	if err != nil || !eq(ids(got, mid), []int64{1, 2, 3}) {
+		t.Errorf("limit 10 = %v, %v", ids(got, mid), err)
 	}
-	stop := errors.New("stop")
-	seen = nil
-	err = d.ChannelDate(ctx, "c1", "#a", "2026-01-01", "2026-01-03", nil, nil, func(m db.Message) error {
-		seen = append(seen, m.MessageId)
-		return stop
-	})
-	if !errors.Is(err, stop) || len(seen) != 1 {
-		t.Errorf("stop: %v, %v", seen, err)
+	got, err = d.ChannelDate(ctx, "c1", "#a", "2026-01-01", "2026-01-03", nil, nil, 2)
+	if err != nil || !eq(ids(got, mid), []int64{1, 2}) {
+		t.Errorf("limit 2 = %v, %v", ids(got, mid), err)
 	}
 }

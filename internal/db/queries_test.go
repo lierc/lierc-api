@@ -69,7 +69,7 @@ func TestSearchQueriesTakePlainText(t *testing.T) {
 			t.Errorf("last %q: %d rows, %v; want %d", c.q, n, err, c.want)
 		}
 
-		rows, err = d.Pool.Query(ctx, db.Query("channel_date"), "c1", "#a", today, today, c.q, nil)
+		rows, err = d.Pool.Query(ctx, db.Query("channel_date"), "c1", "#a", today, today, c.q, nil, 10)
 		if err != nil {
 			t.Fatalf("date %q: %v", c.q, err)
 		}

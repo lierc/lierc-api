@@ -2,7 +2,7 @@
 -- through date $4, oldest first, from logs and log_archives; when $5 is not
 -- NULL, only those whose text matches $5 (websearch_to_tsquery: plain words,
 -- "phrases", or, -word; never a syntax error), and when $6 is not
--- NULL, only those sent by $6.
+-- NULL, only those sent by $6; at most $7, the oldest.
 --
 -- Only the archive blocks whose time span overlaps the range are unpacked.
 -- Their elements are filtered by their own time (whole seconds, which never
@@ -32,3 +32,4 @@ WHERE time >= date($3)
   AND ($5::text IS NULL OR to_tsvector('english', m->'Params'->1) @@ websearch_to_tsquery($5::text))
   AND ($6::text IS NULL OR m->'Prefix'->>'Name' = $6::text)
 ORDER BY id ASC
+LIMIT $7::int

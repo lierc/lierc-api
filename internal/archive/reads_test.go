@@ -221,7 +221,7 @@ func readCases(t *testing.T, fixtureIDs []int) []readCase {
 				perl, extra := perlDateSQL(f.text, f.sender)
 				cs = append(cs, readCase{
 					name: fmt.Sprintf("date %s %s %s..%s%s", conn, ch, r[0], r[1], desc),
-					sql:  dateSQL, args: []any{conn, ch, r[0], r[1], text, sender},
+					sql:  dateSQL, args: []any{conn, ch, r[0], r[1], text, sender, 1 << 20},
 					perl: perl, perlArgs: append([]any{conn, ch, r[0], r[1]}, extra...),
 				})
 			}
@@ -273,27 +273,35 @@ func runAll(t *testing.T, d *tdb, cases []readCase, perl bool) map[string][]read
 	t.Helper()
 	got := map[string][]readRow{}
 	for _, zone := range readZones {
-		conn, err := d.pool.Acquire(context.Background())
-		if err != nil {
-			t.Fatal(err)
-		}
-		if _, err := conn.Exec(context.Background(), "SET TIME ZONE '"+zone+"'"); err != nil {
-			t.Fatal(err)
-		}
-		for _, c := range cases {
-			rs := runRead(t, conn, c.sql, c.args)
-			if perl {
-				want := runRead(t, conn, c.perl, c.perlArgs)
-				if !reflect.DeepEqual(rs, want) {
-					t.Errorf("%s (%s) on log alone: ids %v, Channel.pm gives %v", c.name, zone, rowIDs(rs), rowIDs(want))
-				}
-			}
-			got[zone+" "+c.name] = rs
-		}
-		conn.Exec(context.Background(), "RESET TIME ZONE")
-		conn.Release()
+		runZone(t, d, zone, cases, perl, got)
 	}
 	return got
+}
+
+// runZone is runAll's cases in one time zone. The connection is released
+// however it ends: held past a t.Fatal, it would leave the pool's Close,
+// at cleanup, waiting for it forever.
+func runZone(t *testing.T, d *tdb, zone string, cases []readCase, perl bool, got map[string][]readRow) {
+	t.Helper()
+	conn, err := d.pool.Acquire(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Release()
+	if _, err := conn.Exec(context.Background(), "SET TIME ZONE '"+zone+"'"); err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Exec(context.Background(), "RESET TIME ZONE")
+	for _, c := range cases {
+		rs := runRead(t, conn, c.sql, c.args)
+		if perl {
+			want := runRead(t, conn, c.perl, c.perlArgs)
+			if !reflect.DeepEqual(rs, want) {
+				t.Errorf("%s (%s) on log alone: ids %v, Channel.pm gives %v", c.name, zone, rowIDs(rs), rowIDs(want))
+			}
+		}
+		got[zone+" "+c.name] = rs
+	}
 }
 
 func TestReadsSameAfterArchiving(t *testing.T) {

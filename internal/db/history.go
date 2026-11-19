@@ -78,25 +78,11 @@ func (d *DB) ChannelLast(ctx context.Context, conn, channel string, query *strin
 	return d.messages(ctx, Query("channel_last"), channel, conn, query, limit)
 }
 
-// ChannelDate calls each for the messages of channel on conn from date
-// from through date to, oldest first, as they're read; text and sender
-// filter when set. It stops with each's error.
-func (d *DB) ChannelDate(ctx context.Context, conn, channel, from, to string, text, sender *string, each func(Message) error) error {
-	rows, err := d.Pool.Query(ctx, Query("channel_date"), conn, channel, from, to, text, sender)
-	if err != nil {
-		return err
-	}
-	defer rows.Close()
-	for rows.Next() {
-		m, err := scanMessage(rows)
-		if err != nil {
-			return err
-		}
-		if err := each(m); err != nil {
-			return err
-		}
-	}
-	return rows.Err()
+// ChannelDate is the messages of channel on conn from date from through
+// date to, oldest first, at most limit of them; text and sender filter
+// when set.
+func (d *DB) ChannelDate(ctx context.Context, conn, channel, from, to string, text, sender *string, limit int) ([]Message, error) {
+	return d.messages(ctx, Query("channel_date"), conn, channel, from, to, text, sender, limit)
 }
 
 func (d *DB) messages(ctx context.Context, sql string, args ...any) ([]Message, error) {
