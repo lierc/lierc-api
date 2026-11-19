@@ -20,7 +20,7 @@ var (
 )
 
 func opts() Options {
-	return Options{Keep: 3, Block: 2, MinAge: 720 * time.Hour, Now: now}
+	return Options{Keep: 3, Block: 2}
 }
 
 type tdb struct {
@@ -156,12 +156,14 @@ func TestMoveKeepsNewest(t *testing.T) {
 	}
 }
 
-func TestMoveRespectsMinAge(t *testing.T) {
+// Age doesn't matter: everything below the Keep newest moves, a message
+// from a minute ago as much as one from last year.
+func TestMoveIgnoresAge(t *testing.T) {
 	d := newDB(t)
 	for i := 1; i <= 10; i++ {
 		at := old.Add(time.Duration(i) * time.Minute)
-		if i >= 7 {
-			at = fresh.Add(time.Duration(i) * time.Minute)
+		if i >= 5 {
+			at = now.Add(-time.Duration(11-i) * time.Minute)
 		}
 		d.insert(i, "c1", "#chan", at)
 	}
@@ -171,20 +173,6 @@ func TestMoveRespectsMinAge(t *testing.T) {
 	}
 	if got := d.logIDs("c1", "#chan"); !reflect.DeepEqual(got, ids(7, 10)) {
 		t.Fatalf("log ids %v", got)
-	}
-
-	// Two old messages fewer: archivable is 1-4 by age, and 5-6 stay.
-	d2 := newDB(t)
-	for i := 1; i <= 10; i++ {
-		at := old.Add(time.Duration(i) * time.Minute)
-		if i >= 5 {
-			at = fresh.Add(time.Duration(i) * time.Minute)
-		}
-		d2.insert(i, "c1", "#chan", at)
-	}
-	moveAll(t, d2, Channel{Connection: "c1", Channel: "#chan"}, opts())
-	if got := d2.archiveBlocks("c1", "#chan"); !reflect.DeepEqual(got, []blk{{1, 2, 2}, {3, 4, 2}}) {
-		t.Fatalf("archive %v", got)
 	}
 }
 
@@ -449,7 +437,7 @@ func TestCandidates(t *testing.T) {
 		d.insert(id, "c1", "#full", old.Add(time.Duration(id)*time.Minute))
 		id++
 	}
-	// #new has many messages, all recent.
+	// #new has many messages, all recent: age doesn't count.
 	for i := 0; i < 10; i++ {
 		d.insert(id, "c1", "#new", fresh.Add(time.Duration(id)*time.Minute))
 		id++
@@ -463,7 +451,7 @@ func TestCandidates(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !reflect.DeepEqual(cs, []Channel{{Connection: "c1", Channel: "#full", Movable: o.Block}}) {
+	if !reflect.DeepEqual(cs, []Channel{{Connection: "c1", Channel: "#full", Movable: o.Block}, {Connection: "c1", Channel: "#new", Movable: o.Block}}) {
 		t.Fatalf("candidates %+v", cs)
 	}
 }

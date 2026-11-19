@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"testing"
-	"time"
 
 	"github.com/lierc/lierc-api/internal/archive"
 	"github.com/lierc/lierc-api/internal/db"
@@ -73,7 +72,11 @@ func TestHighlights(t *testing.T) {
 	a := testenv.AddUser(t, d, "alice")
 	testenv.AddConnection(t, d, "c1", a, "{}")
 	for i := int64(1); i <= 6; i++ {
-		msgRow(t, d, i, "c1", a, "#a", "x", false, i%2 == 0, "2026-01-01")
+		if i%2 == 0 {
+			hlRow(t, d, i, "c1", a, "#a", "x")
+		} else {
+			msgRow(t, d, i, "c1", a, "#a", "x", false, false, "2026-01-01")
+		}
 	}
 	got, err := d.Highlights(ctx, a, nil, 2)
 	if err != nil || !eq(ids(got, uid), []int64{6, 4}) {
@@ -94,7 +97,7 @@ func TestChannelLogsAndBefore(t *testing.T) {
 	for i := int64(1); i <= 6; i++ {
 		msgRow(t, d, i, "c1", a, "#a", fmt.Sprint("m", i), false, false, "2020-01-01")
 	}
-	o := archive.Options{Keep: 2, Block: 2, MinAge: time.Hour, Now: time.Now()}
+	o := archive.Options{Keep: 2, Block: 2}
 	for n := 0; ; n++ {
 		_, ok, err := archive.MoveBlock(ctx, d, archive.Channel{Connection: "c1", Channel: "#a"}, o)
 		if err != nil {

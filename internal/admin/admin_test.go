@@ -152,7 +152,7 @@ func TestUserCounts(t *testing.T) {
 	e.exec(`INSERT INTO prefs (user_id, name, value) VALUES ('` + a + `', 'p', 'v')`)
 	var got map[string]int64
 	e.getJSON("/admin/users/"+a+"/counts", &got)
-	want := map[string]int64{"log": 1, "log_archive": 0, "seen": 0, "private": 0, "pref": 1, "web_push": 0, "connection": 1, "login": 0}
+	want := map[string]int64{"log": 1, "log_archive": 0, "highlight": 0, "seen": 0, "private": 0, "pref": 1, "web_push": 0, "connection": 1, "login": 0}
 	if len(got) != len(want) {
 		t.Fatalf("counts = %v", got)
 	}
@@ -194,7 +194,7 @@ func TestConnectionCounts(t *testing.T) {
 	e.exec(`INSERT INTO private_chats (connection_id, nick, time) VALUES ('c1', 'n', now())`)
 	var got map[string]int64
 	e.getJSON("/admin/connections/c1/counts", &got)
-	if got["log"] != 2 || got["private"] != 1 || got["seen"] != 0 || got["log_archive"] != 0 || len(got) != 4 {
+	if got["log"] != 2 || got["private"] != 1 || got["seen"] != 0 || got["log_archive"] != 0 || got["highlight"] != 0 || len(got) != 5 {
 		t.Errorf("counts = %v", got)
 	}
 	code, body := e.get("/admin/connections/nosuch/counts")

@@ -204,7 +204,7 @@ func TestArchiveBudget(t *testing.T) {
 func TestArchiveUsage(t *testing.T) {
 	h := newHarness(t)
 	for _, args := range [][]string{
-		{"--min-age", "soon"}, {"--min-age", "-3d"}, {"--keep", "0"}, {"--block", "0"},
+		{"--min-age", "7d"}, {"--keep", "0"}, {"--block", "0"},
 		{"--pause", "-1s"}, {"--budget", "-1s"}, {"--max-blocks", "-1"}, {"extra"},
 	} {
 		var ue *UsageError
@@ -214,15 +214,16 @@ func TestArchiveUsage(t *testing.T) {
 	}
 }
 
-// By default messages older than 7 days can be archived; newer ones stay.
-func TestArchiveDefaultMinAge(t *testing.T) {
+// Age doesn't count: a channel of recent messages archives all but its
+// newest --keep, like one of old messages.
+func TestArchiveIgnoresAge(t *testing.T) {
 	h := newHarness(t)
 	u := h.user("ann")
 	insertConn(h, "c1", u, cfg)
 	for _, ch := range []struct {
 		name string
 		age  string
-	}{{"#old", "10 days"}, {"#new", "3 days"}} {
+	}{{"#old", "10 days"}, {"#new", "1 hour"}} {
 		h.exec(`INSERT INTO logs (connection_id, user_id, channel, time, message)
 		  SELECT 'c1', $1, $2, now() - $3::interval + g * interval '1 second', '{}' FROM generate_series(1, 10) g`,
 			u, ch.name, ch.age)
@@ -231,10 +232,10 @@ func TestArchiveDefaultMinAge(t *testing.T) {
 		t.Fatal(err)
 	}
 	if n := h.count(`SELECT count(*) FROM log_archives WHERE channel = '#old'`); n != 3 {
-		t.Errorf("%d #old blocks archived, want 3 (10-day-old messages are past the default age)", n)
+		t.Errorf("%d #old blocks archived, want 3", n)
 	}
-	if n := h.count(`SELECT count(*) FROM log_archives WHERE channel = '#new'`); n != 0 {
-		t.Errorf("%d #new blocks archived, want 0 (3-day-old messages are within the default age)", n)
+	if n := h.count(`SELECT count(*) FROM log_archives WHERE channel = '#new'`); n != 3 {
+		t.Errorf("%d #new blocks archived, want 3 (messages from the last hour move too)", n)
 	}
 }
 

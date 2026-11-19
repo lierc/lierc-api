@@ -144,6 +144,7 @@ func seedCounts(t *testing.T, d *db.DB) (user, conn string) {
 	testenv.AddLog(t, d, 1, conn, user)
 	testenv.AddLog(t, d, 2, conn, user)
 	testenv.AddLog(t, d, 4, "otherc", other)
+	exec(t, d, `INSERT INTO highlights (id, connection_id, user_id, channel, time, message) VALUES (1, 'conn1', '`+user+`', '#a', now(), '{}'), (4, 'otherc', '`+other+`', '#a', now(), '{}')`)
 	exec(t, d, `INSERT INTO log_archives (connection_id, user_id, channel, first_id, last_id, min_time, max_time, count, messages)
 	  VALUES ('conn1', '`+user+`', '#a', 1, 1, now(), now(), 1, '[]')`)
 	exec(t, d, `INSERT INTO seen_markers (user_id, connection_id, channel, message_id) VALUES ('`+user+`', 'conn1', '#a', 1), ('`+user+`', 'conn2', '#a', 1), ('`+other+`', 'otherc', '#a', 1)`)
@@ -161,7 +162,7 @@ func TestUserCounts(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := map[string]int64{"log": 2, "log_archive": 1, "seen": 2, "private": 1, "pref": 1, "web_push": 1, "connection": 2, "login": 2}
+	want := map[string]int64{"log": 2, "log_archive": 1, "highlight": 1, "seen": 2, "private": 1, "pref": 1, "web_push": 1, "connection": 2, "login": 2}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("counts = %v, want %v", got, want)
 	}
@@ -174,7 +175,7 @@ func TestConnectionCounts(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := map[string]int64{"log": 2, "log_archive": 1, "seen": 1, "private": 1}
+	want := map[string]int64{"log": 2, "log_archive": 1, "highlight": 1, "seen": 1, "private": 1}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("counts = %v, want %v", got, want)
 	}
@@ -302,7 +303,7 @@ func TestDeleteConnectionData(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := map[string]int64{"log": 2, "log_archive": 1, "seen": 1, "private": 1, "connection": 1}
+	want := map[string]int64{"log": 2, "log_archive": 1, "highlight": 1, "seen": 1, "private": 1, "connection": 1}
 	if !reflect.DeepEqual(counts, want) {
 		t.Errorf("counts = %v, want %v", counts, want)
 	}

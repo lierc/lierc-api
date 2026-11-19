@@ -22,9 +22,8 @@ func TestArchiveBlocks(t *testing.T) {
 	for i := int64(7); i <= 9; i++ {
 		msgRow(t, d, i, "c1", a, "status", "x", false, false, "2020-01-01")
 	}
-	cutoff := time.Now().Add(-time.Hour)
 
-	got, err := d.ArchiveCandidates(ctx, 2, cutoff, 2, nil)
+	got, err := d.ArchiveCandidates(ctx, 2, 2, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -36,23 +35,23 @@ func TestArchiveBlocks(t *testing.T) {
 	if !reflect.DeepEqual(have, want) {
 		t.Errorf("ArchiveCandidates = %v, want %v", have, want)
 	}
-	if got, err = d.ArchiveCandidates(ctx, 2, cutoff, 2, []string{"nope"}); err != nil || len(got) != 0 {
+	if got, err = d.ArchiveCandidates(ctx, 2, 2, []string{"nope"}); err != nil || len(got) != 0 {
 		t.Errorf("ArchiveCandidates(nope) = %v, %v", got, err)
 	}
 
-	b, ok, err := d.ArchiveBlock(ctx, "c1", "#a", 2, cutoff, 2)
+	b, ok, err := d.ArchiveBlock(ctx, "c1", "#a", 2, 2)
 	if err != nil || !ok || b.FirstID != 1 || b.LastID != 2 || b.Count != 2 {
 		t.Errorf("ArchiveBlock = %+v, %v, %v", b, ok, err)
 	}
-	if _, ok, err = d.ArchiveBlock(ctx, "c1", "#a", 2, cutoff, 5); err != nil || ok {
+	if _, ok, err = d.ArchiveBlock(ctx, "c1", "#a", 2, 5); err != nil || ok {
 		t.Errorf("ArchiveBlock with too few = %v, %v, want false", ok, err)
 	}
 
-	b, ok, err = d.DropStatusBlock(ctx, "c1", "status", 1, cutoff, 5)
+	b, ok, err = d.DropStatusBlock(ctx, "c1", "status", 1, 5)
 	if err != nil || !ok || b.FirstID != 7 || b.LastID != 8 || b.Count != 2 {
 		t.Errorf("DropStatusBlock = %+v, %v, %v", b, ok, err)
 	}
-	if _, ok, err = d.DropStatusBlock(ctx, "c1", "status", 1, cutoff, 5); err != nil || ok {
+	if _, ok, err = d.DropStatusBlock(ctx, "c1", "status", 1, 5); err != nil || ok {
 		t.Errorf("DropStatusBlock again = %v, %v, want false", ok, err)
 	}
 }
@@ -96,8 +95,8 @@ func TestReviveCandidates(t *testing.T) {
 }
 
 // ArchiveCandidates' boundaries (keep 2, block 3): the newest keep messages
-// stay, nothing newer than the cutoff moves even past keep, and the count
-// stops at a block.
+// stay, however old the rest is (age doesn't count), and the count stops at
+// a block.
 func TestArchiveCandidatesBoundaries(t *testing.T) {
 	d := testenv.Postgres(t)
 	ctx := context.Background()
@@ -110,7 +109,7 @@ func TestArchiveCandidatesBoundaries(t *testing.T) {
 	for i := int64(31); i <= 32; i++ { // exactly keep
 		msgRow(t, d, i, "c1", a, "#exact", "x", false, false, old)
 	}
-	for i := int64(41); i <= 45; i++ { // two old, then three newer than the cutoff
+	for i := int64(41); i <= 45; i++ { // two old, then three from the future: all but keep move
 		when := old
 		if i > 42 {
 			when = fresh
@@ -120,7 +119,7 @@ func TestArchiveCandidatesBoundaries(t *testing.T) {
 	for i := int64(51); i <= 60; i++ { // eight movable, capped at a block
 		msgRow(t, d, i, "c1", a, "#cap", "x", false, false, old)
 	}
-	got, err := d.ArchiveCandidates(ctx, 2, time.Now().Add(-time.Hour), 3, nil)
+	got, err := d.ArchiveCandidates(ctx, 2, 3, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -128,7 +127,7 @@ func TestArchiveCandidatesBoundaries(t *testing.T) {
 	for _, c := range got {
 		have = append(have, c.Channel+":"+strconv.Itoa(c.Movable))
 	}
-	want := []string{"#cap:3", "#fresh:2", "#keep:1"}
+	want := []string{"#cap:3", "#fresh:3", "#keep:1"}
 	if !reflect.DeepEqual(have, want) {
 		t.Errorf("ArchiveCandidates = %v, want %v", have, want)
 	}

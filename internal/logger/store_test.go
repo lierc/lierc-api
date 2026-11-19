@@ -4,52 +4,30 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"fmt"
-	"os"
 	"testing"
 	"time"
 
+	"github.com/lierc/lierc-api/internal/testenv"
 	"github.com/lierc/lierc/pkg/ircwire"
 )
 
-// Runs against a real Postgres when LOGGER_TEST_DSN is set, e.g.
-// "user=postgres password=test host=localhost port=5432 sslmode=disable".
-// The tables are created in a temporary schema that's dropped after.
-func testStore(t *testing.T) (*pgStore, *sql.DB) {
-	dsn := os.Getenv("LOGGER_TEST_DSN")
-	if dsn == "" {
-		t.Skip("LOGGER_TEST_DSN not set")
-	}
+func TestMain(m *testing.M) { testenv.Main(m) }
 
-	db, err := sql.Open("postgres", dsn)
+// testStore is a store on a fresh, migrated database (testenv's embedded
+// Postgres) with connections c1 (user u1, highlight word "leedo") and c2
+// (user u2), and the same database through database/sql.
+func testStore(t *testing.T) (*pgStore, *sql.DB) {
+	d := testenv.Postgres(t)
+	testenv.EnsureConnection(t, d, "c1", "u1")
+	testenv.EnsureConnection(t, d, "c2", "u2")
+	if _, err := d.Pool.Exec(context.Background(), `UPDATE connections SET config = '{"Highlight": ["leedo"]}' WHERE id = 'c1'`); err != nil {
+		t.Fatal(err)
+	}
+	db, err := sql.Open("postgres", testenv.DSN(d))
 	if err != nil {
 		t.Fatal(err)
 	}
-	// one connection, so search_path applies to every query
-	db.SetMaxOpenConns(1)
-
-	schema := fmt.Sprintf("logger_test_%d", time.Now().UnixNano())
-	for _, q := range []string{
-		"CREATE SCHEMA " + schema,
-		"SET search_path TO " + schema,
-		`CREATE TABLE connections (id varchar(24) primary key, user_id varchar(24) not null, config jsonb not null)`,
-		`CREATE TABLE logs (id serial primary key, connection_id varchar(24) not null references connections on delete cascade, user_id varchar(24) not null,
-			channel varchar(32) not null, command varchar(16), highlight bool not null default false,
-			time timestamp not null, message jsonb not null, self bool not null default false)`,
-		`CREATE TABLE private_chats (connection_id varchar(24) not null references connections on delete cascade, nick varchar(32) not null, time timestamp not null,
-			primary key (connection_id, nick))`,
-		`INSERT INTO connections VALUES ('c1', 'u1', '{"Highlight": ["leedo"]}'), ('c2', 'u2', '{}')`,
-	} {
-		if _, err := db.Exec(q); err != nil {
-			t.Fatal(err)
-		}
-	}
-
-	t.Cleanup(func() {
-		db.Exec("DROP SCHEMA " + schema + " CASCADE")
-		db.Close()
-	})
-
+	t.Cleanup(func() { db.Close() })
 	return &pgStore{db: db}, db
 }
 
@@ -73,6 +51,23 @@ func TestStoreInsertMessage(t *testing.T) {
 	}
 	if user != "u1" || channel != "#chan" || command != "PRIVMSG" || !highlight || text != "hi" || at.Unix() != 1700000000 {
 		t.Errorf("stored %q %q %q %v %v %q", user, channel, command, highlight, at, text)
+	}
+
+	// a highlight gets its highlights row too, with the same id and columns
+	var n int
+	err = db.QueryRow(`SELECT count(*) FROM highlights h JOIN logs l USING (id)
+		WHERE id = $1 AND h.user_id = l.user_id AND h.connection_id = l.connection_id AND h.channel = l.channel
+		  AND h.time = l.time AND h.message = l.message AND h.self = l.self`, id).Scan(&n)
+	if err != nil || n != 1 {
+		t.Errorf("highlights row for %d: %d, %v", id, n, err)
+	}
+	plain, err := s.InsertMessage(ctx, "c1", m, "#chan", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	db.QueryRow(`SELECT count(*) FROM highlights WHERE id = $1`, plain).Scan(&n)
+	if n != 0 {
+		t.Errorf("a message that isn't a highlight got a highlights row")
 	}
 
 	if _, err := s.InsertMessage(ctx, "nope", m, "#chan", false); !errors.Is(err, ErrNoConnection) {

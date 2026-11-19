@@ -176,6 +176,13 @@ func newDatabase(t testing.TB, opts string) *db.DB {
 	return d
 }
 
+// DSN is d's connection string in the key=value form lib/pq takes, for
+// code that opens its own database/sql pool (the logger).
+func DSN(d *db.DB) string {
+	c := d.Pool.Config().ConnConfig
+	return fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=disable", c.Host, c.Port, c.User, c.Password, c.Database)
+}
+
 // AddUser inserts a user named name, logged in just now, and returns its
 // id. (The column has no default: signup leaves it NULL until a login.)
 func AddUser(t testing.TB, d *db.DB, name string) string {

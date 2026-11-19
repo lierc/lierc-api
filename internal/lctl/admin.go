@@ -194,7 +194,7 @@ func (a *Admin) Connection(ctx context.Context, id string) (admin.Connection, er
 }
 
 // ConnectionCounts is the rows a delete of the connection would remove, per
-// table (log, log_archive, seen, private).
+// table (log, log_archive, highlight, seen, private).
 func (a *Admin) ConnectionCounts(ctx context.Context, id string) (map[string]int64, error) {
 	var out map[string]int64
 	return out, a.do(ctx, http.MethodGet, "/admin/connections/"+url.PathEscape(id)+"/counts", nil, &out)

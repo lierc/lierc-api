@@ -76,9 +76,9 @@ type Store interface {
 	DeleteWebPush(ctx context.Context, user, endpoint string) error
 
 	// archive and lctl's maintenance commands
-	ArchiveCandidates(ctx context.Context, keep int, cutoff time.Time, block int, conns []string) ([]ChannelCount, error)
-	ArchiveBlock(ctx context.Context, conn, channel string, keep int, cutoff time.Time, block int) (ArchivedBlock, bool, error)
-	DropStatusBlock(ctx context.Context, conn, channel string, keep int, cutoff time.Time, block int) (ArchivedBlock, bool, error)
+	ArchiveCandidates(ctx context.Context, keep int, block int, conns []string) ([]ChannelCount, error)
+	ArchiveBlock(ctx context.Context, conn, channel string, keep int, block int) (ArchivedBlock, bool, error)
+	DropStatusBlock(ctx context.Context, conn, channel string, keep int, block int) (ArchivedBlock, bool, error)
 	ReviveCandidates(ctx context.Context, since time.Duration, instance string) ([]ReviveConnection, error)
 
 	// the admin API's reads

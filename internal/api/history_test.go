@@ -7,18 +7,21 @@ import (
 	"fmt"
 	"net/url"
 	"testing"
-	"time"
 
 	"github.com/lierc/lierc-api/internal/archive"
 	"github.com/lierc/lierc-api/internal/testenv"
 )
 
-// msg inserts a PRIVMSG log row with text.
+// msg adds a message, and its highlights row when it is one.
 func (e *env) msg(id int64, conn, user, channel, text string, self, highlight bool, when string) {
 	e.t.Helper()
 	m := fmt.Sprintf(`{"Command":"PRIVMSG","Params":[%q,%q]}`, channel, text)
 	e.exec(`INSERT INTO logs (id, connection_id, user_id, channel, command, self, highlight, time, message) VALUES ($1,$2,$3,$4,'PRIVMSG',$5,$6,$7::timestamp,$8)`,
 		id, conn, user, channel, self, highlight, when, m)
+	if highlight { // as the logger does
+		e.exec(`INSERT INTO highlights (id, connection_id, user_id, channel, time, message, self)
+			SELECT id, connection_id, user_id, channel, time, message, self FROM logs WHERE id = $1`, id)
+	}
 }
 
 // msgIDs is the MessageIds of a JSON list body.
@@ -113,7 +116,7 @@ func TestChannelEventsRoutes(t *testing.T) {
 	for i := int64(1); i <= 6; i++ {
 		e.msg(i, "c1", a, "#a", "x", false, false, "2020-01-01")
 	}
-	o := archive.Options{Keep: 2, Block: 2, MinAge: time.Hour, Now: time.Now()}
+	o := archive.Options{Keep: 2, Block: 2}
 	for n := 0; n < 10; n++ {
 		if _, ok, err := archive.MoveBlock(context.Background(), e.db, archive.Channel{Connection: "c1", Channel: "#a"}, o); err != nil || !ok {
 			break

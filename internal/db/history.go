@@ -46,9 +46,11 @@ func (d *DB) LogSince(ctx context.Context, user string, after int32) ([]UserMess
 }
 
 // Highlights is user's highlighted messages, newest first, below before
-// when it is set.
+// when it is set. They're read from highlights, not logs, so they're kept
+// when their log rows are archived.
 func (d *DB) Highlights(ctx context.Context, user string, before *int32, limit int) ([]UserMessage, error) {
-	q := userMessages(psql).Where(sq.Eq{"l.user_id": user, "l.highlight": true})
+	q := psql.Select("l.id", "l.message::text", "l.connection_id", "l.self", "true").From("highlights AS l").
+		Where(sq.Eq{"l.user_id": user})
 	if before != nil {
 		q = q.Where(sq.Lt{"l.id": *before})
 	}

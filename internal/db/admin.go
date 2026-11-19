@@ -91,7 +91,7 @@ func (d *DB) LookupUsers(ctx context.Context, q string) ([]UserRow, error) {
 // admin API returns: the table's name from before the tables were renamed
 // (migration 2), so the API's output and lctl's didn't change.
 var countKey = map[string]string{
-	"logs": "log", "log_archives": "log_archive", "seen_markers": "seen", "private_chats": "private",
+	"logs": "log", "log_archives": "log_archive", "highlights": "highlight", "seen_markers": "seen", "private_chats": "private",
 	"prefs": "pref", "web_push_subscriptions": "web_push", "connections": "connection", "logins": "login",
 }
 
@@ -106,7 +106,7 @@ func userCounts(ctx context.Context, r runner, id string) (map[string]int64, err
 	ofConns := sq.Expr("connection_id IN (?)", sub.Select("id").From("connections").Where(owned))
 	either := sq.Or{owned, ofConns}
 	return countRows(ctx, r, []tableRows{
-		{"logs", either}, {"log_archives", either}, {"seen_markers", either},
+		{"logs", either}, {"log_archives", either}, {"highlights", either}, {"seen_markers", either},
 		{"private_chats", ofConns},
 		{"prefs", owned}, {"web_push_subscriptions", owned}, {"connections", owned}, {"logins", owned},
 	})
@@ -206,7 +206,7 @@ func (d *DB) ConnectionCounts(ctx context.Context, id string) (map[string]int64,
 func connectionCounts(ctx context.Context, r runner, id string) (map[string]int64, error) {
 	ofConn := sq.Eq{"connection_id": id}
 	return countRows(ctx, r, []tableRows{
-		{"logs", ofConn}, {"log_archives", ofConn}, {"seen_markers", ofConn}, {"private_chats", ofConn},
+		{"logs", ofConn}, {"log_archives", ofConn}, {"highlights", ofConn}, {"seen_markers", ofConn}, {"private_chats", ofConn},
 	})
 }
 
@@ -230,7 +230,7 @@ func (d *DB) PruneStaleSeen(ctx context.Context) (int64, error) {
 }
 
 // DeleteUserData deletes user id, and so (the keys cascade) everything of
-// theirs: connections, their logs, archive, seen markers and private chats,
+// theirs: connections, their logs, archive, highlights, seen markers and private chats,
 // prefs, web push subscriptions and logins. It returns a delete change for
 // each connection, to announce once this has returned, and the rows deleted
 // per table. ErrNotFound if there is no such user.
@@ -281,7 +281,7 @@ func (d *DB) deleteUser(ctx context.Context, id string) ([]ConnectionChange, map
 }
 
 // DeleteConnectionData deletes connection id, and so (the keys cascade) its
-// logs, archive, seen markers and private chats. It returns the
+// logs, archive, highlights, seen markers and private chats. It returns the
 // connection's delete change and the rows deleted per table. ErrNotFound if
 // there is no such connection.
 func (d *DB) DeleteConnectionData(ctx context.Context, id string) (changes []ConnectionChange, counts map[string]int64, err error) {

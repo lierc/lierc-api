@@ -11,14 +11,13 @@ import (
 	"github.com/lierc/lierc-api/internal/archive"
 )
 
-const archiveUsage = `archive [--move] [--keep N] [--block N] [--min-age DURATION] [--connection ID[,ID...]]
+const archiveUsage = `archive [--move] [--keep N] [--block N] [--connection ID[,ID...]]
         [--pause DURATION (1s)] [--budget DURATION (30m)] [--max-blocks N]
 
 Moves old log rows into compressed archive blocks (log_archives). Per
-connection and channel it keeps the newest --keep (default 1000) messages and everything
-newer than --min-age (default 7d; days such as 7d, or a Go duration such as 168h), and
-moves the rest, oldest first, in full blocks of --block messages; fewer than
-a block are left for later. A status window is different: its old messages
+connection and channel it keeps the newest --keep (default 1000) messages,
+however old, and moves the rest, oldest first, in full blocks of --block
+messages; fewer than a block are left for later. A status window is different: its old messages
 are deleted, in batches of --block, and never archived. Without --move it's
 a dry run that lists the channels with a block or more to move and the
 status windows with old messages to delete, without counting them (counting
@@ -37,7 +36,6 @@ func archiveCmd(ctx context.Context, env *Env, args []string) error {
 	move := fs.Bool("move", false, "move the rows (otherwise only list what would move)")
 	keep := fs.Int("keep", 1000, "newest messages to keep in each channel")
 	block := fs.Int("block", 500, "messages per block")
-	minAge := fs.String("min-age", "7d", "leave messages newer than this (7d, 168h)")
 	pause := fs.Duration("pause", time.Second, "how long to wait between blocks (0: none)")
 	budget := fs.Duration("budget", 30*time.Minute, "stop starting new blocks after this long (0: no limit)")
 	maxBlocks := fs.Int("max-blocks", 0, "stop after this many blocks (0: no limit)")
@@ -45,12 +43,9 @@ func archiveCmd(ctx context.Context, env *Env, args []string) error {
 	if err := Parse(fs, args); err != nil {
 		return err
 	}
-	age, ok := parseSince(*minAge)
 	switch {
 	case fs.NArg() != 0:
 		return &UsageError{Msg: "archive takes no arguments"}
-	case !ok:
-		return &UsageError{Msg: "--min-age needs a duration such as 7d or 168h"}
 	case *keep < 1:
 		return &UsageError{Msg: "--keep must be at least 1"}
 	case *block < 1:
@@ -84,7 +79,7 @@ func archiveCmd(ctx context.Context, env *Env, args []string) error {
 		}
 	}
 
-	opts := archive.Options{Keep: *keep, Block: *block, MinAge: age, Now: env.now(), Connections: ids}
+	opts := archive.Options{Keep: *keep, Block: *block, Connections: ids}
 	cands, err := archive.Candidates(ctx, env.Store, opts)
 	if err != nil {
 		return err
@@ -130,7 +125,6 @@ loop:
 				break loop
 			}
 			o := opts
-			o.Now = now
 			var b archive.Block
 			var more bool
 			var err error
