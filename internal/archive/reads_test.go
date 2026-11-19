@@ -170,22 +170,29 @@ func readCases(t *testing.T, fixtureIDs []int) []readCase {
 			{text: strp("run"), sender: strp("alice")},
 			{text: strp("late"), sender: strp("bob")},
 		}
+		// the days of the search's time zone, apart from the session's
+		dateZones := []string{"UTC", "America/New_York"}
 		for _, r := range ranges {
 			for _, f := range filters {
-				var text, sender any
-				desc := ""
-				if f.text != nil {
-					text = *f.text
-					desc += " text " + *f.text
+				for _, tz := range dateZones {
+					var text, sender any
+					desc := ""
+					if f.text != nil {
+						text = *f.text
+						desc += " text " + *f.text
+					}
+					if f.sender != nil {
+						sender = *f.sender
+						desc += " sender " + *f.sender
+					}
+					if tz != "UTC" {
+						desc += " in " + tz
+					}
+					cs = append(cs, readCase{
+						name: fmt.Sprintf("date %s %s %s..%s%s", conn, ch, r[0], r[1], desc),
+						sql:  dateSQL, args: []any{conn, ch, r[0], r[1], text, sender, 1 << 20, tz},
+					})
 				}
-				if f.sender != nil {
-					sender = *f.sender
-					desc += " sender " + *f.sender
-				}
-				cs = append(cs, readCase{
-					name: fmt.Sprintf("date %s %s %s..%s%s", conn, ch, r[0], r[1], desc),
-					sql:  dateSQL, args: []any{conn, ch, r[0], r[1], text, sender, 1 << 20},
-				})
 			}
 		}
 	}

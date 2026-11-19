@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"regexp"
 	"strings"
@@ -54,6 +55,7 @@ func optional(r *http.Request, name string) *string {
 }
 
 // dateSearch answers the channel's messages from {from} through {to},
+// days in the time zone the tz parameter names (UTC without it),
 // filtered by the text and sender parameters, as {"messages": [...],
 // "truncated": bool}.
 func (a *api) dateSearch(w http.ResponseWriter, r *http.Request, user, id string) {
@@ -68,7 +70,16 @@ func (a *api) dateSearch(w http.ResponseWriter, r *http.Request, user, id string
 		respond.Error(w, http.StatusBadRequest, "Search at most 31 days at a time")
 		return
 	}
-	ms, err := channelDate(a.db, r.Context(), id, channel(r), fromS, toS, optional(r, "text"), optional(r, "sender"), dateLimit+1)
+	// the zone the dates are days in: the browser's, UTC for older pages
+	tz := "UTC"
+	if z := optional(r, "tz"); z != nil {
+		tz = *z
+	}
+	ms, err := channelDate(a.db, r.Context(), id, channel(r), fromS, toS, tz, optional(r, "text"), optional(r, "sender"), dateLimit+1)
+	if errors.Is(err, db.ErrUnknownTimeZone) {
+		respond.Error(w, http.StatusBadRequest, fmt.Sprintf("Unknown time zone '%s'", tz))
+		return
+	}
 	if err != nil {
 		if r.Context().Err() == nil && !errors.Is(err, context.Canceled) {
 			respond.Internal(w, "date search", err)

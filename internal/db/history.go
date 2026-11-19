@@ -3,9 +3,12 @@ package db
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"strings"
 
 	sq "github.com/Masterminds/squirrel"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 // The history reads. Message is the stored JSON as it is, in jsonb's key
@@ -78,11 +81,21 @@ func (d *DB) ChannelLast(ctx context.Context, conn, channel string, query *strin
 	return d.messages(ctx, Query("channel_last"), channel, conn, query, limit)
 }
 
+// ErrUnknownTimeZone is ChannelDate's error for a time zone Postgres
+// doesn't know.
+var ErrUnknownTimeZone = errors.New("unknown time zone")
+
 // ChannelDate is the messages of channel on conn from date from through
-// date to, oldest first, at most limit of them; text and sender filter
-// when set.
-func (d *DB) ChannelDate(ctx context.Context, conn, channel, from, to string, text, sender *string, limit int) ([]Message, error) {
-	return d.messages(ctx, Query("channel_date"), conn, channel, from, to, text, sender, limit)
+// date to, days in time zone tz (an IANA name), oldest first, at most limit
+// of them; text and sender filter when set.
+func (d *DB) ChannelDate(ctx context.Context, conn, channel, from, to, tz string, text, sender *string, limit int) ([]Message, error) {
+	ms, err := d.messages(ctx, Query("channel_date"), conn, channel, from, to, text, sender, limit, tz)
+	var pe *pgconn.PgError
+	// invalid_parameter_value: time zone "..." not recognized
+	if errors.As(err, &pe) && pe.Code == "22023" && strings.Contains(pe.Message, "time zone") {
+		return nil, ErrUnknownTimeZone
+	}
+	return ms, err
 }
 
 func (d *DB) messages(ctx context.Context, sql string, args ...any) ([]Message, error) {

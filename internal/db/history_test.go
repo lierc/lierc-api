@@ -3,6 +3,7 @@ package db_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"testing"
 
@@ -140,6 +141,36 @@ func TestChannelLast(t *testing.T) {
 	}
 }
 
+// ChannelDate's days are the time zone's: 03:00 UTC on 2 January is the
+// evening of the 1st in New York, and the morning of the 3rd in Kiritimati
+// (UTC+14) is 10:00 UTC on the 2nd.
+func TestChannelDateTimeZone(t *testing.T) {
+	d := testenv.Postgres(t)
+	ctx := context.Background()
+	a := testenv.AddUser(t, d, "alice")
+	testenv.AddConnection(t, d, "c1", a, "{}")
+	msgRow(t, d, 1, "c1", a, "#a", "x", false, false, "2026-01-02 03:00+00")
+	msgRow(t, d, 2, "c1", a, "#a", "x", false, false, "2026-01-02 10:00+00")
+	for _, c := range []struct {
+		tz, day string
+		want    []int64
+	}{
+		{"UTC", "2026-01-02", []int64{1, 2}},
+		{"America/New_York", "2026-01-01", []int64{1}},
+		{"America/New_York", "2026-01-02", []int64{2}},
+		{"Pacific/Kiritimati", "2026-01-02", []int64{1}},
+		{"Pacific/Kiritimati", "2026-01-03", []int64{2}},
+	} {
+		got, err := d.ChannelDate(ctx, "c1", "#a", c.day, c.day, c.tz, nil, nil, 10)
+		if err != nil || !eq(ids(got, mid), c.want) {
+			t.Errorf("%s in %s = %v, %v; want %v", c.day, c.tz, ids(got, mid), err, c.want)
+		}
+	}
+	if _, err := d.ChannelDate(ctx, "c1", "#a", "2026-01-02", "2026-01-02", "Mars/Olympus", nil, nil, 10); !errors.Is(err, db.ErrUnknownTimeZone) {
+		t.Errorf("unknown zone: err = %v, want ErrUnknownTimeZone", err)
+	}
+}
+
 // ChannelDate returns at most limit messages, the oldest.
 func TestChannelDateLimit(t *testing.T) {
 	d := testenv.Postgres(t)
@@ -149,11 +180,11 @@ func TestChannelDateLimit(t *testing.T) {
 	for i := int64(1); i <= 3; i++ {
 		msgRow(t, d, i, "c1", a, "#a", "x", false, false, "2026-01-02 10:00")
 	}
-	got, err := d.ChannelDate(ctx, "c1", "#a", "2026-01-01", "2026-01-03", nil, nil, 10)
+	got, err := d.ChannelDate(ctx, "c1", "#a", "2026-01-01", "2026-01-03", "UTC", nil, nil, 10)
 	if err != nil || !eq(ids(got, mid), []int64{1, 2, 3}) {
 		t.Errorf("limit 10 = %v, %v", ids(got, mid), err)
 	}
-	got, err = d.ChannelDate(ctx, "c1", "#a", "2026-01-01", "2026-01-03", nil, nil, 2)
+	got, err = d.ChannelDate(ctx, "c1", "#a", "2026-01-01", "2026-01-03", "UTC", nil, nil, 2)
 	if err != nil || !eq(ids(got, mid), []int64{1, 2}) {
 		t.Errorf("limit 2 = %v, %v", ids(got, mid), err)
 	}

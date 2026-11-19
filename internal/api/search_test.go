@@ -102,6 +102,26 @@ func TestDateSearchErrors(t *testing.T) {
 	}
 }
 
+// tz names the time zone the dates are days in; without it they're UTC's.
+// The fixture's messages are at 10:00 UTC on 2 January: the 3rd in
+// Kiritimati (UTC+14).
+func TestDateSearchTimeZone(t *testing.T) {
+	e, a := searchSetup(t)
+	base := "/connection/c1/channel/%23a/date/"
+	for path, want := range map[string]int{
+		base + "2026-01-02/2026-01-02":                         3,
+		base + "2026-01-02/2026-01-02?tz=UTC":                  3,
+		base + "2026-01-02/2026-01-02?tz=Pacific%2FKiritimati": 0,
+		base + "2026-01-03/2026-01-03?tz=Pacific%2FKiritimati": 3,
+		base + "2026-01-02/2026-01-02?tz=America%2FNew_York":   3,
+	} {
+		if r := e.search(path, a); len(r.Messages) != want {
+			t.Errorf("%s: %d messages, want %d", path, len(r.Messages), want)
+		}
+	}
+	e.want(base+"2026-01-02/2026-01-02?tz=Mars%2FOlympus", a, 400, `{"status":"error","error":"Unknown time zone 'Mars/Olympus'"}`)
+}
+
 // Past the limit, the oldest dateLimit messages are sent, marked truncated.
 func TestDateSearchTruncated(t *testing.T) {
 	e, a := searchSetup(t)
@@ -119,7 +139,7 @@ func TestDateSearchTruncated(t *testing.T) {
 }
 
 // swapDate replaces the date search's query for one test.
-func swapDate(t *testing.T, f func(s db.Store, ctx context.Context, conn, channel, from, to string, text, sender *string, limit int) ([]db.Message, error)) {
+func swapDate(t *testing.T, f func(s db.Store, ctx context.Context, conn, channel, from, to, tz string, text, sender *string, limit int) ([]db.Message, error)) {
 	old := channelDate
 	channelDate = f
 	t.Cleanup(func() { channelDate = old })
@@ -127,7 +147,7 @@ func swapDate(t *testing.T, f func(s db.Store, ctx context.Context, conn, channe
 
 func TestDateSearchFails(t *testing.T) {
 	e, a := searchSetup(t)
-	swapDate(t, func(db.Store, context.Context, string, string, string, string, *string, *string, int) ([]db.Message, error) {
+	swapDate(t, func(db.Store, context.Context, string, string, string, string, string, *string, *string, int) ([]db.Message, error) {
 		return nil, errors.New("boom")
 	})
 	e.want(datePath, a, 500, `{"status":"error","error":"internal error"}`)
@@ -136,7 +156,7 @@ func TestDateSearchFails(t *testing.T) {
 // A browser that leaves cancels the query.
 func TestDateSearchCancels(t *testing.T) {
 	e, a := searchSetup(t)
-	swapDate(t, func(_ db.Store, ctx context.Context, _, _, _, _ string, _, _ *string, _ int) ([]db.Message, error) {
+	swapDate(t, func(_ db.Store, ctx context.Context, _, _, _, _, _ string, _, _ *string, _ int) ([]db.Message, error) {
 		_, err := e.db.Pool.Exec(ctx, `SELECT pg_sleep(5) /* date-search-test */`)
 		return nil, err
 	})
@@ -189,7 +209,7 @@ func TestDateSearchStalledClient(t *testing.T) {
 	t.Cleanup(func() { dateWriteTimeout = old })
 	big := json.RawMessage(`{"Params":["#a","` + strings.Repeat("x", 64<<10) + `"]}`)
 	written := make(chan struct{})
-	swapDate(t, func(db.Store, context.Context, string, string, string, string, *string, *string, int) ([]db.Message, error) {
+	swapDate(t, func(db.Store, context.Context, string, string, string, string, string, *string, *string, int) ([]db.Message, error) {
 		ms := make([]db.Message, 200) // ~13 MB
 		for i := range ms {
 			ms[i] = db.Message{MessageId: int64(i + 1), Message: big, ConnectionId: "c1"}
