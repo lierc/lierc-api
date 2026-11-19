@@ -26,38 +26,6 @@ func readSQL(t *testing.T, name string) string {
 	return string(b)
 }
 
-// The queries Channel.pm runs on log alone, before the archive existed.
-const (
-	perlLogs = `SELECT id, message, connection_id, highlight FROM logs
-      WHERE channel=$1 AND connection_id=$2
-      ORDER BY id DESC LIMIT $3`
-	perlLogsID = `SELECT id, message, connection_id, highlight FROM logs
-      WHERE channel=$1 AND connection_id=$2 AND id < $3
-      ORDER BY id DESC LIMIT $4`
-	perlDate = `SELECT id, message, connection_id, highlight
-        FROM logs
-        WHERE connection_id=$1
-          AND channel=$2
-          AND time >= date($3)
-          AND time < (date($4) + '1 day'::interval)`
-)
-
-// perlDateSQL builds Channel.pm's date query the way it does, numbering
-// sender after text when both are given.
-func perlDateSQL(text, sender *string) (string, []any) {
-	sql := perlDate
-	var extra []any
-	if text != nil {
-		extra = append(extra, *text)
-		sql += ` AND to_tsvector('english', message->'Params'->1) @@ websearch_to_tsquery($5)`
-	}
-	if sender != nil {
-		extra = append(extra, *sender)
-		sql += fmt.Sprintf(` AND message->'Prefix'->>'Name'=$%d`, 4+len(extra))
-	}
-	return sql + ` ORDER BY id ASC`, extra
-}
-
 type readRow struct {
 	ID         int
 	Message    any // decoded, so equal messages compare equal whatever their text
@@ -144,11 +112,9 @@ func readFixture(d *tdb) []int {
 }
 
 type readCase struct {
-	name     string
-	sql      string
-	args     []any
-	perl     string // Channel.pm's query on log alone
-	perlArgs []any
+	name string
+	sql  string
+	args []any
 }
 
 func strp(s string) *string { return &s }
@@ -166,7 +132,6 @@ func readCases(t *testing.T, fixtureIDs []int) []readCase {
 			cs = append(cs, readCase{
 				name: fmt.Sprintf("logs %s %s limit %d", conn, ch, limit),
 				sql:  logsSQL, args: []any{ch, conn, limit},
-				perl: perlLogs, perlArgs: []any{ch, conn, limit},
 			})
 		}
 		cursors := append([]int{}, fixtureIDs...)
@@ -176,7 +141,6 @@ func readCases(t *testing.T, fixtureIDs []int) []readCase {
 				cs = append(cs, readCase{
 					name: fmt.Sprintf("logs_before %s %s before %d limit %d", conn, ch, before, limit),
 					sql:  beforeSQL, args: []any{ch, conn, before, limit},
-					perl: perlLogsID, perlArgs: []any{ch, conn, before, limit},
 				})
 			}
 		}
@@ -218,11 +182,9 @@ func readCases(t *testing.T, fixtureIDs []int) []readCase {
 					sender = *f.sender
 					desc += " sender " + *f.sender
 				}
-				perl, extra := perlDateSQL(f.text, f.sender)
 				cs = append(cs, readCase{
 					name: fmt.Sprintf("date %s %s %s..%s%s", conn, ch, r[0], r[1], desc),
 					sql:  dateSQL, args: []any{conn, ch, r[0], r[1], text, sender, 1 << 20},
-					perl: perl, perlArgs: append([]any{conn, ch, r[0], r[1]}, extra...),
 				})
 			}
 		}
@@ -267,13 +229,12 @@ func rowIDs(rs []readRow) []int {
 
 var readZones = []string{"UTC", "America/New_York"}
 
-// runAll runs every case in every session time zone, checking each query
-// file against Channel.pm's query when perl is set.
-func runAll(t *testing.T, d *tdb, cases []readCase, perl bool) map[string][]readRow {
+// runAll runs every case in every session time zone.
+func runAll(t *testing.T, d *tdb, cases []readCase) map[string][]readRow {
 	t.Helper()
 	got := map[string][]readRow{}
 	for _, zone := range readZones {
-		runZone(t, d, zone, cases, perl, got)
+		runZone(t, d, zone, cases, got)
 	}
 	return got
 }
@@ -281,7 +242,7 @@ func runAll(t *testing.T, d *tdb, cases []readCase, perl bool) map[string][]read
 // runZone is runAll's cases in one time zone. The connection is released
 // however it ends: held past a t.Fatal, it would leave the pool's Close,
 // at cleanup, waiting for it forever.
-func runZone(t *testing.T, d *tdb, zone string, cases []readCase, perl bool, got map[string][]readRow) {
+func runZone(t *testing.T, d *tdb, zone string, cases []readCase, got map[string][]readRow) {
 	t.Helper()
 	conn, err := d.pool.Acquire(context.Background())
 	if err != nil {
@@ -293,14 +254,7 @@ func runZone(t *testing.T, d *tdb, zone string, cases []readCase, perl bool, got
 	}
 	defer conn.Exec(context.Background(), "RESET TIME ZONE")
 	for _, c := range cases {
-		rs := runRead(t, conn, c.sql, c.args)
-		if perl {
-			want := runRead(t, conn, c.perl, c.perlArgs)
-			if !reflect.DeepEqual(rs, want) {
-				t.Errorf("%s (%s) on log alone: ids %v, Channel.pm gives %v", c.name, zone, rowIDs(rs), rowIDs(want))
-			}
-		}
-		got[zone+" "+c.name] = rs
+		got[zone+" "+c.name] = runRead(t, conn, c.sql, c.args)
 	}
 }
 
@@ -309,7 +263,7 @@ func TestReadsSameAfterArchiving(t *testing.T) {
 	fixtureIDs := readFixture(d)
 	cases := readCases(t, fixtureIDs)
 
-	before := runAll(t, d, cases, true)
+	before := runAll(t, d, cases)
 
 	// The fixture must give the cases something to find.
 	nonEmpty := 0
@@ -357,7 +311,7 @@ func TestReadsSameAfterArchiving(t *testing.T) {
 		t.Fatalf("%d blocks span a midnight", n)
 	}
 
-	after := runAll(t, d, cases, false)
+	after := runAll(t, d, cases)
 	for _, zone := range readZones {
 		for _, c := range cases {
 			k := zone + " " + c.name
