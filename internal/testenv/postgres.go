@@ -84,12 +84,41 @@ func startPostgres() error {
 	return createTemplate(ctx)
 }
 
+// pgRun is how pgContainer is made: its data on a tmpfs, without fsync,
+// since nothing in it outlives the container, and trust authentication,
+// since it listens only on 127.0.0.1 and holds only test data (SCRAM's
+// key derivation, done in Go on every new connection, took more than
+// half the database tests' time under -race).
+var pgRun = []string{
+	"-e", "POSTGRES_PASSWORD=" + pgPassword, "-e", "POSTGRES_HOST_AUTH_METHOD=trust",
+	"-p", "127.0.0.1::5432", "--tmpfs", "/var/lib/postgresql", pgImage,
+	"-c", "fsync=off", "-c", "synchronous_commit=off", "-c", "full_page_writes=off",
+	"-c", "max_connections=500",
+}
+
+// pgRunLabel is the container label holding a hash of pgRun, so a
+// container made with other settings (an older pgRun, another image) is
+// replaced.
+const pgRunLabel = "lierc-api-test.run"
+
+func pgRunHash() string {
+	sum := sha256.Sum256([]byte(strings.Join(pgRun, "\x00")))
+	return hex.EncodeToString(sum[:])[:12]
+}
+
 // startContainer starts pgContainer, or finds it running (another test
-// process, or an earlier run, started it), and returns its admin URL. Its
-// data is on a tmpfs, without fsync: nothing in it outlives the container.
+// process, or an earlier run, started it), and returns its admin URL.
 func startContainer(ctx context.Context) (string, error) {
 	if _, err := exec.LookPath("docker"); err != nil {
 		return "", errors.New("the tests' Postgres needs docker")
+	}
+	want := pgRunHash()
+	out, err := exec.CommandContext(ctx, "docker", "inspect", "-f",
+		`{{index .Config.Labels "`+pgRunLabel+`"}}`, pgContainer).Output()
+	if err == nil && strings.TrimSpace(string(out)) != want {
+		// made with other settings; another test process may be
+		// replacing it too
+		exec.CommandContext(ctx, "docker", "rm", "-f", pgContainer).Run()
 	}
 	if url, ok := containerURL(ctx); ok {
 		return url, nil
@@ -97,11 +126,8 @@ func startContainer(ctx context.Context) (string, error) {
 	// stopped, or never made: start it, or make it (losing a race with
 	// another test process to make it is fine)
 	if exec.CommandContext(ctx, "docker", "start", pgContainer).Run() != nil {
-		out, err := exec.CommandContext(ctx, "docker", "run", "-d", "--name", pgContainer,
-			"-e", "POSTGRES_PASSWORD="+pgPassword, "-p", "127.0.0.1::5432",
-			"--tmpfs", "/var/lib/postgresql", pgImage,
-			"-c", "fsync=off", "-c", "synchronous_commit=off", "-c", "full_page_writes=off",
-			"-c", "max_connections=500").CombinedOutput()
+		args := append([]string{"run", "-d", "--name", pgContainer, "--label", pgRunLabel + "=" + want}, pgRun...)
+		out, err := exec.CommandContext(ctx, "docker", args...).CombinedOutput()
 		if err != nil && !strings.Contains(string(out), "is already in use") {
 			return "", fmt.Errorf("starting the tests' Postgres (docker run %s): %v: %s", pgImage, err, out)
 		}
