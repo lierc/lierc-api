@@ -22,14 +22,14 @@ func hlRow(t *testing.T, d *db.DB, id int64, conn, user, channel, text string) {
 // Migration 5 copies the highlighted rows of logs, with their columns.
 func TestMigration5CopiesHighlights(t *testing.T) {
 	d := testenv.EmptyPostgres(t)
-	if err := d.Migrate(ctx, db.MigrateOptions{FS: migrationsUpTo(t, 4), Rewrite: noLZ4}); err != nil {
+	if err := d.Migrate(ctx, db.MigrateOptions{FS: migrationsUpTo(t, 4)}); err != nil {
 		t.Fatal(err)
 	}
 	testenv.EnsureConnection(t, d, "c1", "u1")
 	msgRow(t, d, 1, "c1", "u1", "#a", "one", false, false, "2026-01-01")
 	msgRow(t, d, 2, "c1", "u1", "#a", "two", false, true, "2026-01-02")
 	msgRow(t, d, 3, "c1", "u1", "#b", "three", true, true, "2026-01-03")
-	if err := d.Migrate(ctx, db.MigrateOptions{Rewrite: noLZ4}); err != nil {
+	if err := d.Migrate(ctx, db.MigrateOptions{}); err != nil {
 		t.Fatal(err)
 	}
 

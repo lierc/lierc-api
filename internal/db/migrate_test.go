@@ -310,7 +310,7 @@ func TestMigrateWaitStopsOnCancel(t *testing.T) {
 	}
 }
 
-// otherLogin is a DB on the embedded server with one login detail changed.
+// otherLogin is a DB on the tests' server with one login detail changed.
 func otherLogin(t *testing.T, change func(*config.Config)) *db.DB {
 	t.Helper()
 	cc := testenv.EmptyPostgres(t).Pool.Config().ConnConfig
@@ -349,9 +349,7 @@ func TestMigrateFailsFastOnMissingDatabase(t *testing.T) {
 
 func TestEmbeddedMigrationsApply(t *testing.T) {
 	d := testenv.EmptyPostgres(t)
-	err := d.Migrate(ctx, db.MigrateOptions{
-		Rewrite: func(s string) string { return strings.ReplaceAll(s, " compression lz4", "") },
-	})
+	err := d.Migrate(ctx, db.MigrateOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}

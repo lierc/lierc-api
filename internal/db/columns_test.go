@@ -17,7 +17,7 @@ import (
 // min_time index, one entry per block.
 func TestMigration4NoRewrite(t *testing.T) {
 	d := testenv.EmptyPostgres(t)
-	if err := d.Migrate(ctx, db.MigrateOptions{FS: migrationsUpTo(t, 3), Rewrite: noLZ4}); err != nil {
+	if err := d.Migrate(ctx, db.MigrateOptions{FS: migrationsUpTo(t, 3)}); err != nil {
 		t.Fatal(err)
 	}
 	// the tables and every index on them, by name
@@ -40,7 +40,7 @@ func TestMigration4NoRewrite(t *testing.T) {
 		return out
 	}
 	before := filenodes()
-	if err := d.Migrate(ctx, db.MigrateOptions{Rewrite: noLZ4}); err != nil {
+	if err := d.Migrate(ctx, db.MigrateOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	after := filenodes()

@@ -3,15 +3,12 @@ package db_test
 import (
 	"fmt"
 	"os"
-	"strings"
 	"testing"
 	"testing/fstest"
 
 	"github.com/lierc/lierc-api/internal/db"
 	"github.com/lierc/lierc-api/internal/testenv"
 )
-
-func noLZ4(s string) string { return strings.ReplaceAll(s, " compression lz4", "") }
 
 // migrationsUpTo is the embedded migrations numbered up to last.
 func migrationsUpTo(t *testing.T, last int) fstest.MapFS {
@@ -106,7 +103,7 @@ func total(m map[string]int) (n int) {
 // those, before it adds the keys.
 func TestMigration3RemovesOrphans(t *testing.T) {
 	d := testenv.EmptyPostgres(t)
-	if err := d.Migrate(ctx, db.MigrateOptions{FS: migrationsUpTo(t, 2), Rewrite: noLZ4}); err != nil {
+	if err := d.Migrate(ctx, db.MigrateOptions{FS: migrationsUpTo(t, 2)}); err != nil {
 		t.Fatal(err)
 	}
 	seedUser(t, d, "u1")
@@ -123,7 +120,7 @@ func TestMigration3RemovesOrphans(t *testing.T) {
 	)
 	live := rowsOf(t, d, "u1", "c1")
 
-	if err := d.Migrate(ctx, db.MigrateOptions{Rewrite: noLZ4}); err != nil {
+	if err := d.Migrate(ctx, db.MigrateOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	for _, o := range [][2]string{{"gone_user", "cx"}, {"gone_user2", "gone_conn2"}, {"nobody", "gone_conn"}} {

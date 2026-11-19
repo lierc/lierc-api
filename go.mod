@@ -7,7 +7,6 @@ require (
 	github.com/SherClockHolmes/webpush-go v1.4.0
 	github.com/VictoriaMetrics/metrics v1.44.1
 	github.com/ergochat/irc-go v0.7.0
-	github.com/fergusstrange/embedded-postgres v1.32.0
 	github.com/jackc/pgx/v5 v5.7.6
 	github.com/lib/pq v1.12.3
 	github.com/lierc/lierc v0.0.0-20261118222513-710a340f360e
@@ -47,9 +46,9 @@ require (
 	github.com/olekukonko/cat v0.0.0-20250911104152-50322a0618f6 // indirect
 	github.com/olekukonko/errors v1.2.0 // indirect
 	github.com/olekukonko/ll v0.1.6 // indirect
+	github.com/stretchr/testify v1.10.0 // indirect
 	github.com/valyala/fastrand v1.1.0 // indirect
 	github.com/valyala/histogram v1.2.0 // indirect
-	github.com/xi2/xz v0.0.0-20171230120015-48954b6210f8 // indirect
 	golang.org/x/sync v0.24.0 // indirect
 	golang.org/x/sys v0.49.0 // indirect
 )

@@ -5,10 +5,8 @@ import (
 	"testing"
 )
 
-// The template database is built by the migrations. log_archives.messages
-// asks for lz4, which production and the dev stack's Postgres have; the
-// embedded Postgres the tests run is built without it, so the template
-// leaves the compression method out.
+// The template database is built by the migrations, compression lz4 and
+// all: the tests' Postgres is production's version, with lz4.
 func TestTemplateIsMigrated(t *testing.T) {
 	d := Postgres(t)
 	ctx := context.Background()
@@ -36,7 +34,7 @@ func TestTemplateIsMigrated(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if compression != "" {
-		t.Errorf("log_archives.messages compression = %q, want none", compression)
+	if compression != "l" {
+		t.Errorf("log_archives.messages compression = %q, want l (lz4)", compression)
 	}
 }

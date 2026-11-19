@@ -314,10 +314,14 @@ func dbEnv(t *testing.T, d *db.DB, env map[string]string) map[string]string {
 }
 
 // lierc-api applies the migrations before it listens, and exits when one
-// fails. The embedded Postgres lacks lz4, so on an empty database the real
-// 0001_initial fails there.
+// fails: here 0001_initial, on a database that already has one of its
+// tables.
 func TestExitsWhenMigrationFails(t *testing.T) {
-	env := dbEnv(t, testenv.EmptyPostgres(t), map[string]string{
+	d := testenv.EmptyPostgres(t)
+	if _, err := d.Pool.Exec(context.Background(), "CREATE TABLE pref (x int)"); err != nil {
+		t.Fatal(err)
+	}
+	env := dbEnv(t, d, map[string]string{
 		"LISTEN":               "127.0.0.1:0",
 		"ADMIN_LISTEN":         "127.0.0.1:0",
 		"ACCOUNT_TOKEN_SECRET": "acct",

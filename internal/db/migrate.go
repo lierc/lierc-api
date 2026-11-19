@@ -24,6 +24,9 @@ import (
 //go:embed migrations/*.sql
 var embedded embed.FS
 
+// Migrations is the embedded migration files (migrations/NNNN_name.sql).
+func Migrations() fs.FS { return embedded }
+
 // migrateLockKey is the advisory lock Migrate holds while it runs ("lierc").
 const migrateLockKey int64 = 0x6c69657263
 

@@ -94,8 +94,12 @@ Tests
 -----
 
 ```
-go test -p 1 ./...
+go test ./...
 ```
 
-The tests start their own embedded PostgreSQL and nsqd; `-p 1` keeps the
-packages from starting several at once.
+The tests need Docker: the first one to need Postgres starts a container,
+`lierc-api-test-postgres` (production's version), and leaves it running
+for the next run; every test gets its own database, and those a killed run
+left are dropped after an hour. Set `LIERC_TEST_POSTGRES` to a Postgres URL
+to use another server instead. The tests also build and start their own
+nsqd.

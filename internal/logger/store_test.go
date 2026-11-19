@@ -13,7 +13,7 @@ import (
 
 func TestMain(m *testing.M) { testenv.Main(m) }
 
-// testStore is a store on a fresh, migrated database (testenv's embedded
+// testStore is a store on a fresh, migrated database (testenv's
 // Postgres) with connections c1 (user u1, highlight word "leedo") and c2
 // (user u2), and the same database through database/sql.
 func testStore(t *testing.T) (*pgStore, *sql.DB) {
