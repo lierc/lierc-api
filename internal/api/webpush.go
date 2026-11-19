@@ -19,7 +19,7 @@ var (
 	endpointURL = regexp.MustCompile(`\Ahttps://([A-Za-z0-9.-]+)(?::443)?(?:/[!-~]*)?\z`)
 	// The push services browsers use. The notifier POSTs to whatever
 	// endpoint is saved, so only these are accepted; it also refuses
-	// private addresses when sending (lierc pkg/notify/pushclient.go).
+	// private addresses when sending (internal/notify/pushclient.go).
 	pushHosts = []*regexp.Regexp{
 		regexp.MustCompile(`\A(?:fcm\.googleapis\.com)\z`),                  // Chrome, Edge, Opera, Samsung
 		regexp.MustCompile(`\A(?:updates\.push\.services\.mozilla\.com)\z`), // Firefox
