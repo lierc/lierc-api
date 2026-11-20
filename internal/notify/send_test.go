@@ -17,6 +17,7 @@ import (
 	"time"
 
 	webpush "github.com/SherClockHolmes/webpush-go"
+	"github.com/lierc/lierc-api/internal/logger"
 	"golang.org/x/time/rate"
 )
 
@@ -139,7 +140,7 @@ func TestSendEmailFailsPushStillSent(t *testing.T) {
 			EmailEnabled: true, EmailAddress: "u1@example.com",
 			WebPushConfigs: []*WebPushConfig{subscription(t, badURL), subscription(t, okURL)},
 		},
-		Messages: []*LoggedMessage{highlight("c1", time.Now())},
+		Messages: []*logger.LoggedMessage{highlight("c1", time.Now())},
 	})
 	received(t, "good push", ok)
 	received(t, "failing push", bad)
@@ -161,7 +162,7 @@ func TestSendEmailPanicsPushStillSent(t *testing.T) {
 	n.Send(&Notification{
 		User:     "u1",
 		Pref:     &NotificationPref{EmailEnabled: true, EmailAddress: "u1@example.com", WebPushConfigs: []*WebPushConfig{subscription(t, url)}},
-		Messages: []*LoggedMessage{m},
+		Messages: []*logger.LoggedMessage{m},
 	})
 	received(t, "push", got)
 	logs.mustContain(t, "email for u1 failed: panic:", "web push to "+url+" for u1: 201 Created")
@@ -195,7 +196,7 @@ func TestSendEmailHangsPushStillSent(t *testing.T) {
 		n.Send(&Notification{
 			User:     "u1",
 			Pref:     &NotificationPref{EmailEnabled: true, EmailAddress: "u1@example.com", WebPushConfigs: []*WebPushConfig{subscription(t, url)}},
-			Messages: []*LoggedMessage{highlight("c1", time.Now())},
+			Messages: []*logger.LoggedMessage{highlight("c1", time.Now())},
 		})
 		close(done)
 	}()
@@ -213,7 +214,7 @@ func TestSendEmailHangsPushStillSent(t *testing.T) {
 func TestSendNothingEnabled(t *testing.T) {
 	logs := captureLog(t)
 	n := sendNotifier(t, "")
-	n.Send(&Notification{User: "u1", Pref: &NotificationPref{}, Messages: []*LoggedMessage{highlight("c1", time.Now())}})
+	n.Send(&Notification{User: "u1", Pref: &NotificationPref{}, Messages: []*logger.LoggedMessage{highlight("c1", time.Now())}})
 	logs.mustContain(t, "not notifying u1: email off and no web push subscriptions")
 	if n.UserRateLimit("u1") {
 		t.Error("nothing sent but rate limited")
@@ -224,7 +225,7 @@ func TestSendRateLimitedLogged(t *testing.T) {
 	logs := captureLog(t)
 	n := sendNotifier(t, refusedAddr(t))
 	n.Last["u1"] = time.Now()
-	n.Send(&Notification{User: "u1", Pref: &NotificationPref{EmailEnabled: true}, Messages: []*LoggedMessage{highlight("c1", time.Now())}})
+	n.Send(&Notification{User: "u1", Pref: &NotificationPref{EmailEnabled: true}, Messages: []*logger.LoggedMessage{highlight("c1", time.Now())}})
 	logs.mustContain(t, "not notifying u1: notified less than 10m0s ago")
 }
 

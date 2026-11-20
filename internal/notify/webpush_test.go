@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	webpush "github.com/SherClockHolmes/webpush-go"
+	"github.com/lierc/lierc-api/internal/logger"
 )
 
 func TestSendWebPushSendsVAPIDPublicKey(t *testing.T) {
@@ -38,7 +39,7 @@ func TestSendWebPushSendsVAPIDPublicKey(t *testing.T) {
 		VAPIDPrivateKey: private,
 		VAPIDPublicKey:  public,
 	}}
-	res, _, err := n.SendWebPush([]*LoggedMessage{}, &WebPushConfig{
+	res, _, err := n.SendWebPush([]*logger.LoggedMessage{}, &WebPushConfig{
 		Endpoint: srv.URL + "/push/abc",
 		Key:      base64.RawURLEncoding.EncodeToString(browser.PublicKey().Bytes()),
 		Auth:     base64.RawURLEncoding.EncodeToString(secret),

@@ -8,8 +8,8 @@ import (
 	"strings"
 )
 
-// Unsubscribe tokens go in notification emails, made by lierc's notifier,
-// which has its own copy of this format. They don't expire: the token is
+// Unsubscribe tokens go in notification emails, made by the notifier
+// (internal/notify), and are checked here. They don't expire: the token is
 // base64url (unpadded) of "<user>:<mac>", the mac the hex HMAC-SHA256 of
 // "unsubscribe|<user>" keyed by a secret used for nothing else.
 

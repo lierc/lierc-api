@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lierc/lierc/pkg/ircwire"
 	"github.com/lierc/lierc-api/internal/logger"
+	"github.com/lierc/lierc/pkg/ircwire"
 )
 
 func TestNotify(t *testing.T) {
@@ -33,7 +33,7 @@ func TestNotify(t *testing.T) {
 
 func TestNotifyFullQueueDrops(t *testing.T) {
 	n := New(&NotifierConfig{}, nil)
-	n.Queue = make(chan *LoggedMessage, 1)
+	n.Queue = make(chan *logger.LoggedMessage, 1)
 	m := &logger.LoggedMessage{ConnectionId: "c1",
 		Message: &ircwire.IRCMessage{Prefix: &ircwire.IRCPrefix{Name: "bob"}, Params: []string{"#c", "hi"}}}
 

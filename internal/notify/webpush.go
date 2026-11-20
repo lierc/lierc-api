@@ -9,6 +9,7 @@ import (
 	"time"
 
 	webpush "github.com/SherClockHolmes/webpush-go"
+	"github.com/lierc/lierc-api/internal/logger"
 )
 
 type WebPushConfig struct {
@@ -59,7 +60,7 @@ const (
 
 // pushPayload encodes ms for one push, keeping as many messages as fit in
 // maxPushPayload. The first message is always kept.
-func pushPayload(to string, ms []*LoggedMessage) ([]byte, error) {
+func pushPayload(to string, ms []*logger.LoggedMessage) ([]byte, error) {
 	payload := &WebPush{To: to, Count: len(ms), Data: []pushMessage{}}
 	var body []byte
 
@@ -81,7 +82,7 @@ func pushPayload(to string, ms []*LoggedMessage) ([]byte, error) {
 	return body, nil
 }
 
-func trimForPush(m *LoggedMessage) pushMessage {
+func trimForPush(m *logger.LoggedMessage) pushMessage {
 	params := []string{}
 	if len(m.Message.Params) > 0 {
 		params = append(params, m.Message.Params[0])
@@ -111,7 +112,7 @@ func trimForPush(m *LoggedMessage) pushMessage {
 
 // SendWebPush sends m to one subscription and returns the push service's
 // response, with its body already read.
-func (n *Notifier) SendWebPush(m []*LoggedMessage, c *WebPushConfig) (*http.Response, []byte, error) {
+func (n *Notifier) SendWebPush(m []*logger.LoggedMessage, c *WebPushConfig) (*http.Response, []byte, error) {
 	parts := strings.Split(c.Endpoint, "/")
 	id := parts[len(parts)-1]
 

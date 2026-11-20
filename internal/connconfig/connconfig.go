@@ -26,6 +26,7 @@ import (
 	"golang.org/x/text/unicode/norm"
 
 	"github.com/lierc/lierc-api/internal/config"
+	"github.com/lierc/lierc/pkg/ircwire"
 )
 
 // unicodeSpace is the Unicode White_Space property as a character class
@@ -259,24 +260,10 @@ func Clean(raw []byte) (map[string]any, error) {
 	return config, nil
 }
 
-// Addresses liercd must not connect to. The same list is in lierc's
-// pkg/lierc/dialguard.go; keep the two in step.
-var blocked = func() []netip.Prefix {
-	var out []netip.Prefix
-	for _, p := range []string{
-		"0.0.0.0/8", "10.0.0.0/8", "100.64.0.0/10", "127.0.0.0/8", "169.254.0.0/16",
-		"172.16.0.0/12", "192.0.0.0/24", "192.168.0.0/16", "198.18.0.0/15", "224.0.0.0/4",
-		"240.0.0.0/4",
-		"::/128", "::1/128", "fc00::/7", "fe80::/10", "ff00::/8", "64:ff9b::/96",
-	} {
-		out = append(out, netip.MustParsePrefix(p))
-	}
-	return out
-}()
-
-// BlockedIP reports whether liercd must not connect to ip. Anything that
-// isn't a plain address (one with a zone included) is blocked; an IPv4-mapped address is checked as the IPv4
-// address it carries.
+// BlockedIP reports whether liercd must not connect to ip: whether
+// ircwire.BlockedIP, liercd's own check, refuses it. Anything that isn't a
+// plain address (one with a zone included) is blocked too; an IPv4-mapped
+// address is checked as the IPv4 address it carries.
 func BlockedIP(ip string) bool {
 	a, err := netip.ParseAddr(ip)
 	if err != nil || a.Zone() != "" {
@@ -285,13 +272,7 @@ func BlockedIP(ip string) bool {
 	if strings.Contains(ip, ":") != a.Is6() {
 		return true // the text must say the family: ':' for IPv6 only
 	}
-	a = a.Unmap()
-	for _, p := range blocked {
-		if p.Contains(a) {
-			return true
-		}
-	}
-	return false
+	return ircwire.BlockedIP(a) // the list liercd refuses
 }
 
 // Exempt reports whether host and port are the default network

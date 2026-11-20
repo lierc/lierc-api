@@ -15,7 +15,7 @@ type Config struct {
 	// links (ACCOUNT_TOKEN_SECRET).
 	AccountTokenSecret string
 	// UnsubscribeSecret signs the unsubscribe links in notification
-	// emails (UNSUBSCRIBE_SECRET); lierc's notifier has the same one.
+	// emails (UNSUBSCRIBE_SECRET); lierc-logger's notifier reads it too.
 	UnsubscribeSecret string
 	NSQAddr           string
 	Listen            string

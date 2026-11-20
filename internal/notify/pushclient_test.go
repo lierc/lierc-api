@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/lierc/lierc-api/internal/logger"
 	"github.com/lierc/lierc/pkg/ircwire"
 )
 
@@ -40,7 +41,7 @@ func TestSendWebPushRefusesPrivate(t *testing.T) {
 	defer srv.Close()
 	n := sendNotifier(t, "")
 	n.PushHTTP = nil // the real client
-	_, _, err := n.SendWebPush([]*LoggedMessage{highlight("c1", time.Now())}, subscription(t, srv.URL+"/push/abc"))
+	_, _, err := n.SendWebPush([]*logger.LoggedMessage{highlight("c1", time.Now())}, subscription(t, srv.URL+"/push/abc"))
 	if err == nil || !strings.Contains(err.Error(), "private address") || hit {
 		t.Errorf("err %v, hit %v", err, hit)
 	}

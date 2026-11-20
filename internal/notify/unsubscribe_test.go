@@ -8,23 +8,20 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/lierc/lierc-api/internal/accounts"
+	"github.com/lierc/lierc-api/internal/logger"
 )
 
-// the vector lierc-api's accounts test pins too, computed independently
-const unsubscribeVector = "dTE6YWVkODQwMTQ4OTJlZGFiZGM4OWFhNDI2MzRhMTQ5YTc1OWZmNjc1ZDMxNzM0YjkzOGMwYmYzYzZjYjAwOTFmMw"
-
-func TestUnsubscribeTokenVector(t *testing.T) {
-	if got := unsubscribeToken("test-secret", "u1"); got != unsubscribeVector {
-		t.Errorf("token %s, want %s", got, unsubscribeVector)
-	}
-}
+// the token in u1's links; accounts' test pins its value
+var unsubscribeVector = accounts.UnsubscribeToken("test-secret", "u1")
 
 // emailFor is the notification email for one highlight, its headers parsed
 // and its body decoded.
 func emailFor(t *testing.T) (mail.Header, string) {
 	t.Helper()
 	n := &Notifier{Config: &NotifierConfig{APIURL: "https://relaychat.party", UnsubscribeSecret: "test-secret"}}
-	m, err := n.emailMessage([]*LoggedMessage{highlight("c1", time.Now())}, "u1@example.com", "u1")
+	m, err := n.emailMessage([]*logger.LoggedMessage{highlight("c1", time.Now())}, "u1@example.com", "u1")
 	if err != nil {
 		t.Fatal(err)
 	}

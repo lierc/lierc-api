@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/lierc/lierc-api/internal/logger"
 	"github.com/lierc/lierc/pkg/ircwire"
 	"golang.org/x/time/rate"
 )
@@ -38,8 +39,8 @@ func accumulateNotifier(t *testing.T, db *sql.DB) *Notifier {
 	return n
 }
 
-func highlight(connection string, at time.Time) *LoggedMessage {
-	return &LoggedMessage{
+func highlight(connection string, at time.Time) *logger.LoggedMessage {
+	return &logger.LoggedMessage{
 		ConnectionId: connection,
 		MessageId:    1,
 		Message: &ircwire.IRCMessage{
@@ -221,7 +222,7 @@ func TestSendEmailFailure(t *testing.T) {
 	n.Send(&Notification{
 		User:     "u1",
 		Pref:     &NotificationPref{EmailEnabled: true, EmailAddress: "u1@example.com"},
-		Messages: []*LoggedMessage{highlight("c1", time.Now())},
+		Messages: []*logger.LoggedMessage{highlight("c1", time.Now())},
 	})
 	if !n.UserRateLimit("u1") {
 		t.Error("send not recorded")

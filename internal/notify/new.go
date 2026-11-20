@@ -27,28 +27,23 @@ func New(conf *NotifierConfig, db *sql.DB) *Notifier {
 		Mu:            &sync.Mutex{},
 		Limiter:       rate.NewLimiter(1, 5),
 		Config:        conf,
-		Queue:         make(chan *LoggedMessage, QueueSize),
+		Queue:         make(chan *logger.LoggedMessage, QueueSize),
 		db:            db,
 	}
 }
 
 // Notify queues a highlight or private message from the logger, without
 // waiting. A message without a sender or text is dropped, since email and
-// web push need both.
+// web push need both. e is queued as it is; the logger doesn't change it
+// after handing it over.
 func (n *Notifier) Notify(e *logger.LoggedMessage) {
 	if msg := e.Message; msg == nil || msg.Prefix == nil || len(msg.Params) < 2 {
 		log.Printf("not notifying message %d on %s: no sender or text", e.MessageId, e.ConnectionId)
 		return
 	}
 
-	m := &LoggedMessage{
-		Message:      e.Message,
-		ConnectionId: e.ConnectionId,
-		MessageId:    e.MessageId,
-		Highlight:    e.Highlight,
-	}
 	select {
-	case n.Queue <- m:
+	case n.Queue <- e:
 	default:
 		log.Printf("not notifying message %d on %s: notifier queue full", e.MessageId, e.ConnectionId)
 	}

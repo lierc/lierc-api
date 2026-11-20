@@ -10,6 +10,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/lierc/lierc-api/internal/accounts"
+	"github.com/lierc/lierc-api/internal/logger"
 	gomail "github.com/wneessen/go-mail"
 )
 
@@ -95,7 +97,7 @@ func (c *NotifierConfig) SMTPAddress() (string, int) {
 }
 
 // SendEmail emails ms to emailAddress, for user.
-func (n *Notifier) SendEmail(ms []*LoggedMessage, emailAddress, user string) error {
+func (n *Notifier) SendEmail(ms []*logger.LoggedMessage, emailAddress, user string) error {
 	m, err := n.emailMessage(ms, emailAddress, user)
 	if err != nil {
 		return err
@@ -105,7 +107,7 @@ func (n *Notifier) SendEmail(ms []*LoggedMessage, emailAddress, user string) err
 
 // emailMessage is the email of ms, with user's unsubscribe link and the
 // one-click List-Unsubscribe headers (RFC 8058).
-func (n *Notifier) emailMessage(ms []*LoggedMessage, emailAddress, user string) (*gomail.Msg, error) {
+func (n *Notifier) emailMessage(ms []*logger.LoggedMessage, emailAddress, user string) (*gomail.Msg, error) {
 	var (
 		lines   []string
 		subject string
@@ -132,7 +134,7 @@ func (n *Notifier) emailMessage(ms []*LoggedMessage, emailAddress, user string) 
 		}
 	}
 
-	token := unsubscribeToken(n.Config.UnsubscribeSecret, user)
+	token := accounts.UnsubscribeToken(n.Config.UnsubscribeSecret, user)
 
 	m := gomail.NewMsg()
 	if err := m.FromFormat("Relaychat Party", "notifications@relaychat.party"); err != nil {

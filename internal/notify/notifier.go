@@ -6,14 +6,16 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	_ "github.com/lib/pq"
-	"golang.org/x/time/rate"
 	"io/ioutil"
 	"log"
 	"net/http"
 	"strings"
 	"sync"
 	"time"
+
+	_ "github.com/lib/pq"
+	"github.com/lierc/lierc-api/internal/logger"
+	"golang.org/x/time/rate"
 )
 
 type Notifier struct {
@@ -23,7 +25,7 @@ type Notifier struct {
 	Mu            *sync.Mutex
 	Limiter       *rate.Limiter
 	Config        *NotifierConfig
-	Queue         chan *LoggedMessage
+	Queue         chan *logger.LoggedMessage
 
 	// PushHTTP sends web pushes; nil means a client that refuses private
 	// addresses (newPushClient). Tests set it to reach httptest servers.
@@ -139,7 +141,7 @@ func (n *Notifier) RemoveNotification(user string) {
 	}
 }
 
-func (n *Notifier) AddNotification(u string, p *NotificationPref, m *LoggedMessage) {
+func (n *Notifier) AddNotification(u string, p *NotificationPref, m *logger.LoggedMessage) {
 	n.Mu.Lock()
 	defer n.Mu.Unlock()
 
@@ -155,7 +157,7 @@ func (n *Notifier) AddNotification(u string, p *NotificationPref, m *LoggedMessa
 	o := &Notification{
 		Pref:     p,
 		User:     u,
-		Messages: []*LoggedMessage{m},
+		Messages: []*logger.LoggedMessage{m},
 	}
 
 	n.Notifications[u] = o
@@ -190,7 +192,7 @@ func (n *Notifier) Accumulate() {
 
 // accumulate handles one highlight. Errors are logged and the highlight
 // dropped, so one bad message or a database outage never stops the notifier.
-func (n *Notifier) accumulate(m *LoggedMessage) {
+func (n *Notifier) accumulate(m *logger.LoggedMessage) {
 	received := time.Unix(int64(m.Message.Time), 0)
 	if received.Add(maxMessageAge).Before(time.Now()) {
 		log.Printf("discarding highlight %d on %s: too old (%s)", m.MessageId, m.ConnectionId, received.UTC().Format(time.RFC3339))

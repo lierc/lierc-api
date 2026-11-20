@@ -8,9 +8,11 @@ import (
 	"testing"
 	"time"
 	"unicode/utf8"
+
+	"github.com/lierc/lierc-api/internal/logger"
 )
 
-func longHighlight(text string) *LoggedMessage {
+func longHighlight(text string) *logger.LoggedMessage {
 	m := highlight("c1", time.Now())
 	m.Message.Tags = map[string]string{"time": "2026-11-09T12:13:16.123Z", "msgid": strings.Repeat("x", 26)}
 	m.Message.Params[1] = text
@@ -18,7 +20,7 @@ func longHighlight(text string) *LoggedMessage {
 }
 
 func TestPushPayloadFits(t *testing.T) {
-	var ms []*LoggedMessage
+	var ms []*logger.LoggedMessage
 	for i := 0; i < 50; i++ {
 		ms = append(ms, longHighlight(strings.Repeat("é", 1000)))
 	}
@@ -60,7 +62,7 @@ func TestPushPayloadFits(t *testing.T) {
 func TestPushPayloadSmall(t *testing.T) {
 	m := highlight("c1", time.Now())
 	m.Message.Direct = true
-	b, err := pushPayload("abc", []*LoggedMessage{m, highlight("c2", time.Now())})
+	b, err := pushPayload("abc", []*logger.LoggedMessage{m, highlight("c2", time.Now())})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -82,7 +84,7 @@ func TestSendWebPushLargeBacklog(t *testing.T) {
 	}))
 	defer srv.Close()
 	n := sendNotifier(t, "")
-	var ms []*LoggedMessage
+	var ms []*logger.LoggedMessage
 	for i := 0; i < 50; i++ {
 		ms = append(ms, longHighlight(strings.Repeat("a", 280)))
 	}

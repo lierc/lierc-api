@@ -4,6 +4,8 @@ import (
 	"net/http"
 	"testing"
 	"time"
+
+	"github.com/lierc/lierc-api/internal/logger"
 )
 
 func sent() map[string]uint64 {
@@ -40,7 +42,7 @@ func TestSendCountsNotifications(t *testing.T) {
 			EmailEnabled: true, EmailAddress: "u1@example.com",
 			WebPushConfigs: []*WebPushConfig{subscription(t, okURL), subscription(t, badURL), subscription(t, goneURL)},
 		},
-		Messages: []*LoggedMessage{highlight("c1", time.Now())},
+		Messages: []*logger.LoggedMessage{highlight("c1", time.Now())},
 	})
 	received(t, "ok", ok)
 	received(t, "bad", bad)
@@ -65,7 +67,7 @@ func TestSendCountsPanicAsFailure(t *testing.T) {
 	m := highlight("c1", time.Now())
 	m.Message.Prefix = nil
 	before := sent()
-	n.Send(&Notification{User: "u1", Pref: &NotificationPref{EmailEnabled: true, EmailAddress: "u1@example.com"}, Messages: []*LoggedMessage{m}})
+	n.Send(&Notification{User: "u1", Pref: &NotificationPref{EmailEnabled: true, EmailAddress: "u1@example.com"}, Messages: []*logger.LoggedMessage{m}})
 	if got := delta(before, sent()); len(got) != 1 || got["email/failure"] != 1 {
 		t.Errorf("counted %v, want email/failure 1", got)
 	}

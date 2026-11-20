@@ -8,14 +8,14 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/lierc/lierc-api/internal/envfile"
+	"github.com/lierc/lierc-api/internal/config"
 	"github.com/lierc/lierc-api/internal/logger"
 	"github.com/lierc/lierc/pkg/metrics"
 )
 
 func main() {
 	// Production's secrets are files, named by NAME_FILE.
-	getenv, err := envfile.WithFiles(os.Environ(), os.Getenv)
+	getenv, err := config.WithFiles(os.Environ(), os.Getenv)
 	if err != nil {
 		log.Fatal(err)
 	}

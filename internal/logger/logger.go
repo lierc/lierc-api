@@ -50,6 +50,7 @@ type LoggedMessage struct {
 
 // Notifier is sent highlights and private messages once they're stored.
 // Notify must not wait: it runs on the NSQ handler that stores messages.
+// It may keep e; the logger doesn't change e after handing it over.
 type Notifier interface {
 	Notify(e *LoggedMessage)
 }
