@@ -2,12 +2,11 @@ package logger
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"errors"
 	"strings"
 
-	"github.com/lib/pq"
+	"github.com/lierc/lierc-api/internal/db"
 	"github.com/lierc/lierc/pkg/ircwire"
 )
 
@@ -28,135 +27,71 @@ type Store interface {
 	Highlights(ctx context.Context) (map[string]string, error)
 }
 
+// pgStore is the Store on lierc-api's database layer.
 type pgStore struct {
-	db *sql.DB
+	db *db.DB
+}
+
+// entry is m as the database stores it: the line as JSON, the command
+// upper case.
+func entry(connection string, m *ircwire.IRCMessage) (db.LogEntry, error) {
+	v, err := json.Marshal(m)
+	if err != nil {
+		return db.LogEntry{}, err
+	}
+	return db.LogEntry{
+		Connection: connection,
+		Command:    strings.ToUpper(m.Command),
+		Message:    v,
+		Time:       m.Time,
+		Self:       m.Prefix.Self,
+	}, nil
+}
+
+// noConnection turns db.ErrGone, a connection missing or deleted while
+// the insert ran, into ErrNoConnection. Retrying can't help.
+func noConnection(err error) error {
+	if errors.Is(err, db.ErrGone) {
+		return ErrNoConnection
+	}
+	return err
 }
 
 func (s *pgStore) InsertMessage(ctx context.Context, connection string, m *ircwire.IRCMessage, channel string, highlight bool) (int, error) {
-	v, err := json.Marshal(m)
+	e, err := entry(connection, m)
 	if err != nil {
 		return 0, err
 	}
-
-	// a highlight also goes in highlights, which /highlight reads and
-	// archiving leaves alone: same id, same statement
-	var id int
-	err = s.db.QueryRowContext(ctx,
-		`WITH logged AS (
-			INSERT INTO logs (user_id, connection_id, channel, command, message, time, self, highlight)
-			SELECT connections.user_id, connections.id, $2, $3, $4, to_timestamp($5), $6, $7
-			FROM connections WHERE connections.id = $1
-			RETURNING id, user_id, connection_id, channel, time, message, self, highlight
-		), highlighted AS (
-			INSERT INTO highlights (id, user_id, connection_id, channel, time, message, self)
-			SELECT id, user_id, connection_id, channel, time, message, self FROM logged WHERE highlight
-		)
-		SELECT id FROM logged`,
-		connection,
-		strings.ToLower(channel),
-		strings.ToUpper(m.Command),
-		v,
-		m.Time,
-		m.Prefix.Self,
-		highlight,
-	).Scan(&id)
-
-	if err == sql.ErrNoRows || connectionGone(err) {
-		return 0, ErrNoConnection
-	}
-	return id, err
+	id, err := s.db.InsertLog(ctx, e, strings.ToLower(channel), highlight)
+	return int(id), noConnection(err)
 }
 
 func (s *pgStore) InsertMessages(ctx context.Context, connection string, m *ircwire.IRCMessage, channels []string) (int, error) {
 	if len(channels) == 0 {
 		return 0, nil
 	}
-
-	v, err := json.Marshal(m)
+	e, err := entry(connection, m)
 	if err != nil {
 		return 0, err
 	}
-
 	lower := make([]string, len(channels))
 	for i, channel := range channels {
 		lower[i] = strings.ToLower(channel)
 	}
-
-	// one statement for all the channels, in order, so the last id is
-	// the last channel's
-	var id sql.NullInt64
-	err = s.db.QueryRowContext(ctx,
-		`WITH inserted AS (
-			INSERT INTO logs (user_id, connection_id, channel, command, message, time, self, highlight)
-			SELECT connections.user_id, connections.id, c.channel, $3, $4, to_timestamp($5), $6, false
-			FROM connections, unnest($2::text[]) WITH ORDINALITY AS c(channel, n)
-			WHERE connections.id = $1
-			ORDER BY c.n
-			RETURNING id
-		)
-		SELECT max(id) FROM inserted`,
-		connection,
-		pq.Array(lower),
-		strings.ToUpper(m.Command),
-		v,
-		m.Time,
-		m.Prefix.Self,
-	).Scan(&id)
-
-	if connectionGone(err) {
-		return 0, ErrNoConnection
-	}
-	if err != nil {
-		return 0, err
-	}
-	if !id.Valid {
-		return 0, ErrNoConnection
-	}
-	return int(id.Int64), nil
+	id, err := s.db.InsertLogs(ctx, e, lower)
+	return int(id), noConnection(err)
 }
 
 // InsertPrivate records the time of a private message with nick on
 // connection; for a connection that's gone it stores nothing.
 func (s *pgStore) InsertPrivate(ctx context.Context, connection string, nick string, time float64) error {
-	_, err := s.db.ExecContext(ctx,
-		`INSERT INTO private_chats (connection_id, nick, time)
-		SELECT id, $2, to_timestamp($3) FROM connections WHERE id = $1
-		ON CONFLICT (connection_id, nick) DO UPDATE SET time = to_timestamp($3)`,
-		connection,
-		nick,
-		time,
-	)
-	if connectionGone(err) {
+	err := s.db.SavePrivateAt(ctx, connection, nick, time)
+	if errors.Is(err, db.ErrGone) {
 		return nil
 	}
 	return err
 }
 
-// connectionGone reports whether err is a key violation (23503): the
-// connection was deleted while the insert ran, and with it everything of
-// its. Retrying can't help, so it's treated like a missing connection.
-func connectionGone(err error) bool {
-	var pqErr *pq.Error
-	return errors.As(err, &pqErr) && pqErr.Code == "23503"
-}
-
 func (s *pgStore) Highlights(ctx context.Context) (map[string]string, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT id, config->>'Highlight' FROM connections`)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	configs := make(map[string]string)
-	for rows.Next() {
-		var id string
-		var highlight sql.NullString
-		if err := rows.Scan(&id, &highlight); err != nil {
-			return nil, err
-		}
-		if highlight.Valid {
-			configs[id] = highlight.String
-		}
-	}
-	return configs, rows.Err()
+	return s.db.HighlightWords(ctx)
 }

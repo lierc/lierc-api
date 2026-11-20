@@ -247,3 +247,26 @@ func TestDefaultNetworkPort(t *testing.T) {
 		}
 	}
 }
+
+// LoadDB reads the database settings as Load does, and nothing else: an
+// API setting Load would refuse doesn't matter to it.
+func TestLoadDB(t *testing.T) {
+	e := env(map[string]string{"POSTGRES_HOST": "db:5433", "POSTGRES_USER": "u", "POSTGRES_PASSWORD": "p",
+		"POSTGRES_DB": "d", "DB_MAX_CONNS": "5", "API_SECURE": "maybe"})
+	c, err := LoadDB(e)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := Config{DBHost: "db:5433", DBUser: "u", DBPass: "p", DBName: "d", DBMaxConns: 5}
+	if !reflect.DeepEqual(c, want) {
+		t.Errorf("LoadDB = %+v, want %+v", c, want)
+	}
+
+	c, err = LoadDB(env(nil))
+	if err != nil || c.DBHost != "127.0.0.1" || c.DBName != "lierc" || c.DBMaxConns != DefaultDBMaxConns {
+		t.Errorf("defaults: %+v %v", c, err)
+	}
+	if _, err := LoadDB(env(map[string]string{"DB_MAX_CONNS": "0"})); err == nil {
+		t.Error("DB_MAX_CONNS=0 accepted")
+	}
+}

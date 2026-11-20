@@ -8,7 +8,6 @@ require (
 	github.com/VictoriaMetrics/metrics v1.44.1
 	github.com/ergochat/irc-go v0.7.0
 	github.com/jackc/pgx/v5 v5.7.6
-	github.com/lib/pq v1.12.3
 	github.com/lierc/lierc v0.0.0-20261118222513-710a340f360e
 	github.com/nsqio/go-nsq v1.1.0
 	github.com/olekukonko/tablewriter v1.1.5

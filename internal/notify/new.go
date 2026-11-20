@@ -1,7 +1,6 @@
 package notify
 
 import (
-	"database/sql"
 	"fmt"
 	"log"
 	"net/http"
@@ -17,9 +16,9 @@ import (
 // highlight that finds the queue full is dropped.
 const QueueSize = 500
 
-// New returns a notifier that uses db, the logger's pool. Run Accumulate
-// to process what Notify queues.
-func New(conf *NotifierConfig, db *sql.DB) *Notifier {
+// New returns a notifier that uses store, the logger's database. Run
+// Accumulate to process what Notify queues.
+func New(conf *NotifierConfig, store Store) *Notifier {
 	return &Notifier{
 		Client:        &http.Client{},
 		Notifications: make(map[string]*Notification),
@@ -28,7 +27,7 @@ func New(conf *NotifierConfig, db *sql.DB) *Notifier {
 		Limiter:       rate.NewLimiter(1, 5),
 		Config:        conf,
 		Queue:         make(chan *logger.LoggedMessage, QueueSize),
-		db:            db,
+		store:         store,
 	}
 }
 

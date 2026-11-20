@@ -9,30 +9,19 @@ package logger
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
 	"time"
 
-	"github.com/lib/pq"
+	"github.com/lierc/lierc-api/internal/db"
 	"github.com/lierc/lierc/pkg/ircwire"
 	"github.com/nsqio/go-nsq"
 )
 
 type Config struct {
-	DBUser   string
-	DBPass   string
-	DBHost   string
-	DBName   string
 	NSQDHost string
-	// most database connections to open; 0 means no limit
-	MaxDBConns int
-}
-
-func (c *Config) dsn() string {
-	return fmt.Sprintf("user=%s password=%s dbname=%s host=%s sslmode=disable", c.DBUser, c.DBPass, c.DBName, c.DBHost)
 }
 
 func (c *Config) nsqd() string {
@@ -61,34 +50,32 @@ type publisher interface {
 
 type Logger struct {
 	config     *Config
-	db         *sql.DB
+	db         *db.DB
 	store      Store
 	pub        publisher
 	producer   *nsq.Producer
 	consumers  []*nsq.Consumer
-	listener   *pq.Listener
 	highlights *Highlighters
+	// stopListening stops listenForHighlights' goroutine; listening is
+	// closed when it has
+	stopListening context.CancelFunc
+	listening     chan struct{}
 	// notifier is nil when notifications are off
 	notifier Notifier
 }
 
-func New(config *Config) (*Logger, error) {
-	db, err := sql.Open("postgres", config.dsn())
-	if err != nil {
-		return nil, err
-	}
-	db.SetMaxOpenConns(config.MaxDBConns)
-
+// New returns a logger that stores messages in d. d stays the caller's to
+// close, after Stop.
+func New(config *Config, d *db.DB) (*Logger, error) {
 	producer, err := nsq.NewProducer(config.nsqd(), nsq.NewConfig())
 	if err != nil {
-		db.Close()
 		return nil, err
 	}
 
 	return &Logger{
 		config:     config,
-		db:         db,
-		store:      &pgStore{db: db},
+		db:         d,
+		store:      &pgStore{db: d},
 		pub:        producer,
 		producer:   producer,
 		highlights: &Highlighters{},
@@ -100,7 +87,7 @@ func New(config *Config) (*Logger, error) {
 // and nsqd to be reachable, so it can start before they do.
 func (l *Logger) Start(ctx context.Context) error {
 	err := retry(ctx, "connecting to postgres", func() error {
-		return l.db.PingContext(ctx)
+		return l.db.Pool.Ping(ctx)
 	})
 	if err != nil {
 		return err
@@ -112,9 +99,7 @@ func (l *Logger) Start(ctx context.Context) error {
 	if err := l.loadHighlights(ctx); err != nil {
 		return err
 	}
-	if err := l.listenForHighlights(ctx); err != nil {
-		return err
-	}
+	l.listenForHighlights(ctx)
 
 	for topic, handler := range map[string]nsq.HandlerFunc{
 		"chats": l.handleChat,
@@ -177,12 +162,8 @@ func (l *Logger) SetNotifier(n Notifier) {
 	l.notifier = n
 }
 
-// DB is the logger's database pool, shared with the notifier.
-func (l *Logger) DB() *sql.DB {
-	return l.db
-}
-
-// Stop finishes the messages in flight, then disconnects.
+// Stop finishes the messages in flight, then disconnects. It leaves the
+// database pool open.
 func (l *Logger) Stop() {
 	for _, consumer := range l.consumers {
 		consumer.Stop()
@@ -191,10 +172,10 @@ func (l *Logger) Stop() {
 		<-consumer.StopChan
 	}
 	l.producer.Stop()
-	if l.listener != nil {
-		l.listener.Close()
+	if l.stopListening != nil {
+		l.stopListening()
+		<-l.listening
 	}
-	l.db.Close()
 }
 
 func (l *Logger) handleChat(n *nsq.Message) error {
@@ -330,25 +311,16 @@ func (l *Logger) readHighlights(ctx context.Context) error {
 	return nil
 }
 
-// listenForHighlights reloads highlights whenever the API sends
-// NOTIFY highlights, and after reconnecting, in case one was missed.
-func (l *Logger) listenForHighlights(ctx context.Context) error {
-	l.listener = pq.NewListener(l.config.dsn(), 10*time.Second, time.Minute,
-		func(ev pq.ListenerEventType, err error) {
-			if err != nil {
-				log.Printf("highlight listener: %v", err)
-			}
-		})
-
-	if err := l.listener.Listen("highlights"); err != nil {
-		return fmt.Errorf("listening for highlight changes: %w", err)
-	}
-
+// listenForHighlights reloads the highlights whenever the API sends
+// NOTIFY highlights, and on each (re)connect of its listening connection,
+// in case one was missed, until Stop.
+func (l *Logger) listenForHighlights(ctx context.Context) {
+	ctx, l.stopListening = context.WithCancel(ctx)
+	l.listening = make(chan struct{})
 	go func() {
-		for range l.listener.Notify {
-			l.reloadHighlights(ctx)
-		}
+		defer close(l.listening)
+		l.db.ListenHighlights(ctx, reconnectInterval,
+			func() { l.reloadHighlights(ctx) },
+			func(err error) { log.Printf("highlight listener: %v (retrying in %s)", err, reconnectInterval) })
 	}()
-
-	return nil
 }

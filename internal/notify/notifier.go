@@ -2,7 +2,6 @@ package notify
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -13,7 +12,7 @@ import (
 	"sync"
 	"time"
 
-	_ "github.com/lib/pq"
+	"github.com/lierc/lierc-api/internal/db"
 	"github.com/lierc/lierc-api/internal/logger"
 	"golang.org/x/time/rate"
 )
@@ -32,8 +31,14 @@ type Notifier struct {
 	PushHTTP *http.Client
 	pushOnce sync.Once
 
-	// db is the logger's pool, shared.
-	db *sql.DB
+	// store is the logger's database, shared; nil in some tests
+	store Store
+}
+
+// Store is the notifier's queries; *db.DB has them.
+type Store interface {
+	NotifyTarget(ctx context.Context, conn string) (db.NotifyTarget, bool, error)
+	DeleteWebPush(ctx context.Context, user, endpoint string) error
 }
 
 const DefaultUserRateLimit = 10 * time.Minute
@@ -172,14 +177,6 @@ func (n *Notifier) AddNotification(u string, p *NotificationPref, m *logger.Logg
 	})
 }
 
-// DB returns the pool New was given.
-func (n *Notifier) DB() (*sql.DB, error) {
-	if n.db == nil {
-		return nil, errors.New("no database")
-	}
-	return n.db, nil
-}
-
 // maxMessageAge is how old a highlight may be before it is discarded rather
 // than notified, e.g. after the logger was down and nsqd replays a backlog of chats.
 const maxMessageAge = 5 * time.Minute
@@ -217,67 +214,22 @@ func (n *Notifier) accumulate(m *logger.LoggedMessage) {
 
 // lookup finds the user who owns a connection and how to notify them.
 func (n *Notifier) lookup(connection string) (string, *NotificationPref, error) {
-	db, err := n.DB()
-	if err != nil {
-		return "", nil, err
+	if n.store == nil {
+		return "", nil, errors.New("no database")
 	}
-
-	var (
-		user         string
-		emailPref    sql.NullString
-		emailAddress string
-		confirmed    bool
-	)
-
-	// confirmed: verified, or NULL for an account from before email
-	// confirmation. Signups can use relaychat before confirming, and an
-	// unconfirmed address may be someone else's, so it gets no email.
-	err = db.QueryRow(`
-		SELECT u.email, u.id, p.value, coalesce(u.verified, true)
-			FROM connections AS c
-		JOIN users AS u
-			ON c.user_id = u.id
-		LEFT JOIN prefs AS p
-			ON p.user_id = u.id
-			AND p.name = 'email'
-		WHERE c.id=$1
-	  `, connection,
-	).Scan(&emailAddress, &user, &emailPref, &confirmed)
-	if err == sql.ErrNoRows {
-		return "", nil, fmt.Errorf("unknown connection")
-	}
+	t, ok, err := n.store.NotifyTarget(context.Background(), connection)
 	if err != nil {
 		return "", nil, fmt.Errorf("looking up connection: %w", err)
 	}
-
-	rows, err := db.Query(`
-		SELECT endpoint, auth, key
-			FROM web_push_subscriptions
-		WHERE user_id=$1
-		`, user,
-	)
-	if err != nil {
-		return "", nil, fmt.Errorf("looking up web push: %w", err)
-	}
-	defer rows.Close()
-
-	var webpushConfigs []*WebPushConfig
-	for rows.Next() {
-		c := &WebPushConfig{User: user}
-		if err := rows.Scan(&c.Endpoint, &c.Auth, &c.Key); err != nil {
-			return "", nil, fmt.Errorf("reading web push: %w", err)
-		}
-		webpushConfigs = append(webpushConfigs, c)
-	}
-	if err := rows.Err(); err != nil {
-		return "", nil, fmt.Errorf("reading web push: %w", err)
+	if !ok {
+		return "", nil, fmt.Errorf("unknown connection")
 	}
 
-	return user, &NotificationPref{
-		WebPushConfigs: webpushConfigs,
-		EmailEnabled:   confirmed && emailPref.Valid && emailPref.String == "true",
-		EmailAddress:   emailAddress,
-	}, nil
+	p := &NotificationPref{EmailEnabled: t.EmailOn, EmailAddress: t.Email}
+	for _, w := range t.WebPush {
+		p.WebPushConfigs = append(p.WebPushConfigs, &WebPushConfig{User: t.User, Endpoint: w.Endpoint, Key: w.Key, Auth: w.Auth})
+	}
+	return t.User, p, nil
 }
 
 func (n *Notifier) userRateLimit() time.Duration {
@@ -407,16 +359,10 @@ func (n *Notifier) sendWebPush(o *Notification, c *WebPushConfig) bool {
 }
 
 func (n *Notifier) DeleteWebPushConfig(c *WebPushConfig) {
-	db, err := n.DB()
-	if err != nil {
-		log.Printf("deleting web push %s for %s: %v", c.Endpoint, c.User, err)
-		return
+	err := errors.New("no database")
+	if n.store != nil {
+		err = n.store.DeleteWebPush(context.Background(), c.User, c.Endpoint)
 	}
-	_, err = db.Exec(`
-	  DELETE FROM web_push_subscriptions
-		WHERE user_id=$1 AND endpoint=$2
-	`, c.User, c.Endpoint)
-
 	if err != nil {
 		log.Printf("deleting web push %s for %s: %v", c.Endpoint, c.User, err)
 	}

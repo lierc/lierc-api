@@ -61,24 +61,52 @@ type DefaultNetwork struct {
 // DefaultDBMaxConns is the DB_MAX_CONNS default.
 const DefaultDBMaxConns = 20
 
+// orElse is getenv's value for key, or def when that's empty.
+func orElse(getenv func(string) string, key, def string) string {
+	if v := getenv(key); v != "" {
+		return v
+	}
+	return def
+}
+
+// LoadDB builds a Config with only the database settings, read as Load
+// reads them (POSTGRES_*, DB_MAX_CONNS), for lierc-logger, which has none
+// of the API's other settings. An empty variable counts as unset.
+func LoadDB(getenv func(string) string) (Config, error) {
+	c := Config{
+		DBHost: orElse(getenv, "POSTGRES_HOST", "127.0.0.1"),
+		DBUser: getenv("POSTGRES_USER"),
+		DBPass: getenv("POSTGRES_PASSWORD"),
+		DBName: orElse(getenv, "POSTGRES_DB", "lierc"),
+	}
+	if s := getenv("DB_MAX_CONNS"); s == "" {
+		c.DBMaxConns = DefaultDBMaxConns
+	} else if n, err := strconv.ParseInt(s, 10, 32); err != nil || n <= 0 {
+		return Config{}, fmt.Errorf("DB_MAX_CONNS: %q is not a positive integer", s)
+	} else {
+		c.DBMaxConns = int(n)
+	}
+	return c, nil
+}
+
 // Load builds a Config. An empty variable counts as unset.
 func Load(getenv func(string) string) (Config, error) {
-	or := func(key, def string) string {
-		if v := getenv(key); v != "" {
-			return v
-		}
-		return def
-	}
+	or := func(key, def string) string { return orElse(getenv, key, def) }
 
+	db, err := LoadDB(getenv)
+	if err != nil {
+		return Config{}, err
+	}
 	c := Config{
+		DBHost:             db.DBHost,
+		DBUser:             db.DBUser,
+		DBPass:             db.DBPass,
+		DBName:             db.DBName,
+		DBMaxConns:         db.DBMaxConns,
 		VAPIDPublic:        getenv("VAPID_PUBLIC"),
 		Origins:            origins(getenv),
 		LiercdHost:         or("LIERCD_HOST", "127.0.0.1"),
 		LiercdNextHost:     or("LIERCD_NEXT_HOST", ""),
-		DBHost:             or("POSTGRES_HOST", "127.0.0.1"),
-		DBUser:             or("POSTGRES_USER", ""),
-		DBPass:             or("POSTGRES_PASSWORD", ""),
-		DBName:             or("POSTGRES_DB", "lierc"),
 		AccountTokenSecret: getenv("ACCOUNT_TOKEN_SECRET"),
 		UnsubscribeSecret:  getenv("UNSUBSCRIBE_SECRET"),
 		NSQAddr:            or("NSQD_HOST", "127.0.0.1"),
@@ -99,14 +127,6 @@ func Load(getenv func(string) string) (Config, error) {
 		}
 	}
 
-	if s := getenv("DB_MAX_CONNS"); s == "" {
-		c.DBMaxConns = DefaultDBMaxConns
-	} else if n, err := strconv.ParseInt(s, 10, 32); err != nil || n <= 0 {
-		return Config{}, fmt.Errorf("DB_MAX_CONNS: %q is not a positive integer", s)
-	} else {
-		c.DBMaxConns = int(n)
-	}
-	var err error
 	if host := getenv("DEFAULT_NETWORK_HOST"); host != "" {
 		n := &DefaultNetwork{
 			Host:     host,

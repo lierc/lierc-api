@@ -1,24 +1,26 @@
 package notify
 
 import (
-	"database/sql"
+	"context"
 	"fmt"
 	"net"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/lierc/lierc-api/internal/config"
+	"github.com/lierc/lierc-api/internal/db"
 	"github.com/lierc/lierc-api/internal/logger"
+	"github.com/lierc/lierc-api/internal/testenv"
 	"github.com/lierc/lierc/pkg/ircwire"
 	"golang.org/x/time/rate"
 )
 
 // accumulateNotifier has no open streams and a delay long enough that no
 // notification is sent during a test.
-func accumulateNotifier(t *testing.T, db *sql.DB) *Notifier {
+func accumulateNotifier(t *testing.T, store Store) *Notifier {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte(`{}`))
 	}))
@@ -30,7 +32,7 @@ func accumulateNotifier(t *testing.T, db *sql.DB) *Notifier {
 		Mu:            &sync.Mutex{},
 		Config:        &NotifierConfig{APIStats: srv.URL + "/stats", Delay: time.Hour},
 	}
-	n.db = db
+	n.store = store
 	t.Cleanup(func() {
 		for _, o := range n.Notifications {
 			o.Timer.Stop()
@@ -54,12 +56,12 @@ func highlight(connection string, at time.Time) *logger.LoggedMessage {
 
 // With the database down, a highlight is dropped instead of panicking.
 func TestAccumulateDatabaseDown(t *testing.T) {
-	db, err := sql.Open("postgres", "host=127.0.0.1 port=1 sslmode=disable connect_timeout=1")
+	d, err := db.Open(context.Background(), config.Config{DBHost: "127.0.0.1:1", DBName: "lierc"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
-	n := accumulateNotifier(t, db)
+	defer d.Close()
+	n := accumulateNotifier(t, d)
 	n.accumulate(highlight("c1", time.Now()))
 	if len(n.Notifications) != 0 {
 		t.Errorf("notified: %v", n.Notifications)
@@ -91,48 +93,30 @@ func TestUserRateLimitConcurrent(t *testing.T) {
 	}
 }
 
-// Runs against a real Postgres when NOTIFY_TEST_DSN is set, e.g.
-// "user=postgres password=test host=localhost port=5432 sslmode=disable".
-// The tables are created in a temporary schema that's dropped after.
-func testDB(t *testing.T) *sql.DB {
-	dsn := os.Getenv("NOTIFY_TEST_DSN")
-	if dsn == "" {
-		t.Skip("NOTIFY_TEST_DSN not set")
-	}
-	db, err := sql.Open("postgres", dsn)
-	if err != nil {
-		t.Fatal(err)
-	}
-	// one connection, so search_path applies to every query
-	db.SetMaxOpenConns(1)
+func TestMain(m *testing.M) { testenv.Main(m) }
 
-	schema := fmt.Sprintf("notify_test_%d", time.Now().UnixNano())
+// testDB is a fresh, migrated database (testenv's Postgres) with
+// connections c1 (user u1: confirmed, email on, two push subscriptions)
+// and c2 (user u2: email off).
+func testDB(t *testing.T) *db.DB {
+	d := testenv.Postgres(t)
+	testenv.EnsureConnection(t, d, "c1", "u1")
+	testenv.EnsureConnection(t, d, "c2", "u2")
 	for _, q := range []string{
-		"CREATE SCHEMA " + schema,
-		"SET search_path TO " + schema,
-		`CREATE TABLE users (id varchar(24) primary key, email varchar(255) not null, verified boolean)`,
-		`CREATE TABLE connections (id varchar(24) primary key, user_id varchar(24) not null)`,
-		`CREATE TABLE prefs (user_id varchar(24) not null, name varchar(255) not null, value text not null)`,
-		`CREATE TABLE web_push_subscriptions (endpoint varchar(255) not null, key varchar(255) not null,
-			auth varchar(255) not null, user_id varchar(24) not null, primary key (user_id, endpoint))`,
-		// u1 confirmed; u4 from before confirmation (NULL); u5 not confirmed
-		`INSERT INTO users VALUES ('u1', 'u1@example.com', true), ('u2', 'u2@example.com', true),
-			('u4', 'u4@example.com', NULL), ('u5', 'u5@example.com', false)`,
-		`INSERT INTO connections VALUES ('c1', 'u1'), ('c2', 'u2'), ('c3', 'gone'), ('c4', 'u4'), ('c5', 'u5')`,
-		`INSERT INTO prefs VALUES ('u1', 'email', 'true'), ('u2', 'email', 'false'), ('u4', 'email', 'true'), ('u5', 'email', 'true')`,
-		`INSERT INTO web_push_subscriptions VALUES ('https://push.example/a', 'ka', 'aa', 'u1'), ('https://push.example/b', 'kb', 'ab', 'u1')`,
+		`UPDATE users SET email = id || '@example.com'`,
+		`INSERT INTO prefs (user_id, name, value) VALUES ('u1', 'email', 'true'), ('u2', 'email', 'false')`,
+		`INSERT INTO web_push_subscriptions (endpoint, key, auth, user_id) VALUES
+			('https://push.example/a', 'ka', 'aa', 'u1'), ('https://push.example/b', 'kb', 'ab', 'u1')`,
 	} {
-		if _, err := db.Exec(q); err != nil {
+		if _, err := d.Pool.Exec(context.Background(), q); err != nil {
 			t.Fatal(err)
 		}
 	}
-	t.Cleanup(func() {
-		db.Exec("DROP SCHEMA " + schema + " CASCADE")
-		db.Close()
-	})
-	return db
+	return d
 }
 
+// lookup turns the database's answer into a NotificationPref; which
+// addresses get email is db.NotifyTarget's, and tested there.
 func TestLookup(t *testing.T) {
 	n := accumulateNotifier(t, testDB(t))
 
@@ -154,20 +138,8 @@ func TestLookup(t *testing.T) {
 		t.Errorf("c2: %s %+v %v", user, p, err)
 	}
 
-	// email goes only to a confirmed address, or one from before
-	// confirmation: an unconfirmed one may be someone else's
-	if _, p, err := n.lookup("c4"); err != nil || !p.EmailEnabled {
-		t.Errorf("c4 (verified NULL): %+v %v", p, err)
-	}
-	if _, p, err := n.lookup("c5"); err != nil || p.EmailEnabled {
-		t.Errorf("c5 (unconfirmed): email enabled %+v %v", p, err)
-	}
-
-	// No connection, or one whose user is gone.
-	for _, c := range []string{"nope", "c3"} {
-		if _, _, err := n.lookup(c); err == nil || err.Error() != "unknown connection" {
-			t.Errorf("%s: %v", c, err)
-		}
+	if _, _, err := n.lookup("nope"); err == nil || err.Error() != "unknown connection" {
+		t.Errorf("nope: %v", err)
 	}
 }
 
@@ -187,8 +159,8 @@ func TestAccumulate(t *testing.T) {
 		t.Errorf("notifications: %+v", n.Notifications)
 	}
 
-	// Many highlights in a row on a one-connection pool: each lookup must
-	// release its connection, or the next one blocks.
+	// More highlights in a row than the pool has connections: each lookup
+	// must release its connection, or a later one blocks.
 	done := make(chan struct{})
 	go func() {
 		for i := 0; i < 20; i++ {

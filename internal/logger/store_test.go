@@ -2,11 +2,11 @@ package logger
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/lierc/lierc-api/internal/testenv"
 	"github.com/lierc/lierc/pkg/ircwire"
 )
@@ -15,20 +15,15 @@ func TestMain(m *testing.M) { testenv.Main(m) }
 
 // testStore is a store on a fresh, migrated database (testenv's
 // Postgres) with connections c1 (user u1, highlight word "leedo") and c2
-// (user u2), and the same database through database/sql.
-func testStore(t *testing.T) (*pgStore, *sql.DB) {
+// (user u2), and a pool on that database for checking what it stored.
+func testStore(t *testing.T) (*pgStore, *pgxpool.Pool) {
 	d := testenv.Postgres(t)
 	testenv.EnsureConnection(t, d, "c1", "u1")
 	testenv.EnsureConnection(t, d, "c2", "u2")
 	if _, err := d.Pool.Exec(context.Background(), `UPDATE connections SET config = '{"Highlight": ["leedo"]}' WHERE id = 'c1'`); err != nil {
 		t.Fatal(err)
 	}
-	db, err := sql.Open("postgres", testenv.DSN(d))
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { db.Close() })
-	return &pgStore{db: db}, db
+	return &pgStore{db: d}, d.Pool.Pool
 }
 
 func TestStoreInsertMessage(t *testing.T) {
@@ -44,7 +39,7 @@ func TestStoreInsertMessage(t *testing.T) {
 	var user, channel, command, text string
 	var highlight bool
 	var at time.Time
-	err = db.QueryRow(`SELECT user_id, channel, command, highlight, time, message->'Params'->>1 FROM logs WHERE id = $1`, id).
+	err = db.QueryRow(context.Background(), `SELECT user_id, channel, command, highlight, time, message->'Params'->>1 FROM logs WHERE id = $1`, id).
 		Scan(&user, &channel, &command, &highlight, &at, &text)
 	if err != nil {
 		t.Fatal(err)
@@ -55,7 +50,7 @@ func TestStoreInsertMessage(t *testing.T) {
 
 	// a highlight gets its highlights row too, with the same id and columns
 	var n int
-	err = db.QueryRow(`SELECT count(*) FROM highlights h JOIN logs l USING (id)
+	err = db.QueryRow(context.Background(), `SELECT count(*) FROM highlights h JOIN logs l USING (id)
 		WHERE id = $1 AND h.user_id = l.user_id AND h.connection_id = l.connection_id AND h.channel = l.channel
 		  AND h.time = l.time AND h.message = l.message AND h.self = l.self`, id).Scan(&n)
 	if err != nil || n != 1 {
@@ -65,7 +60,7 @@ func TestStoreInsertMessage(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	db.QueryRow(`SELECT count(*) FROM highlights WHERE id = $1`, plain).Scan(&n)
+	db.QueryRow(context.Background(), `SELECT count(*) FROM highlights WHERE id = $1`, plain).Scan(&n)
 	if n != 0 {
 		t.Errorf("a message that isn't a highlight got a highlights row")
 	}
@@ -85,7 +80,7 @@ func TestStoreInsertMessages(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	rows, err := db.Query(`SELECT id, channel FROM logs ORDER BY id`)
+	rows, err := db.Query(context.Background(), `SELECT id, channel FROM logs ORDER BY id`)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -126,7 +121,7 @@ func TestStoreInsertPrivate(t *testing.T) {
 
 	var count int
 	var at time.Time
-	db.QueryRow(`SELECT count(*), max(time) FROM private_chats`).Scan(&count, &at)
+	db.QueryRow(context.Background(), `SELECT count(*), max(time) FROM private_chats`).Scan(&count, &at)
 	if count != 1 || at.Unix() != 1700000100 {
 		t.Errorf("private: %d rows, time %v; want one row, updated", count, at)
 	}
@@ -152,7 +147,7 @@ func TestInsertPrivateMissingConnection(t *testing.T) {
 		t.Fatalf("err = %v", err)
 	}
 	var n int
-	db.QueryRow(`SELECT count(*) FROM private_chats`).Scan(&n)
+	db.QueryRow(context.Background(), `SELECT count(*) FROM private_chats`).Scan(&n)
 	if n != 0 {
 		t.Errorf("%d private rows, want 0", n)
 	}
@@ -169,7 +164,7 @@ func TestInsertKeyViolationIsNoConnection(t *testing.T) {
 		`CREATE TRIGGER deleted_meanwhile BEFORE INSERT ON logs FOR EACH ROW EXECUTE FUNCTION deleted_meanwhile()`,
 		`CREATE TRIGGER deleted_meanwhile BEFORE INSERT ON private_chats FOR EACH ROW EXECUTE FUNCTION deleted_meanwhile()`,
 	} {
-		if _, err := db.Exec(q); err != nil {
+		if _, err := db.Exec(context.Background(), q); err != nil {
 			t.Fatal(err)
 		}
 	}
