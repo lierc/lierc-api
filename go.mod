@@ -6,9 +6,8 @@ require (
 	github.com/Masterminds/squirrel v1.5.4
 	github.com/SherClockHolmes/webpush-go v1.4.0
 	github.com/VictoriaMetrics/metrics v1.44.1
-	github.com/ergochat/irc-go v0.7.0
 	github.com/jackc/pgx/v5 v5.7.6
-	github.com/lierc/lierc v0.0.0-20261118222513-710a340f360e
+	github.com/lierc/lierc v0.0.0-20261120164844-eb223afb8d3b
 	github.com/nsqio/go-nsq v1.1.0
 	github.com/olekukonko/tablewriter v1.1.5
 	github.com/wneessen/go-mail v0.8.2
@@ -26,6 +25,7 @@ require (
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/clipperhouse/displaywidth v0.10.0 // indirect
 	github.com/clipperhouse/uax29/v2 v2.6.0 // indirect
+	github.com/ergochat/irc-go v0.7.0 // indirect
 	github.com/fatih/color v1.18.0 // indirect
 	github.com/golang-jwt/jwt/v5 v5.3.1 // indirect
 	github.com/golang/snappy v1.0.0 // indirect

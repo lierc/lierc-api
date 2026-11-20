@@ -75,3 +75,19 @@ func TestRouteChat(t *testing.T) {
 		}
 	}
 }
+
+// Every welcome, user count and MOTD numeric goes to the status panel;
+// neighbouring numerics don't.
+func TestLogTypeStatusNumerics(t *testing.T) {
+	for _, c := range []string{"001", "002", "003", "004", "005", "250", "251", "252", "253", "254", "255",
+		"265", "266", "372", "375", "376"} {
+		if k := logType(&ircwire.IRCMessage{Command: c}); k != logStatus {
+			t.Errorf("%s: %s, want status", c, k)
+		}
+	}
+	for _, c := range []string{"006", "256", "264", "267", "371", "373", "374", "377"} {
+		if k := logType(&ircwire.IRCMessage{Command: c}); k != logPass {
+			t.Errorf("%s: %s, want pass", c, k)
+		}
+	}
+}

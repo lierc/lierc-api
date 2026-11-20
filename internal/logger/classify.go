@@ -1,13 +1,8 @@
 package logger
 
 import (
-	"github.com/ergochat/irc-go/ircevent"
 	"github.com/lierc/lierc/pkg/ircwire"
 )
-
-// rplStatsConn is 250, the highest connection count, which irc-go has no
-// name for.
-const rplStatsConn = "250"
 
 // logKind is how a message from the chats topic is handled.
 type logKind int
@@ -69,14 +64,14 @@ func logType(m *ircwire.IRCMessage) logKind {
 	// in 30s, …); CONNECT and DISCONNECT are the older form
 	case "000", "ERROR", "CONNECT", "DISCONNECT",
 		// welcome
-		ircevent.RPL_WELCOME, ircevent.RPL_YOURHOST, ircevent.RPL_CREATED,
-		ircevent.RPL_MYINFO, ircevent.RPL_ISUPPORT,
+		ircwire.RPL_WELCOME, ircwire.RPL_YOURHOST, ircwire.RPL_CREATED,
+		ircwire.RPL_MYINFO, ircwire.RPL_ISUPPORT,
 		// user counts
-		rplStatsConn, ircevent.RPL_LUSERCLIENT, ircevent.RPL_LUSEROP,
-		ircevent.RPL_LUSERUNKNOWN, ircevent.RPL_LUSERCHANNELS, ircevent.RPL_LUSERME,
-		ircevent.RPL_LOCALUSERS, ircevent.RPL_GLOBALUSERS,
+		ircwire.RPL_STATSCONN, ircwire.RPL_LUSERCLIENT, ircwire.RPL_LUSEROP,
+		ircwire.RPL_LUSERUNKNOWN, ircwire.RPL_LUSERCHANNELS, ircwire.RPL_LUSERME,
+		ircwire.RPL_LOCALUSERS, ircwire.RPL_GLOBALUSERS,
 		// MOTD
-		ircevent.RPL_MOTD, ircevent.RPL_MOTDSTART, ircevent.RPL_ENDOFMOTD:
+		ircwire.RPL_MOTD, ircwire.RPL_MOTDSTART, ircwire.RPL_ENDOFMOTD:
 		return logStatus
 	}
 
