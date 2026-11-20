@@ -1,6 +1,7 @@
 package logger
 
 import (
+	"reflect"
 	"testing"
 
 	"github.com/lierc/lierc/pkg/ircwire"
@@ -56,23 +57,35 @@ func TestRouteChat(t *testing.T) {
 		m    *ircwire.IRCMessage
 		want route
 	}{
-		{"channel message", msg("PRIVMSG", "bob", false, false, "#Chan", "hi"), route{logTarget, "#Chan", false}},
-		{"private message to me", msg("PRIVMSG", "bob", true, false, "me", "hi"), route{logTarget, "bob", true}},
-		{"my own private message", msg("PRIVMSG", "me", false, true, "bob", "hi"), route{logTarget, "bob", false}},
-		{"private notice", msg("NOTICE", "NickServ", true, false, "me", "hello"), route{logTarget, "NickServ", true}},
-		{"server notice", msg("NOTICE", "server", false, false, "*", "hello"), route{logStatus, "status", false}},
-		{"motd", msg("372", "server", false, false, "me", "welcome"), route{logStatus, "status", false}},
-		{"error numeric", msg("433", "server", false, false, "me", "nick", "in use"), route{logStatus, "status", false}},
-		{"join", msg("JOIN", "bob", false, false, "#chan"), route{logTarget, "#chan", false}},
+		{"channel message", msg("PRIVMSG", "bob", false, false, "#Chan", "hi"), route{logTarget, []string{"#Chan"}, false}},
+		{"private message to me", msg("PRIVMSG", "bob", true, false, "me", "hi"), route{logTarget, []string{"bob"}, true}},
+		{"my own private message", msg("PRIVMSG", "me", false, true, "bob", "hi"), route{logTarget, []string{"bob"}, false}},
+		{"private notice", msg("NOTICE", "NickServ", true, false, "me", "hello"), route{logTarget, []string{"NickServ"}, true}},
+		{"server notice", msg("NOTICE", "server", false, false, "*", "hello"), route{logStatus, []string{"status"}, false}},
+		{"motd", msg("372", "server", false, false, "me", "welcome"), route{logStatus, []string{"status"}, false}},
+		{"error numeric", msg("433", "server", false, false, "me", "nick", "in use"), route{logStatus, []string{"status"}, false}},
+		{"join", msg("JOIN", "bob", false, false, "#chan"), route{logTarget, []string{"#chan"}, false}},
 		{"nick", msg("NICK", "bob", false, false, "robert"), route{kind: logSkip}},
 		{"typing", &ircwire.IRCMessage{Command: "TAGMSG", Params: []string{"#chan"}, Tags: map[string]string{"+typing": "active"}, Prefix: &ircwire.IRCPrefix{Name: "bob"}}, route{kind: logPass}},
 		{"unknown", msg("PONG", "server", false, false, "x"), route{kind: logPass}},
 	}
 
 	for _, tt := range tests {
-		if got := routeChat(tt.m); got != tt.want {
+		if got := routeChat(tt.m, nil); !reflect.DeepEqual(got, tt.want) {
 			t.Errorf("%s: routeChat = %+v, want %+v", tt.name, got, tt.want)
 		}
+	}
+}
+
+// NICK and QUIT come with the channels they belong in, and go in those;
+// with none, they're passed on, unstored.
+func TestRouteChatChannels(t *testing.T) {
+	quit := &ircwire.IRCMessage{Command: "QUIT", Params: []string{"bye"}, Prefix: &ircwire.IRCPrefix{Name: "bob"}}
+	if got, want := routeChat(quit, []string{"#a", "#B"}), (route{logTarget, []string{"#a", "#B"}, false}); !reflect.DeepEqual(got, want) {
+		t.Errorf("with channels: %+v, want %+v", got, want)
+	}
+	if got, want := routeChat(quit, []string{}), (route{kind: logPass}); !reflect.DeepEqual(got, want) {
+		t.Errorf("no channels: %+v, want %+v", got, want)
 	}
 }
 

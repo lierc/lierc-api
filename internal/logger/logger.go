@@ -182,13 +182,15 @@ func (l *Logger) Stop() {
 	}
 }
 
-// handleChat stores a chats message, if it's a kind that's stored, and
-// publishes it with its connection's owner. A message for a connection
-// that doesn't exist, or is deleted while it's stored, is dropped
-// silently: liercd can send a few after a connection is deleted. When the
-// owner can't be looked up, a message to store is returned as an error,
-// for NSQ to retry, as when its insert fails; one that's only passed on is
-// dropped, since it's of use only live.
+// handleChat stores a chats message, if it's a kind that's stored, under
+// each of its channels (one, but for NICK and QUIT, which come with
+// theirs), and publishes it once, with the last id and its connection's
+// owner. A message for a connection that doesn't exist, or is deleted
+// while it's stored, is dropped silently: liercd can send a few after a
+// connection is deleted. When the owner can't be looked up, a message to
+// store is returned as an error, for NSQ to retry, as when its insert
+// fails; one that's only passed on is dropped, since it's of use only
+// live.
 func (l *Logger) handleChat(n *nsq.Message) error {
 	var m ircwire.IRCClientMessage
 	if err := json.Unmarshal(n.Body, &m); err != nil {
@@ -199,13 +201,10 @@ func (l *Logger) handleChat(n *nsq.Message) error {
 		log.Printf("dropping chats message without a message\n%s", n.Body)
 		return nil
 	}
-	if m.Channels != nil {
-		return l.logMulti(&m)
-	}
 
 	ctx := context.Background()
 
-	route := routeChat(m.Message)
+	route := routeChat(m.Message, m.Channels)
 	countCommand(m.Message.Command)
 	if route.kind == logSkip {
 		return nil
@@ -225,14 +224,14 @@ func (l *Logger) handleChat(n *nsq.Message) error {
 	}
 
 	if route.private {
-		if err := l.store.InsertPrivate(ctx, m.Id, route.channel, m.Message.Time); err != nil {
+		if err := l.store.InsertPrivate(ctx, m.Id, route.channels[0], m.Message.Time); err != nil {
 			return fmt.Errorf("logging private message: %w", err)
 		}
 	}
 
 	highlight := l.highlights.Match(m.Id, m.Message)
 
-	id, err := l.store.InsertMessage(ctx, m.Id, m.Message, route.channel, highlight)
+	id, err := l.store.InsertMessage(ctx, m.Id, m.Message, route.channels, highlight)
 	if errors.Is(err, ErrNoConnection) {
 		l.forget(m.Id)
 		return nil
@@ -250,42 +249,6 @@ func (l *Logger) handleChat(n *nsq.Message) error {
 		ConnectionId: m.Id,
 		MessageId:    id,
 		Highlight:    highlight,
-		UserId:       user,
-	})
-	return nil
-}
-
-// logMulti stores a line in each of its channels (NICK, QUIT), and
-// publishes it once, with the last id. With no channels, nothing is
-// stored but it's still published. A missing connection, or a failed
-// owner lookup, is handled as in handleChat.
-func (l *Logger) logMulti(m *ircwire.IRCClientMessage) error {
-	countCommand(m.Message.Command)
-
-	user, ok, err := l.owner(m.Id)
-	if err != nil {
-		return l.ownerFailed(m, len(m.Channels) > 0, err)
-	}
-	if !ok {
-		return nil
-	}
-
-	id, err := l.store.InsertMessages(context.Background(), m.Id, m.Message, m.Channels)
-	if errors.Is(err, ErrNoConnection) {
-		l.forget(m.Id)
-		return nil
-	}
-	if err != nil {
-		return fmt.Errorf("logging message for %s: %w", m.Id, err)
-	}
-	if len(m.Channels) > 0 {
-		storedTotal.Inc()
-	}
-
-	l.publish(&LoggedMessage{
-		Message:      m.Message,
-		ConnectionId: m.Id,
-		MessageId:    id,
 		UserId:       user,
 	})
 	return nil

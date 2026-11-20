@@ -36,22 +36,13 @@ func (s *fakeStore) Owner(ctx context.Context, connection string) (string, bool,
 	return u, ok, nil
 }
 
-func (s *fakeStore) InsertMessage(ctx context.Context, connection string, m *ircwire.IRCMessage, channel string, highlight bool) (int, error) {
-	if s.err != nil {
-		return 0, s.err
-	}
-	s.nextId++
-	s.messages = append(s.messages, connection+" "+channel+" "+m.Command+map[bool]string{true: " highlight", false: ""}[highlight])
-	return s.nextId, nil
-}
-
-func (s *fakeStore) InsertMessages(ctx context.Context, connection string, m *ircwire.IRCMessage, channels []string) (int, error) {
+func (s *fakeStore) InsertMessage(ctx context.Context, connection string, m *ircwire.IRCMessage, channels []string, highlight bool) (int, error) {
 	if s.err != nil {
 		return 0, s.err
 	}
 	for _, channel := range channels {
 		s.nextId++
-		s.messages = append(s.messages, connection+" "+channel+" "+m.Command)
+		s.messages = append(s.messages, connection+" "+channel+" "+m.Command+map[bool]string{true: " highlight", false: ""}[highlight])
 	}
 	return s.nextId, nil
 }

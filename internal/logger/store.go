@@ -16,11 +16,9 @@ var ErrNoConnection = errors.New("no such connection")
 
 // Store is where logged messages are kept.
 type Store interface {
-	// InsertMessage logs m under channel and returns its id.
-	InsertMessage(ctx context.Context, connection string, m *ircwire.IRCMessage, channel string, highlight bool) (int, error)
-	// InsertMessages logs m once under each of channels and returns
-	// the last id.
-	InsertMessages(ctx context.Context, connection string, m *ircwire.IRCMessage, channels []string) (int, error)
+	// InsertMessage logs m once under each of channels, in order, and
+	// returns the last id.
+	InsertMessage(ctx context.Context, connection string, m *ircwire.IRCMessage, channels []string, highlight bool) (int, error)
 	// InsertPrivate records that nick sent connection a private message.
 	InsertPrivate(ctx context.Context, connection string, nick string, time float64) error
 	// Highlights returns each connection's highlight words, as JSON.
@@ -60,19 +58,7 @@ func noConnection(err error) error {
 	return err
 }
 
-func (s *pgStore) InsertMessage(ctx context.Context, connection string, m *ircwire.IRCMessage, channel string, highlight bool) (int, error) {
-	e, err := entry(connection, m)
-	if err != nil {
-		return 0, err
-	}
-	id, err := s.db.InsertLog(ctx, e, strings.ToLower(channel), highlight)
-	return int(id), noConnection(err)
-}
-
-func (s *pgStore) InsertMessages(ctx context.Context, connection string, m *ircwire.IRCMessage, channels []string) (int, error) {
-	if len(channels) == 0 {
-		return 0, nil
-	}
+func (s *pgStore) InsertMessage(ctx context.Context, connection string, m *ircwire.IRCMessage, channels []string, highlight bool) (int, error) {
 	e, err := entry(connection, m)
 	if err != nil {
 		return 0, err
@@ -81,7 +67,7 @@ func (s *pgStore) InsertMessages(ctx context.Context, connection string, m *ircw
 	for i, channel := range channels {
 		lower[i] = strings.ToLower(channel)
 	}
-	id, err := s.db.InsertLogs(ctx, e, lower)
+	id, err := s.db.InsertLog(ctx, e, lower, highlight)
 	return int(id), noConnection(err)
 }
 

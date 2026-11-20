@@ -31,7 +31,7 @@ func TestStoreInsertMessage(t *testing.T) {
 	ctx := context.Background()
 	m := &ircwire.IRCMessage{Command: "privmsg", Params: []string{"#Chan", "hi"}, Time: 1700000000.5, Prefix: &ircwire.IRCPrefix{Name: "bob"}}
 
-	id, err := s.InsertMessage(ctx, "c1", m, "#Chan", true)
+	id, err := s.InsertMessage(ctx, "c1", m, []string{"#Chan"}, true)
 	if err != nil || id == 0 {
 		t.Fatalf("InsertMessage = %d, %v", id, err)
 	}
@@ -56,7 +56,7 @@ func TestStoreInsertMessage(t *testing.T) {
 	if err != nil || n != 1 {
 		t.Errorf("highlights row for %d: %d, %v", id, n, err)
 	}
-	plain, err := s.InsertMessage(ctx, "c1", m, "#chan", false)
+	plain, err := s.InsertMessage(ctx, "c1", m, []string{"#chan"}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -65,17 +65,17 @@ func TestStoreInsertMessage(t *testing.T) {
 		t.Errorf("a message that isn't a highlight got a highlights row")
 	}
 
-	if _, err := s.InsertMessage(ctx, "nope", m, "#chan", false); !errors.Is(err, ErrNoConnection) {
+	if _, err := s.InsertMessage(ctx, "nope", m, []string{"#chan"}, false); !errors.Is(err, ErrNoConnection) {
 		t.Errorf("missing connection: err = %v, want ErrNoConnection", err)
 	}
 }
 
-func TestStoreInsertMessages(t *testing.T) {
+func TestStoreInsertMessageChannels(t *testing.T) {
 	s, db := testStore(t)
 	ctx := context.Background()
 	m := &ircwire.IRCMessage{Command: "QUIT", Params: []string{"bye"}, Time: 1700000000, Prefix: &ircwire.IRCPrefix{Name: "bob"}}
 
-	id, err := s.InsertMessages(ctx, "c1", m, []string{"#B", "#a", "#c"})
+	id, err := s.InsertMessage(ctx, "c1", m, []string{"#B", "#a", "#c"}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -100,10 +100,10 @@ func TestStoreInsertMessages(t *testing.T) {
 		t.Errorf("returned id %d, want the last one, %d", id, last)
 	}
 
-	if id, err := s.InsertMessages(ctx, "c1", m, nil); id != 0 || err != nil {
+	if id, err := s.InsertMessage(ctx, "c1", m, nil, false); id != 0 || err != nil {
 		t.Errorf("no channels: %d, %v", id, err)
 	}
-	if _, err := s.InsertMessages(ctx, "nope", m, []string{"#a"}); !errors.Is(err, ErrNoConnection) {
+	if _, err := s.InsertMessage(ctx, "nope", m, []string{"#a"}, false); !errors.Is(err, ErrNoConnection) {
 		t.Errorf("missing connection: err = %v, want ErrNoConnection", err)
 	}
 }
@@ -180,11 +180,11 @@ func TestInsertKeyViolationIsNoConnection(t *testing.T) {
 		}
 	}
 	m := &ircwire.IRCMessage{Command: "PRIVMSG", Params: []string{"#a", "hi"}, Prefix: &ircwire.IRCPrefix{Name: "bob"}}
-	if _, err := s.InsertMessage(ctx, "c1", m, "#a", false); !errors.Is(err, ErrNoConnection) {
+	if _, err := s.InsertMessage(ctx, "c1", m, []string{"#a"}, false); !errors.Is(err, ErrNoConnection) {
 		t.Errorf("InsertMessage: err = %v, want ErrNoConnection", err)
 	}
-	if _, err := s.InsertMessages(ctx, "c1", m, []string{"#a"}); !errors.Is(err, ErrNoConnection) {
-		t.Errorf("InsertMessages: err = %v, want ErrNoConnection", err)
+	if _, err := s.InsertMessage(ctx, "c1", m, []string{"#a", "#b"}, false); !errors.Is(err, ErrNoConnection) {
+		t.Errorf("InsertMessage, two channels: err = %v, want ErrNoConnection", err)
 	}
 	if err := s.InsertPrivate(ctx, "c1", "bob", 1700000000); err != nil {
 		t.Errorf("InsertPrivate: err = %v, want nil", err)

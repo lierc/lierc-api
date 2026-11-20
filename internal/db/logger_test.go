@@ -86,14 +86,13 @@ func TestInsertLogMissingConnection(t *testing.T) {
 	d := testenv.Postgres(t)
 	ctx := context.Background()
 	e := db.LogEntry{Connection: "nope", Command: "PRIVMSG", Message: []byte(`{}`), Time: 1700000000}
-	if _, err := d.InsertLog(ctx, e, "#a", false); !errors.Is(err, db.ErrGone) {
-		t.Errorf("InsertLog: %v, want ErrGone", err)
+	for _, channels := range [][]string{{"#a"}, {"#a", "#b"}} {
+		if _, err := d.InsertLog(ctx, e, channels, false); !errors.Is(err, db.ErrGone) {
+			t.Errorf("InsertLog %v: %v, want ErrGone", channels, err)
+		}
 	}
-	if _, err := d.InsertLogs(ctx, e, []string{"#a"}); !errors.Is(err, db.ErrGone) {
-		t.Errorf("InsertLogs: %v, want ErrGone", err)
-	}
-	if id, err := d.InsertLogs(ctx, e, nil); id != 0 || err != nil {
-		t.Errorf("InsertLogs, no channels: %d %v", id, err)
+	if id, err := d.InsertLog(ctx, e, nil, false); id != 0 || err != nil {
+		t.Errorf("InsertLog, no channels: %d %v", id, err)
 	}
 }
 

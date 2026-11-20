@@ -56,7 +56,7 @@ func logType(m *ircwire.IRCMessage) logKind {
 		return logStatus
 
 	// older liercd also sent these plainly; they come with their
-	// channels too, and are logged from those (logMulti)
+	// channels now, and are routed by those (routeChat)
 	case "NICK", "QUIT":
 		return logSkip
 
@@ -91,22 +91,31 @@ func isReaction(m *ircwire.IRCMessage) bool {
 // route is what to do with a message from the chats topic.
 type route struct {
 	kind logKind
-	// the channel to store it under (lowercased when stored)
-	channel string
+	// the channels to store it under, in order (lowercased when stored)
+	channels []string
 	// it's a private message from someone else, so the conversation
-	// with channel (their nick) is recorded too
+	// with its one channel (their nick) is recorded too
 	private bool
 }
 
-func routeChat(m *ircwire.IRCMessage) route {
+// routeChat routes m. channels are the ones liercd sent it with (NICK and
+// QUIT, which belong in every channel the nick shares); nil for any other
+// line, which goes in the one channel it names, or status.
+func routeChat(m *ircwire.IRCMessage, channels []string) route {
+	if channels != nil {
+		if len(channels) == 0 {
+			return route{kind: logPass} // a nick in no channel: live only
+		}
+		return route{kind: logTarget, channels: channels}
+	}
 	switch kind := logType(m); kind {
 	case logTarget:
 		if m.Direct && !m.Prefix.Self {
-			return route{kind: kind, channel: m.Prefix.Name, private: true}
+			return route{kind: kind, channels: []string{m.Prefix.Name}, private: true}
 		}
-		return route{kind: kind, channel: m.Params[0]}
+		return route{kind: kind, channels: []string{m.Params[0]}}
 	case logStatus:
-		return route{kind: kind, channel: statusChannel}
+		return route{kind: kind, channels: []string{statusChannel}}
 	default:
 		return route{kind: kind}
 	}

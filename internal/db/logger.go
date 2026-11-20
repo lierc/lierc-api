@@ -20,33 +20,18 @@ type LogEntry struct {
 	Self       bool    // sent by the connection's own nick
 }
 
-// InsertLog stores e under channel for its connection's owner and returns
-// its id; a highlight also goes in highlights, with the same id. ErrGone
-// when the connection doesn't exist or is deleted meanwhile: nothing was
-// stored.
-func (d *DB) InsertLog(ctx context.Context, e LogEntry, channel string, highlight bool) (int64, error) {
-	var id int64
-	err := d.Pool.QueryRow(ctx, Query("insert_log"),
-		e.Connection, channel, e.Command, e.Message, e.Time, e.Self, highlight).Scan(&id)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return 0, ErrGone
-	}
-	if err != nil {
-		return 0, gone(err)
-	}
-	return id, nil
-}
-
-// InsertLogs stores e once under each of channels, in order, never as a
-// highlight, and returns the last id. ErrGone when nothing was stored for
-// want of the connection; with no channels it stores nothing and returns 0.
-func (d *DB) InsertLogs(ctx context.Context, e LogEntry, channels []string) (int64, error) {
+// InsertLog stores e once under each of channels, in order, for its
+// connection's owner, and returns the last id; a highlight also goes in
+// highlights, with the same id. ErrGone when the connection doesn't exist
+// or is deleted meanwhile: nothing was stored. With no channels it stores
+// nothing and returns 0.
+func (d *DB) InsertLog(ctx context.Context, e LogEntry, channels []string, highlight bool) (int64, error) {
 	if len(channels) == 0 {
 		return 0, nil
 	}
 	var id *int64
 	err := d.Pool.QueryRow(ctx, Query("insert_logs"),
-		e.Connection, channels, e.Command, e.Message, e.Time, e.Self).Scan(&id)
+		e.Connection, channels, e.Command, e.Message, e.Time, e.Self, highlight).Scan(&id)
 	if err != nil {
 		return 0, gone(err)
 	}
