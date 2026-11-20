@@ -44,8 +44,8 @@ github.com/lann/builder v0.0.0-20180802200727-47ae307949d0 h1:SOEGU9fKiNWd/HOJuq
 github.com/lann/builder v0.0.0-20180802200727-47ae307949d0/go.mod h1:dXGbAdH5GtBTC4WfIxhKZfyBF/HBFgRZSWwZ9g/He9o=
 github.com/lann/ps v0.0.0-20150810152359-62de8c46ede0 h1:P6pPBnrTSX3DEVR4fDembhRWSsG5rVo6hYhAB/ADZrk=
 github.com/lann/ps v0.0.0-20150810152359-62de8c46ede0/go.mod h1:vmVJ0l/dxyfGW6FmdpVm2joNMFikkuWg0EoCKLGUMNw=
-github.com/lierc/lierc v0.0.0-20261120164844-eb223afb8d3b h1:6fzwZ9YrXluf99fFPDGHle8T4tPqBGTjEJyLOZBd7Bs=
-github.com/lierc/lierc v0.0.0-20261120164844-eb223afb8d3b/go.mod h1:qOfwDICKmgWKOLoyaUQq4OPrHViY4OefaWts2/L1cDs=
+github.com/lierc/lierc v0.0.0-20261120211019-bea31d36024c h1:EEjTTEY0jdkW1aotTWaiQA9LYskPE85tIjEjWrsLV+8=
+github.com/lierc/lierc v0.0.0-20261120211019-bea31d36024c/go.mod h1:qOfwDICKmgWKOLoyaUQq4OPrHViY4OefaWts2/L1cDs=
 github.com/mattn/go-colorable v0.1.14 h1:9A9LHSqF/7dyVVX6g0U9cwm9pG3kP9gSzcuIPHPsaIE=
 github.com/mattn/go-colorable v0.1.14/go.mod h1:6LmQG8QLFO4G5z1gPvYEzlUgJ2wF+stgPZH1UqBm1s8=
 github.com/mattn/go-isatty v0.0.20 h1:xfD0iDuEKnDkl03q4limB+vH+GxLEtL/jb4xVJSWWEY=

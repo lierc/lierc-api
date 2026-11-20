@@ -230,3 +230,56 @@ func TestServiceConfigAndStatus(t *testing.T) {
 	defer svc.Stop()
 	waitFor(t, "the change published while stopped", func() bool { return testenv.SameJSON(config(), `{"Host":"irc.x","Nick":"two"}`) })
 }
+
+// From a liercd that sends its config changes and connection states on
+// chats lines: a JOIN's change is saved, and a 000 line's Status comes out
+// in its logged NOTIFY.
+func TestServiceEnvelope(t *testing.T) {
+	d := testenv.Postgres(t)
+	testenv.AddConnection(t, d, "c1", "u1", `{"Host":"irc.x","Channels":["#a"]}`)
+	nsqd, publish := testenv.NSQD(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	got := make(chan []byte, 100)
+	listening := make(chan struct{})
+	go func() {
+		defer close(listening)
+		d.ListenStream(ctx, 10*time.Millisecond, func(p []byte) { got <- p }, func([]byte) {}, func(error) {})
+	}()
+	defer func() { cancel(); <-listening }()
+
+	svc, err := New(func(k string) string { return map[string]string{"NSQD_HOST": nsqd}[k] }, d, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.Start(ctx); err != nil {
+		t.Fatal(err)
+	}
+	defer svc.Stop()
+
+	status, _ := json.Marshal(ircwire.IRCClientMessage{Id: "c1", Status: &ircwire.ConnectionStatus{Connected: true},
+		Message: &ircwire.IRCMessage{Command: "000", Params: []string{"me", "Connected"}, Prefix: &ircwire.IRCPrefix{Name: "irc.x"}}})
+	var payload []byte
+	waitFor(t, "the status line's NOTIFY", func() bool {
+		publish("chats", status)
+		select {
+		case payload = <-got:
+			return true
+		case <-time.After(100 * time.Millisecond):
+			return false
+		}
+	})
+	var e logger.LoggedMessage
+	if err := json.Unmarshal(payload, &e); err != nil || e.Status == nil || !e.Status.Connected || e.Message.Command != "000" {
+		t.Errorf("payload %s (%v)", payload, err)
+	}
+
+	join, _ := json.Marshal(ircwire.IRCClientMessage{Id: "c1", Config: map[string]any{"Channels": []string{"#a", "#b"}},
+		Message: &ircwire.IRCMessage{Command: "JOIN", Params: []string{"#b"}, Prefix: &ircwire.IRCPrefix{Name: "me", Self: true}}})
+	publish("chats", join)
+	waitFor(t, "the JOIN's config change", func() bool {
+		raw, _, err := d.LookupConfig(context.Background(), "c1")
+		return err == nil && testenv.SameJSON(string(raw), `{"Host":"irc.x","Channels":["#a","#b"]}`)
+	})
+}

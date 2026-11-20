@@ -44,6 +44,10 @@ type LoggedMessage struct {
 	// UserId is the connection's owner, so the stream server needn't
 	// look it up. The logger always sets it.
 	UserId string
+	// Status is liercd's connection state, on its 000 status line only
+	// (ircwire.IRCClientMessage.Status), which the stream server sends as
+	// connection:connect or connection:disconnect.
+	Status *ircwire.ConnectionStatus `json:",omitempty"`
 }
 
 // Notifier is sent highlights and private messages once they're stored.
@@ -79,6 +83,8 @@ type Logger struct {
 	consumers  []*nsq.Consumer
 	highlights *Highlighters
 	owners     owners
+	// configs saves config changes that come on chats lines
+	configs configQueue
 	// stopListening stops listenForHighlights' goroutine; listening is
 	// closed when it has
 	stopListening context.CancelFunc
@@ -90,13 +96,15 @@ type Logger struct {
 // New returns a logger that stores messages in d and hands them to out.
 // d and out stay the caller's to close, after Stop.
 func New(config *Config, d *db.DB, out Output) *Logger {
-	return &Logger{
+	l := &Logger{
 		config:     config,
 		db:         d,
 		store:      &pgStore{db: d},
 		out:        out,
 		highlights: &Highlighters{},
 	}
+	l.configs.start(l.store.MergeConfig)
+	return l
 }
 
 // Start loads highlights, starts listening for changes to them, and
@@ -206,6 +214,8 @@ func (l *Logger) Stop() {
 	for _, consumer := range l.consumers {
 		<-consumer.StopChan
 	}
+	// the handlers are done, so nothing more is queued
+	l.configs.stop()
 	if l.stopListening != nil {
 		l.stopListening()
 		<-l.listening
@@ -240,16 +250,19 @@ func (l *Logger) handleChat(n *nsq.Message) error {
 		return nil
 	}
 
+	// a config change mustn't be lost, even on a line that's only passed
+	// on (our NICK in no channel): retried like a line to store
 	user, ok, err := l.owner(m.Id)
 	if err != nil {
-		return l.ownerFailed(&m, route.kind != logPass, err)
+		return l.ownerFailed(&m, route.kind != logPass || m.Config != nil, err)
 	}
 	if !ok {
 		return nil
 	}
 
 	if route.kind == logPass {
-		l.publish(&LoggedMessage{Message: m.Message, ConnectionId: m.Id, UserId: user})
+		l.publish(&LoggedMessage{Message: m.Message, ConnectionId: m.Id, UserId: user, Status: m.Status})
+		l.configs.queue(m.Id, m.Config)
 		return nil
 	}
 
@@ -264,7 +277,7 @@ func (l *Logger) handleChat(n *nsq.Message) error {
 	id, err := l.store.InsertMessage(ctx, m.Id, m.Message, route.channels, highlight)
 	if errors.Is(err, ErrNoConnection) {
 		l.forget(m.Id)
-		return nil
+		return nil // and its config change, if any: there's nothing to save it to
 	}
 	if err != nil {
 		return fmt.Errorf("logging message for %s: %w", m.Id, err)
@@ -280,7 +293,9 @@ func (l *Logger) handleChat(n *nsq.Message) error {
 		MessageId:    id,
 		Highlight:    highlight,
 		UserId:       user,
+		Status:       m.Status,
 	})
+	l.configs.queue(m.Id, m.Config)
 	return nil
 }
 

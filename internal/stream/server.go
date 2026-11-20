@@ -206,12 +206,14 @@ func (s *Server) deregisterLocked(st *stream) {
 // ConnectionId and UserId as strings and MessageId as a number (its
 // logger.LoggedMessage); a message with other types, or without a UserId,
 // is logged and dropped. A MessageId of 0 or none means the event goes out
-// without an id.
+// without an id. liercd's 000 status line comes with its Status, which goes
+// out after it as connection:connect or connection:disconnect.
 func (s *Server) Deliver(body []byte) {
 	var m struct {
 		ConnectionId string
 		MessageId    int64
 		UserId       string
+		Status       *struct{ Connected bool }
 	}
 	if err := json.Unmarshal(body, &m); err != nil {
 		log.Printf("stream: bad message: %v", err)
@@ -241,7 +243,14 @@ func (s *Server) Deliver(body []byte) {
 	if m.MessageId != 0 {
 		id = strconv.FormatInt(m.MessageId, 10)
 	}
-	ev := sseEvent("irc", body, id)
+	evs := [][]byte{sseEvent("irc", body, id)}
+	if m.Status != nil {
+		typ := "connection:disconnect"
+		if m.Status.Connected {
+			typ = "connection:connect"
+		}
+		evs = append(evs, connEventBytes(typ, connEvent{Id: m.ConnectionId}))
+	}
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -249,7 +258,9 @@ func (s *Server) Deliver(body []byte) {
 		s.raiseLatestLocked(owner, m.MessageId)
 	}
 	for _, st := range s.streams[owner] {
-		s.offerLocked(st, ev)
+		for _, ev := range evs {
+			s.offerLocked(st, ev)
+		}
 	}
 }
 

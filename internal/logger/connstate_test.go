@@ -25,16 +25,16 @@ func TestHandleConfig(t *testing.T) {
 			t.Errorf("%s: %v, want dropped", drop, err)
 		}
 	}
-	if !equal(store.configs, []string{`c1 {"Channels":["#a","#B"]}`}) {
-		t.Errorf("saved %q", store.configs)
+	if !equal(store.saved(), []string{`c1 {"Channels":["#a","#B"]}`}) {
+		t.Errorf("saved %q", store.saved())
 	}
 
-	store.mergeFails = 1
+	store.setMergeFails(1)
 	if err := l.handleConfig(body(`{"Id":"c1","Config":{"Nick":"y"}}`)); err == nil {
 		t.Error("database error: returned nil, so it wouldn't be retried")
 	}
-	if err := l.handleConfig(body(`{"Id":"c1","Config":{"Nick":"y"}}`)); err != nil || len(store.configs) != 2 {
-		t.Errorf("retry: %v, saved %q", err, store.configs)
+	if err := l.handleConfig(body(`{"Id":"c1","Config":{"Nick":"y"}}`)); err != nil || len(store.saved()) != 2 {
+		t.Errorf("retry: %v, saved %q", err, store.saved())
 	}
 }
 

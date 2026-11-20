@@ -237,3 +237,35 @@ func TestDeliverFromNotify(t *testing.T) {
 		break
 	}
 }
+
+// liercd's 000 status line, with its Status, goes out as the irc event and
+// then connection:connect or :disconnect; any other line only as itself.
+func TestDeliverStatusLine(t *testing.T) {
+	e := setup(t)
+	u := e.addUser("alice")
+	e.liveConn("c1", u)
+	c := e.openReplayed(u)
+
+	line := func(id int, status string) []byte {
+		return []byte(fmt.Sprintf(`{"ConnectionId":"c1","MessageId":%d,"UserId":%q,"Message":{"Command":"000","Params":["me","x"]}%s}`, id, u, status))
+	}
+	e.s.Deliver(line(1, `,"Status":{"Connected":false}`))
+	e.s.Deliver(line(2, ``))
+	e.s.Deliver(line(3, `,"Status":{"Connected":true}`))
+
+	var got []string
+	for len(got) < 5 {
+		ev := c.next()
+		if ev.typ == "ping" {
+			continue
+		}
+		got = append(got, ev.typ+" "+ev.id)
+		if strings.HasPrefix(ev.typ, "connection:") && ev.data != `{"Id":"c1"}` {
+			t.Errorf("%s data %s", ev.typ, ev.data)
+		}
+	}
+	want := []string{"irc 1", "connection:disconnect ", "irc 2", "irc 3", "connection:connect "}
+	if strings.Join(got, "|") != strings.Join(want, "|") {
+		t.Errorf("events %q, want %q", got, want)
+	}
+}

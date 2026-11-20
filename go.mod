@@ -7,7 +7,7 @@ require (
 	github.com/SherClockHolmes/webpush-go v1.4.0
 	github.com/VictoriaMetrics/metrics v1.44.1
 	github.com/jackc/pgx/v5 v5.7.6
-	github.com/lierc/lierc v0.0.0-20261120164844-eb223afb8d3b
+	github.com/lierc/lierc v0.0.0-20261120211019-bea31d36024c
 	github.com/nsqio/go-nsq v1.1.0
 	github.com/olekukonko/tablewriter v1.1.5
 	github.com/wneessen/go-mail v0.8.2

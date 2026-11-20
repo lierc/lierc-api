@@ -9,6 +9,7 @@ import (
 	"os"
 	"regexp"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/lierc/lierc/pkg/ircwire"
@@ -25,13 +26,30 @@ type fakeStore struct {
 	owners   map[string]string
 	ownerErr error
 	lookups  int
-	// configs are MergeConfig's calls; mergeFails fails that many first
+	// configs are MergeConfig's calls; mergeFails fails that many first.
+	// The config queue's goroutine calls it: use saved and setMergeFails.
+	mu         sync.Mutex
 	configs    []string
 	mergeFails int
 }
 
+// saved is MergeConfig's calls so far.
+func (s *fakeStore) saved() []string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return append([]string(nil), s.configs...)
+}
+
+func (s *fakeStore) setMergeFails(n int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.mergeFails = n
+}
+
 // MergeConfig records "connection fields", failing mergeFails times first.
 func (s *fakeStore) MergeConfig(ctx context.Context, connection string, fields []byte) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	if s.mergeFails > 0 {
 		s.mergeFails--
 		return errors.New("database is down")
@@ -99,7 +117,9 @@ func newTestLogger() (*Logger, *fakeStore, *fakeOutput) {
 	pub := &fakeOutput{}
 	h := &Highlighters{}
 	h.Replace(map[string]*regexp.Regexp{"c1": regexp.MustCompile(`(?i)\bleedo\b`)})
-	return &Logger{store: store, out: pub, highlights: h, notifier: &fakeNotifier{}}, store, pub
+	l := &Logger{store: store, out: pub, highlights: h, notifier: &fakeNotifier{}}
+	l.configs.start(store.MergeConfig)
+	return l, store, pub
 }
 
 func notified(l *Logger) []string { return l.notifier.(*fakeNotifier).got }

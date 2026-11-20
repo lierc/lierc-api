@@ -55,10 +55,14 @@ default command is `stream`).
 
 The database name is always `lierc`; `POSTGRES_DB` is ignored.
 
-It doesn't use NSQ. The logger sends it each message it handled, and each
-connection state liercd reports, as Postgres NOTIFYs on `logged` and
-`status`, which it LISTENs for on one connection of its own (`lierc stream
-listener` in `pg_stat_activity`), so several instances each get every one.
+It doesn't use NSQ. The logger sends it each message it handled as a
+Postgres NOTIFY on `logged`, which it LISTENs for on one connection of its
+own (`lierc stream listener` in `pg_stat_activity`), so several instances
+each get every one. liercd's `000` status line comes with a `Status` field,
+set by liercd in its message envelope (never from an IRC server's line),
+and goes out as `connection:connect` or `:disconnect` too. (For a liercd
+from before that field, the logger forwards its `status` topic as NOTIFYs
+on `status`, on the same connection.)
 If that connection drops it keeps serving streams (replay works; live
 messages wait) and reconnects every 5 s. Notifications sent while it is
 disconnected are lost; clients catch up from `last_id`.

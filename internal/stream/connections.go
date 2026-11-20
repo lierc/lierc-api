@@ -93,6 +93,8 @@ func (s *Server) ConnectionChanged(ctx context.Context, c db.ConnectionChange) {
 // from the logger on "status" (see db.ListenStream), to its owner's
 // streams, UserId, as connection:connect or connection:disconnect. A
 // payload that can't be read, or has no owner, is logged and dropped.
+// It's for a liercd from before the 000 status line carried the state in
+// its envelope (Deliver sends that); it goes once none is left.
 func (s *Server) StatusChanged(body []byte) {
 	var m struct {
 		ConnectionId string
