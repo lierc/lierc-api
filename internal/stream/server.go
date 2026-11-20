@@ -27,9 +27,6 @@ type Server struct {
 	PingInterval time.Duration
 	// WriteTimeout is how long one write may block before the stream is closed.
 	WriteTimeout time.Duration
-	// NSQReconnect is the wait between attempts to reach nsqd, at start and
-	// after a lost connection.
-	NSQReconnect time.Duration
 	// LoginCheck is how often a stream re-checks that its login still exists
 	// and has not expired.
 	LoginCheck time.Duration
@@ -55,7 +52,6 @@ func New(cfg config.Config, d db.Store, lc *liercd.Client) *Server {
 	return &Server{
 		PingInterval:      5 * time.Second,
 		WriteTimeout:      3 * time.Minute,
-		NSQReconnect:      5 * time.Second,
 		LoginCheck:        time.Minute,
 		LoginCheckTimeout: 10 * time.Second,
 		cfg:               cfg,
@@ -205,7 +201,7 @@ func (s *Server) deregisterLocked(st *stream) {
 }
 
 // Deliver sends one logged message, a NOTIFY payload from the logger (see
-// db.ListenLogged), to every stream of its owner,
+// db.ListenStream), to every stream of its owner,
 // UserId. The body is passed through untouched. The logger sends
 // ConnectionId and UserId as strings and MessageId as a number (its
 // logger.LoggedMessage); a message with other types, or without a UserId,

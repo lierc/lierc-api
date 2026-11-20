@@ -33,13 +33,11 @@ func TestArgumentsRefused(t *testing.T) {
 }
 
 func TestServesStreamUnauthorized(t *testing.T) {
-	nsqAddr, _ := testenv.NSQD(t)
 	env := dbEnv(t, testenv.Postgres(t), map[string]string{
 		"LISTEN":               "127.0.0.1:0",
 		"ADMIN_LISTEN":         "127.0.0.1:0",
 		"ACCOUNT_TOKEN_SECRET": "acct",
 		"UNSUBSCRIBE_SECRET":   "unsub",
-		"NSQD_HOST":            nsqAddr,
 	})
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -78,14 +76,13 @@ func TestServesStreamUnauthorized(t *testing.T) {
 	}
 }
 
-// The server starts and serves without nsqd, and still shuts down cleanly.
-func TestStreamServesWithoutNSQ(t *testing.T) {
+// The server needs no nsqd: it starts, serves and shuts down cleanly.
+func TestServesWithoutNSQ(t *testing.T) {
 	env := dbEnv(t, testenv.Postgres(t), map[string]string{
 		"LISTEN":               "127.0.0.1:0",
 		"ADMIN_LISTEN":         "127.0.0.1:0",
 		"ACCOUNT_TOKEN_SECRET": "acct",
-		"UNSUBSCRIBE_SECRET":   "unsub",
-		"NSQD_HOST":            "127.0.0.2:1", // nothing listens here
+		"UNSUBSCRIBE_SECRET":   "unsub", // nothing listens here
 	})
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -99,14 +96,14 @@ func TestStreamServesWithoutNSQ(t *testing.T) {
 	select {
 	case a = <-addr:
 	case code := <-done:
-		t.Fatalf("exited %d without nsqd: %s", code, logs.String())
+		t.Fatalf("exited %d: %s", code, logs.String())
 	case <-time.After(30 * time.Second):
 		t.Fatal("server did not start")
 	}
 	time.Sleep(200 * time.Millisecond) // the first connection attempt fails
 	select {
 	case code := <-done:
-		t.Fatalf("exited %d without nsqd: %s", code, logs.String())
+		t.Fatalf("exited %d: %s", code, logs.String())
 	default:
 	}
 	resp, err := http.Get("http://" + a.String() + "/events")
@@ -135,7 +132,6 @@ func TestAdminListenerServesStats(t *testing.T) {
 		"ADMIN_LISTEN":         "127.0.0.1:0",
 		"ACCOUNT_TOKEN_SECRET": "acct",
 		"UNSUBSCRIBE_SECRET":   "unsub",
-		"NSQD_HOST":            "127.0.0.2:1",
 	})
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -196,7 +192,6 @@ func TestAdminListenInUse(t *testing.T) {
 		"ADMIN_LISTEN":         taken.Addr().String(),
 		"ACCOUNT_TOKEN_SECRET": "acct",
 		"UNSUBSCRIBE_SECRET":   "unsub",
-		"NSQD_HOST":            "127.0.0.2:1",
 	})
 	var logs syncBuffer
 	if code := run(context.Background(), nil, func(k string) string { return env[k] }, &logs, nil); code != 1 {
@@ -215,7 +210,6 @@ func TestRefusesWithoutSecrets(t *testing.T) {
 			"POSTGRES_HOST":        "127.0.0.1:1",
 			"LISTEN":               "127.0.0.1:0",
 			"ADMIN_LISTEN":         "127.0.0.1:0",
-			"NSQD_HOST":            "127.0.0.2:1",
 			"ACCOUNT_TOKEN_SECRET": "acct",
 			"UNSUBSCRIBE_SECRET":   "unsub",
 		}
@@ -259,7 +253,6 @@ func TestAdminRoutesMounted(t *testing.T) {
 		"ADMIN_LISTEN":         "127.0.0.1:0",
 		"ACCOUNT_TOKEN_SECRET": "acct",
 		"UNSUBSCRIBE_SECRET":   "unsub",
-		"NSQD_HOST":            "127.0.0.2:1",
 	})
 	addrs := make(chan [2]net.Addr, 1)
 	done := make(chan int, 1)
@@ -326,7 +319,6 @@ func TestExitsWhenMigrationFails(t *testing.T) {
 		"ADMIN_LISTEN":         "127.0.0.1:0",
 		"ACCOUNT_TOKEN_SECRET": "acct",
 		"UNSUBSCRIBE_SECRET":   "unsub",
-		"NSQD_HOST":            "127.0.0.2:1",
 	})
 	exitsBeforeListening(t, env, "0001_initial")
 }
@@ -337,7 +329,6 @@ func TestRefusesWithMissingDatabase(t *testing.T) {
 		"ADMIN_LISTEN":         "127.0.0.1:0",
 		"ACCOUNT_TOKEN_SECRET": "acct",
 		"UNSUBSCRIBE_SECRET":   "unsub",
-		"NSQD_HOST":            "127.0.0.2:1",
 	})
 	env["POSTGRES_DB"] = "nosuch"
 	exitsBeforeListening(t, env, "nosuch")

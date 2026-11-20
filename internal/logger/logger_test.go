@@ -25,6 +25,19 @@ type fakeStore struct {
 	owners   map[string]string
 	ownerErr error
 	lookups  int
+	// configs are MergeConfig's calls; mergeFails fails that many first
+	configs    []string
+	mergeFails int
+}
+
+// MergeConfig records "connection fields", failing mergeFails times first.
+func (s *fakeStore) MergeConfig(ctx context.Context, connection string, fields []byte) error {
+	if s.mergeFails > 0 {
+		s.mergeFails--
+		return errors.New("database is down")
+	}
+	s.configs = append(s.configs, connection+" "+string(fields))
+	return nil
 }
 
 func (s *fakeStore) Owner(ctx context.Context, connection string) (string, bool, error) {
@@ -63,12 +76,15 @@ func (s *fakeStore) Highlights(ctx context.Context) (map[string]string, error) {
 type fakeOutput struct {
 	published []string // "logged command id"
 	got       []*LoggedMessage
+	statuses  []StatusChange
 }
 
 func (o *fakeOutput) Logged(e *LoggedMessage) {
 	o.published = append(o.published, "logged "+e.Message.Command+" "+string(rune('0'+e.MessageId)))
 	o.got = append(o.got, e)
 }
+
+func (o *fakeOutput) Status(s *StatusChange) { o.statuses = append(o.statuses, *s) }
 
 // fakeNotifier records what the logger hands to the notifier.
 type fakeNotifier struct{ got []string } // "command id"

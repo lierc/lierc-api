@@ -111,23 +111,30 @@ func (e *env) owned(body []byte) []byte {
 	return append([]byte(fmt.Sprintf(`{"UserId":%q,`, owner)), body[1:]...)
 }
 
-// notifyLogged runs a ListenLogged into e's Deliver, as lierc-api does, and
-// returns a publish for awaitSubscribed and the tests: it sends a "logged"
-// message as a NOTIFY, with its owner added (owned).
-func (e *env) notifyLogged() func(topic string, body []byte) {
+// notifyLogged runs a ListenStream into e's Deliver and StatusChanged, as
+// lierc-api does, and returns a publish for awaitSubscribed and the tests:
+// it sends a "logged" or "status" payload as a NOTIFY, with its owner
+// added (owned), as the logger does.
+func (e *env) notifyLogged() func(channel string, body []byte) {
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		e.db.ListenLogged(ctx, 10*time.Millisecond, e.s.Deliver, func(error) {})
+		e.db.ListenStream(ctx, 10*time.Millisecond, e.s.Deliver, e.s.StatusChanged, func(error) {})
 	}()
 	e.t.Cleanup(func() { cancel(); <-done })
-	return func(topic string, body []byte) {
-		if topic != "logged" {
-			e.t.Fatalf("notifyLogged's publish sends only logged, not %s", topic)
+	return func(channel string, body []byte) {
+		var err error
+		switch channel {
+		case "logged":
+			err = e.db.NotifyLogged(context.Background(), e.owned(body))
+		case "status":
+			err = e.db.NotifyStatus(context.Background(), e.owned(body))
+		default:
+			e.t.Fatalf("notifyLogged's publish sends logged or status, not %s", channel)
 		}
-		if err := e.db.NotifyLogged(context.Background(), e.owned(body)); err != nil {
-			e.t.Errorf("NotifyLogged: %v", err)
+		if err != nil {
+			e.t.Errorf("notify %s: %v", channel, err)
 		}
 	}
 }
@@ -741,19 +748,6 @@ func TestReplayOneConnectionFails(t *testing.T) {
 	}
 }
 
-func consume(t *testing.T, s *Server, addr string) {
-	t.Helper()
-	ctx, cancel := context.WithCancel(context.Background())
-	done := make(chan error, 1)
-	go func() { done <- s.Consume(ctx, addr) }()
-	t.Cleanup(func() {
-		cancel()
-		if err := <-done; err != nil {
-			t.Errorf("Consume: %v", err)
-		}
-	})
-}
-
 // awaitSubscribed publishes probe messages for conn until every client has
 // seen one, so later messages reach every consumer's channel.
 func awaitSubscribed(t *testing.T, publish func(string, []byte), conn string, cs ...*client) {
@@ -1008,103 +1002,6 @@ func TestWakePingUnauthorized(t *testing.T) {
 	c := e.open(u)
 	if res := e.post("/events/"+c.id+"/ping", ""); res.StatusCode != 401 {
 		t.Errorf("no cookie: %d, want 401", res.StatusCode)
-	}
-}
-
-// freeAddr returns a local TCP address that nothing listens on.
-func freeAddr(t *testing.T) string {
-	t.Helper()
-	l, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer l.Close()
-	return l.Addr().String()
-}
-
-func TestNSQReconnectDefault(t *testing.T) {
-	if got := New(config.Config{}, nil, nil).NSQReconnect; got != 5*time.Second {
-		t.Fatalf("NSQReconnect = %s, want 5s", got)
-	}
-}
-
-// awaitStatus publishes conn's disconnection on "status" until c gets
-// it, so the status consumer is subscribed, then its connection, which c
-// must get next.
-func awaitStatus(t *testing.T, publish func(string, []byte), conn string, c *client) {
-	t.Helper()
-	deadline := time.Now().Add(waitFor)
-	for seen := false; !seen; {
-		if time.Now().After(deadline) {
-			t.Fatal("status consumer never subscribed")
-		}
-		publish("status", []byte(fmt.Sprintf(`{"Id":%q,"Connected":false}`, conn)))
-		select {
-		case ev := <-c.events:
-			seen = ev.typ == "connection:disconnect"
-		case <-time.After(50 * time.Millisecond):
-		}
-	}
-	publish("status", []byte(fmt.Sprintf(`{"Id":%q,"Connected":true}`, conn)))
-	for {
-		ev := c.next()
-		if ev.typ == "connection:disconnect" {
-			continue // a leftover from the loop
-		}
-		if ev.typ != "connection:connect" {
-			t.Fatalf("got %+v, want connection:connect", ev)
-		}
-		return
-	}
-}
-
-// nsqd is not running when Consume starts; it subscribes once nsqd is up.
-func TestConsumeWaitsForNSQD(t *testing.T) {
-	e := setup(t)
-	e.s.NSQReconnect = 50 * time.Millisecond
-	u := e.addUser("alice")
-	e.liveConn("ca", u)
-	c := e.openReplayed(u)
-	addr := freeAddr(t)
-	consume(t, e.s, addr)
-	time.Sleep(200 * time.Millisecond) // a few failed attempts
-
-	_, publish, _ := testenv.NSQDAt(t, addr)
-	awaitStatus(t, publish, "ca", c)
-}
-
-// nsqd restarts; the consumer reconnects after NSQReconnect.
-func TestConsumeReconnects(t *testing.T) {
-	addr, publish, stop := testenv.NSQDAt(t, "127.0.0.1:0")
-	e := setup(t)
-	e.s.NSQReconnect = 50 * time.Millisecond
-	u := e.addUser("alice")
-	e.liveConn("ca", u)
-	c := e.openReplayed(u)
-	consume(t, e.s, addr)
-	awaitStatus(t, publish, "ca", c)
-
-	stop()
-	_, publish, _ = testenv.NSQDAt(t, addr)
-	awaitStatus(t, publish, "ca", c)
-}
-
-// Consume returns nil when ctx ends while nsqd has never been reachable.
-func TestConsumeStopsWhileWaiting(t *testing.T) {
-	e := setup(t)
-	e.s.NSQReconnect = time.Minute
-	ctx, cancel := context.WithCancel(context.Background())
-	done := make(chan error, 1)
-	go func() { done <- e.s.Consume(ctx, freeAddr(t)) }()
-	time.Sleep(100 * time.Millisecond)
-	cancel()
-	select {
-	case err := <-done:
-		if err != nil {
-			t.Fatalf("Consume: %v", err)
-		}
-	case <-time.After(waitFor):
-		t.Fatal("Consume did not return")
 	}
 }
 

@@ -23,6 +23,10 @@ type Store interface {
 	InsertPrivate(ctx context.Context, connection string, nick string, time float64) error
 	// Highlights returns each connection's highlight words, as JSON.
 	Highlights(ctx context.Context) (map[string]string, error)
+	// MergeConfig merges fields, JSON config fields liercd changed, into
+	// connection's saved config under its row lock; a connection that's
+	// gone isn't an error.
+	MergeConfig(ctx context.Context, connection string, fields []byte) error
 	// Owner returns the user who owns connection; ok is false when
 	// there's no such connection.
 	Owner(ctx context.Context, connection string) (user string, ok bool, err error)
@@ -79,6 +83,10 @@ func (s *pgStore) InsertPrivate(ctx context.Context, connection string, nick str
 		return nil
 	}
 	return err
+}
+
+func (s *pgStore) MergeConfig(ctx context.Context, connection string, fields []byte) error {
+	return s.db.MergeConfig(ctx, connection, fields)
 }
 
 func (s *pgStore) Owner(ctx context.Context, connection string) (string, bool, error) {

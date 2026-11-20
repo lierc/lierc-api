@@ -12,8 +12,6 @@ import (
 	"time"
 
 	"github.com/lierc/lierc-api/internal/db"
-
-	"github.com/lierc/lierc-api/internal/testenv"
 )
 
 // changed announces a connection change as the API does.
@@ -133,22 +131,22 @@ func TestDeliverDropsCreateDeletePassesConnect(t *testing.T) {
 	}
 }
 
-// liercd's status topic becomes connection:connect / :disconnect for the
-// owner, with no SSE id.
-func TestStatusTopicEvents(t *testing.T) {
-	addr, publish := testenv.NSQD(t)
+// The logger's status NOTIFYs reach the owner's streams as
+// connection:connect and :disconnect, with no SSE id; one without an
+// owner is dropped.
+func TestStatusEvents(t *testing.T) {
 	e := setup(t)
+	publish := e.notifyLogged()
 	u := e.addUser("alice")
 	e.liveConn("c1", u)
 	c := e.openReplayed(u)
-	consume(t, e.s, addr)
 
 	deadline := time.Now().Add(waitFor)
 	for seen := false; !seen; {
 		if time.Now().After(deadline) {
-			t.Fatal("status consumer never subscribed")
+			t.Fatal("status listener never subscribed")
 		}
-		publish("status", []byte(`{"Id":"c1","Connected":false,"Message":"Closing connection"}`))
+		publish("status", []byte(`{"ConnectionId":"c1","Connected":false}`))
 		select {
 		case ev := <-c.events:
 			if ev.typ == "connection:disconnect" {
@@ -160,8 +158,8 @@ func TestStatusTopicEvents(t *testing.T) {
 		case <-time.After(50 * time.Millisecond):
 		}
 	}
-	publish("status", []byte(`{"Id":"nobody","Connected":true}`))
-	publish("status", []byte(`{"Id":"c1","Connected":true,"Message":"Connected"}`))
+	publish("status", []byte(`{"ConnectionId":"nobody","Connected":true}`)) // no owner: dropped
+	publish("status", []byte(`{"ConnectionId":"c1","Connected":true}`))
 	for {
 		ev := nextConnEvent(c)
 		if ev.typ == "connection:disconnect" {
@@ -198,7 +196,7 @@ func TestDeliverByUserId(t *testing.T) {
 }
 
 // The logger's NOTIFYs on "logged" reach the owner's streams, as
-// lierc-api wires them (db.ListenLogged into Deliver).
+// lierc-api wires them (db.ListenStream into Deliver).
 func TestDeliverFromNotify(t *testing.T) {
 	e := setup(t)
 	a := e.addUser("alice")
@@ -208,7 +206,7 @@ func TestDeliverFromNotify(t *testing.T) {
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		e.db.ListenLogged(ctx, 10*time.Millisecond, e.s.Deliver, func(error) {})
+		e.db.ListenStream(ctx, 10*time.Millisecond, e.s.Deliver, e.s.StatusChanged, func(error) {})
 	}()
 	t.Cleanup(func() { cancel(); <-done })
 

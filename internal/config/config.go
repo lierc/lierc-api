@@ -4,7 +4,6 @@ package config
 import (
 	"errors"
 	"fmt"
-	"net"
 	"strconv"
 	"strings"
 )
@@ -17,7 +16,6 @@ type Config struct {
 	// UnsubscribeSecret signs the unsubscribe links in notification
 	// emails (UNSUBSCRIBE_SECRET); lierc-logger's notifier reads it too.
 	UnsubscribeSecret string
-	NSQAddr           string
 	Listen            string
 	// AdminListen is the internal admin listener (ADMIN_LISTEN), serving
 	// /stats without authentication; keep it on loopback.
@@ -109,16 +107,11 @@ func Load(getenv func(string) string) (Config, error) {
 		LiercdNextHost:     or("LIERCD_NEXT_HOST", ""),
 		AccountTokenSecret: getenv("ACCOUNT_TOKEN_SECRET"),
 		UnsubscribeSecret:  getenv("UNSUBSCRIBE_SECRET"),
-		NSQAddr:            or("NSQD_HOST", "127.0.0.1"),
 		Listen:             or("LISTEN", ":5003"),
 		AdminListen:        or("ADMIN_LISTEN", "127.0.0.1:5009"),
 		SMTPOpts:           getenv("SMTP_OPTS"),
 		FromAddress:        or("FROM_ADDRESS", "do-not-reply@relaychat.party"),
 		SiteURL:            or("API_URL", "https://relaychat.party"),
-	}
-	// NSQD_HOST may carry a port; without one nsqd's default 4150 is used.
-	if _, _, err := net.SplitHostPort(c.NSQAddr); err != nil {
-		c.NSQAddr = net.JoinHostPort(c.NSQAddr, "4150")
 	}
 
 	for _, p := range strings.Split(or("TRUSTED_PROXIES", "127.0.0.1,::1"), ",") {

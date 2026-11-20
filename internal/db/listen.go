@@ -10,14 +10,14 @@ import (
 )
 
 // LISTEN and NOTIFY: highlights (lierc-api tells the logger to reload
-// highlight words) and logged (the logger hands each message it handled to
-// the stream server).
+// highlight words), and logged and status (the logger hands the stream
+// server each message it handled, and liercd's connection state).
 
 // ListenerName is the application_name of ListenHighlights' connection;
-// LoggedListenerName is ListenLogged's.
+// StreamListenerName is ListenStream's.
 const (
 	ListenerName       = "lierc highlights listener"
-	LoggedListenerName = "lierc logged listener"
+	StreamListenerName = "lierc stream listener"
 )
 
 // MaxNotifyPayload is the longest payload NOTIFY takes, in bytes: Postgres
@@ -36,38 +36,52 @@ var listenPing = 90 * time.Second
 // each time it starts listening, at first and after a lost connection,
 // since a NOTIFY sent meanwhile was missed. See listenLoop.
 func (d *DB) ListenHighlights(ctx context.Context, retry time.Duration, changed func(), report func(error)) {
-	d.listenLoop(ctx, "highlights", ListenerName, retry, changed, func(string) { changed() }, report)
+	d.listenLoop(ctx, ListenerName, retry, changed,
+		map[string]func(string){"highlights": func(string) { changed() }}, report)
 }
 
-// NotifyLogged sends payload, a message the logger handled, to ListenLogged.
+// NotifyLogged sends payload, a message the logger handled, to ListenStream.
 // It goes to whoever listens when it's sent; nothing keeps it for later.
 func (d *DB) NotifyLogged(ctx context.Context, payload []byte) error {
+	return d.notify(ctx, "logged", payload)
+}
+
+// NotifyStatus sends payload, a connection's state from liercd, to
+// ListenStream, as NotifyLogged does.
+func (d *DB) NotifyStatus(ctx context.Context, payload []byte) error {
+	return d.notify(ctx, "status", payload)
+}
+
+func (d *DB) notify(ctx context.Context, channel string, payload []byte) error {
 	if len(payload) > MaxNotifyPayload {
 		return fmt.Errorf("%w: %d bytes", ErrPayloadTooLong, len(payload))
 	}
-	_, err := d.Pool.Exec(ctx, `SELECT pg_notify('logged', $1)`, string(payload))
+	_, err := d.Pool.Exec(ctx, `SELECT pg_notify($1, $2)`, channel, string(payload))
 	return err
 }
 
-// ListenLogged calls deliver with each NotifyLogged payload. Messages sent
-// while it's reconnecting are missed: clients catch up from the database.
-// See listenLoop.
-func (d *DB) ListenLogged(ctx context.Context, retry time.Duration, deliver func(payload []byte), report func(error)) {
-	d.listenLoop(ctx, "logged", LoggedListenerName, retry, func() {},
-		func(p string) { deliver([]byte(p)) }, report)
+// ListenStream calls logged with each NotifyLogged payload and status with
+// each NotifyStatus one, in the order they were sent, on one connection.
+// Notifications sent while it's reconnecting are missed: clients catch up
+// from the database. See listenLoop.
+func (d *DB) ListenStream(ctx context.Context, retry time.Duration, logged, status func(payload []byte), report func(error)) {
+	d.listenLoop(ctx, StreamListenerName, retry, func() {}, map[string]func(string){
+		"logged": func(p string) { logged([]byte(p)) },
+		"status": func(p string) { status([]byte(p)) },
+	}, report)
 }
 
-// listenLoop listens on channel, on a connection of its own outside the
-// pool, named name in pg_stat_activity, calling connected each time it
-// starts listening and notified with each payload. It reconnects retry
-// apart until ctx is done; each lost or failed connection goes to report.
-// The callbacks run on listenLoop's goroutine, so the next notification
-// waits for them.
-func (d *DB) listenLoop(ctx context.Context, channel, name string, retry time.Duration, connected func(), notified func(payload string), report func(error)) {
+// listenLoop listens on each channel of handlers, on a connection of its
+// own outside the pool, named name in pg_stat_activity, calling connected
+// each time it starts listening and a channel's handler with each of its
+// payloads. It reconnects retry apart until ctx is done; each lost or
+// failed connection goes to report. The callbacks run on listenLoop's
+// goroutine, so the next notification waits for them.
+func (d *DB) listenLoop(ctx context.Context, name string, retry time.Duration, connected func(), handlers map[string]func(payload string), report func(error)) {
 	cfg := d.Pool.Config().ConnConfig.Copy()
 	cfg.RuntimeParams["application_name"] = name
 	for {
-		err := listen(ctx, cfg, channel, connected, notified)
+		err := listen(ctx, cfg, handlers, connected)
 		if ctx.Err() != nil {
 			return
 		}
@@ -80,9 +94,10 @@ func (d *DB) listenLoop(ctx context.Context, channel, name string, retry time.Du
 	}
 }
 
-// listen connects, listens on channel, calls connected, then notified with
-// every notification, until the connection fails or ctx is done.
-func listen(ctx context.Context, cfg *pgx.ConnConfig, channel string, connected func(), notified func(string)) error {
+// listen connects, listens on each channel of handlers, calls connected,
+// then the handler of each notification's channel, until the connection
+// fails or ctx is done.
+func listen(ctx context.Context, cfg *pgx.ConnConfig, handlers map[string]func(string), connected func()) error {
 	c, err := pgx.ConnectConfig(ctx, cfg)
 	if err != nil {
 		return wrap(err)
@@ -92,8 +107,10 @@ func listen(ctx context.Context, cfg *pgx.ConnConfig, channel string, connected 
 		defer cancel()
 		c.Close(closeCtx)
 	}()
-	if _, err := c.Exec(ctx, "LISTEN "+pgx.Identifier{channel}.Sanitize()); err != nil {
-		return wrap(err)
+	for channel := range handlers {
+		if _, err := c.Exec(ctx, "LISTEN "+pgx.Identifier{channel}.Sanitize()); err != nil {
+			return wrap(err)
+		}
 	}
 	connected()
 
@@ -103,7 +120,9 @@ func listen(ctx context.Context, cfg *pgx.ConnConfig, channel string, connected 
 		cancel()
 		switch {
 		case err == nil:
-			notified(n.Payload)
+			if h := handlers[n.Channel]; h != nil {
+				h(n.Payload)
+			}
 		case ctx.Err() != nil:
 			return ctx.Err()
 		case errors.Is(err, context.DeadlineExceeded) && !c.IsClosed():

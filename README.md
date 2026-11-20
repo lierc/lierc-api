@@ -15,9 +15,11 @@ JSON fixtures in `testdata/fixtures` record its behaviour, which the Go tests
 check against.
 
 The image also carries two binaries of their own: `lctl`, the admin
-command (`lctl help`), and `lierc-logger`, which logs IRC traffic to
-Postgres and sends the highlight notifications (web push and email). The
-logger runs as its own process, from `docker run --entrypoint
+command (`lctl help`), and `lierc-logger`, which reads everything liercd
+publishes on NSQ (`chats`, `config`, `status`): it logs IRC traffic to
+Postgres, saves liercd's config changes, hands messages and connection
+states to lierc-api as Postgres NOTIFYs, and sends the highlight
+notifications (web push and email). The logger runs as its own process, from `docker run --entrypoint
 /lierc-logger`; it moved here from the lierc repo, with its history.
 
 Layout
@@ -30,7 +32,8 @@ Layout
 - `cmd/lctl`, `internal/lctl`: the admin command; `internal/admin`: the
   admin JSON API it talks to.
 - `internal/api`: the HTTP routes, behind a same-origin check.
-- `internal/stream`: the event stream, NSQ consumers and the admin `/stats`.
+- `internal/stream`: the event stream, fed by the logger's Postgres
+  NOTIFYs, and the admin `/stats`.
 - `internal/accounts`, `internal/passwords`, `internal/mail`: login,
   signup, email confirmation and password reset.
 - `internal/connections`, `internal/connconfig`, `internal/liercd`:
@@ -46,11 +49,11 @@ Running it
 
 The easiest way is the dev stack in `lierc-docker-compose`. To run it by
 hand you need an empty PostgreSQL database (lierc-api creates the
-schema), nsqd and liercd:
+schema) and liercd; the logger (`cmd/lierc-logger`) also needs nsqd:
 
 ```
 go build ./cmd/lierc-api ./cmd/lctl
-POSTGRES_HOST=127.0.0.1 LIERCD_HOST=127.0.0.1 NSQD_HOST=127.0.0.1 \
+POSTGRES_HOST=127.0.0.1 LIERCD_HOST=127.0.0.1 \
   LISTEN=127.0.0.1:5003 ADMIN_LISTEN=127.0.0.1:5009 ./lierc-api
 ```
 

@@ -189,8 +189,8 @@ func TestListenHighlights(t *testing.T) {
 	waitFor(t, "a NOTIFY after reconnecting", func() bool { return calls.Load() == 4 })
 }
 
-// NotifyLogged's payloads reach ListenLogged whole and in order; one too
-// long for NOTIFY is refused before anything is sent.
+// NotifyLogged's payloads reach ListenStream's logged whole and in order;
+// one too long for NOTIFY is refused before anything is sent.
 func TestNotifyLogged(t *testing.T) {
 	d := testenv.Postgres(t)
 	ctx, cancel := context.WithCancel(context.Background())
@@ -198,7 +198,7 @@ func TestNotifyLogged(t *testing.T) {
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		d.ListenLogged(ctx, 10*time.Millisecond, func(p []byte) { got <- string(p) }, func(err error) { t.Logf("reported: %v", err) })
+		d.ListenStream(ctx, 10*time.Millisecond, func(p []byte) { got <- string(p) }, func(p []byte) { got <- "status:" + string(p) }, func(err error) { t.Logf("reported: %v", err) })
 	}()
 	t.Cleanup(func() { cancel(); <-done })
 
@@ -251,5 +251,53 @@ func TestNotifyLogged(t *testing.T) {
 		}
 	case <-time.After(5 * time.Second):
 		t.Fatal("never got the payload at the limit")
+	}
+}
+
+// NotifyStatus goes to ListenStream's status, and keeps its order among
+// logged messages on the one connection.
+func TestNotifyStatus(t *testing.T) {
+	d := testenv.Postgres(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	got := make(chan string, 10)
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		d.ListenStream(ctx, 10*time.Millisecond,
+			func(p []byte) { got <- "logged " + string(p) },
+			func(p []byte) { got <- "status " + string(p) },
+			func(error) {})
+	}()
+	t.Cleanup(func() { cancel(); <-done })
+
+	waitFor(t, "the stream listener", func() bool {
+		d.NotifyStatus(context.Background(), []byte("probe"))
+		select {
+		case <-got:
+			return true
+		case <-time.After(50 * time.Millisecond):
+			return false
+		}
+	})
+	for drained := false; !drained; {
+		select {
+		case <-got:
+		case <-time.After(100 * time.Millisecond):
+			drained = true
+		}
+	}
+
+	d.NotifyLogged(context.Background(), []byte("1"))
+	d.NotifyStatus(context.Background(), []byte("2"))
+	d.NotifyLogged(context.Background(), []byte("3"))
+	for _, want := range []string{"logged 1", "status 2", "logged 3"} {
+		select {
+		case p := <-got:
+			if p != want {
+				t.Errorf("got %q, want %q", p, want)
+			}
+		case <-time.After(5 * time.Second):
+			t.Fatalf("never got %q", want)
+		}
 	}
 }

@@ -27,6 +27,8 @@ func (o *memOutput) Logged(e *logger.LoggedMessage) {
 	o.got = append(o.got, e)
 }
 
+func (o *memOutput) Status(*logger.StatusChange) {}
+
 func (o *memOutput) messages() []*logger.LoggedMessage {
 	o.mu.Lock()
 	defer o.mu.Unlock()
@@ -117,7 +119,7 @@ func TestServiceWithOptions(t *testing.T) {
 }
 
 // Without Options, the service sends each message as a NOTIFY on
-// "logged", which a ListenLogged gets, with its owner.
+// "logged", which a ListenStream gets, with its owner.
 func TestServiceDefaults(t *testing.T) {
 	d := testenv.Postgres(t)
 	testenv.AddConnection(t, d, "c1", "u1", `{}`)
@@ -135,7 +137,7 @@ func TestServiceDefaults(t *testing.T) {
 	listening := make(chan struct{})
 	go func() {
 		defer close(listening)
-		d.ListenLogged(ctx, 10*time.Millisecond, func(p []byte) { got <- p }, func(error) {})
+		d.ListenStream(ctx, 10*time.Millisecond, func(p []byte) { got <- p }, func([]byte) {}, func(error) {})
 	}()
 	defer func() { cancel(); <-listening }()
 
@@ -164,4 +166,67 @@ func TestServiceDefaults(t *testing.T) {
 	if e.ConnectionId != "c1" || e.UserId != "u1" || e.Message.Command != "TAGMSG" {
 		t.Errorf("got %s", payload)
 	}
+}
+
+// The service saves liercd's config changes, durably: one published while
+// it's stopped is saved once it's back. A status change comes out as a
+// NOTIFY on "status", with its owner.
+func TestServiceConfigAndStatus(t *testing.T) {
+	d := testenv.Postgres(t)
+	testenv.AddConnection(t, d, "c1", "u1", `{"Host":"irc.x"}`)
+	nsqd, publish := testenv.NSQD(t)
+	getenv := func(k string) string { return map[string]string{"NSQD_HOST": nsqd}[k] }
+	config := func() string {
+		raw, _, err := d.LookupConfig(context.Background(), "c1")
+		if err != nil {
+			t.Fatal(err)
+		}
+		return string(raw)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	statuses := make(chan []byte, 100)
+	listening := make(chan struct{})
+	go func() {
+		defer close(listening)
+		d.ListenStream(ctx, 10*time.Millisecond, func([]byte) {}, func(p []byte) { statuses <- p }, func(error) {})
+	}()
+	defer func() { cancel(); <-listening }()
+
+	start := func() *Service {
+		svc, err := New(getenv, d, Options{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := svc.Start(ctx); err != nil {
+			t.Fatal(err)
+		}
+		return svc
+	}
+
+	svc := start()
+	publish("config", []byte(`{"Id":"c1","Config":{"Nick":"one"}}`))
+	waitFor(t, "the first config change", func() bool { return testenv.SameJSON(config(), `{"Host":"irc.x","Nick":"one"}`) })
+
+	var payload []byte
+	waitFor(t, "a status NOTIFY", func() bool {
+		publish("status", []byte(`{"Id":"c1","Connected":true,"Message":"Connected"}`))
+		select {
+		case payload = <-statuses:
+			return true
+		case <-time.After(100 * time.Millisecond):
+			return false
+		}
+	})
+	var s logger.StatusChange
+	if err := json.Unmarshal(payload, &s); err != nil || s != (logger.StatusChange{ConnectionId: "c1", Connected: true, UserId: "u1"}) {
+		t.Errorf("status %s (%v)", payload, err)
+	}
+
+	svc.Stop()
+	publish("config", []byte(`{"Id":"c1","Config":{"Nick":"two"}}`))
+	svc = start()
+	defer svc.Stop()
+	waitFor(t, "the change published while stopped", func() bool { return testenv.SameJSON(config(), `{"Host":"irc.x","Nick":"two"}`) })
 }

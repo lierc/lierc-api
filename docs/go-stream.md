@@ -48,7 +48,6 @@ default command is `stream`).
 | `LIERCD_HOST` | `127.0.0.1` | liercd at `http://<host>:5005/`. |
 | `POSTGRES_HOST` | `127.0.0.1` | May carry a port (`db:5433`). |
 | `POSTGRES_USER`, `POSTGRES_PASSWORD` | empty | |
-| `NSQD_HOST` | `127.0.0.1` | nsqd TCP; port 4150 unless given (`nsq:4160`). |
 | `LISTEN` | `:5003` | |
 | `ADMIN_LISTEN` | `127.0.0.1:5009` | The admin listener (`/stats`). Keep it on loopback. |
 | `TRUSTED_PROXIES` | `127.0.0.1,::1` | `X-Forwarded-For` is honoured from these peers. |
@@ -56,9 +55,10 @@ default command is `stream`).
 
 The database name is always `lierc`; `POSTGRES_DB` is ignored.
 
-It subscribes to NSQ on its own ephemeral channel
-(`lierc-api-go-<random>#ephemeral`), so several instances each see every
-message. If nsqd is down, at start or later, it keeps serving
-streams (replay works; live messages wait) and retries nsqd every 5 s, not
-go-nsq's default 60 s. Messages published while it is disconnected are lost,
-as with any ephemeral channel.
+It doesn't use NSQ. The logger sends it each message it handled, and each
+connection state liercd reports, as Postgres NOTIFYs on `logged` and
+`status`, which it LISTENs for on one connection of its own (`lierc stream
+listener` in `pg_stat_activity`), so several instances each get every one.
+If that connection drops it keeps serving streams (replay works; live
+messages wait) and reconnects every 5 s. Notifications sent while it is
+disconnected are lost; clients catch up from `last_id`.

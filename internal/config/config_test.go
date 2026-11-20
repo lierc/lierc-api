@@ -18,7 +18,6 @@ func TestDefaults(t *testing.T) {
 	want := map[string][2]string{
 		"DBName":         {c.DBName, "lierc"},
 		"AdminListen":    {c.AdminListen, "127.0.0.1:5009"},
-		"NSQAddr":        {c.NSQAddr, "127.0.0.1:4150"},
 		"Listen":         {c.Listen, ":5003"},
 		"LiercdHost":     {c.LiercdHost, "127.0.0.1"},
 		"LiercdNextHost": {c.LiercdNextHost, ""},
@@ -42,14 +41,14 @@ func TestDefaults(t *testing.T) {
 
 func TestOverrides(t *testing.T) {
 	c, err := Load(env(map[string]string{
-		"LISTEN": ":9", "TRUSTED_PROXIES": "10.0.0.1, 10.0.0.2", "NSQD_HOST": "nsq",
+		"LISTEN": ":9", "TRUSTED_PROXIES": "10.0.0.1, 10.0.0.2",
 		"LIERCD_HOST": "lc", "LIERCD_NEXT_HOST": "lcn", "POSTGRES_HOST": "pg", "POSTGRES_USER": "u",
 		"POSTGRES_PASSWORD": "p", "ADMIN_LISTEN": "127.0.0.1:7", "ACCOUNT_TOKEN_SECRET": "s",
 	}))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if c.Listen != ":9" || c.NSQAddr != "nsq:4150" || c.LiercdHost != "lc" || c.LiercdNextHost != "lcn" ||
+	if c.Listen != ":9" || c.LiercdHost != "lc" || c.LiercdNextHost != "lcn" ||
 		c.DBHost != "pg" || c.DBUser != "u" || c.DBPass != "p" || c.AdminListen != "127.0.0.1:7" || c.AccountTokenSecret != "s" {
 		t.Errorf("overrides not applied: %+v", c)
 	}
@@ -84,15 +83,6 @@ func TestSecretsRequired(t *testing.T) {
 	}
 	if err != nil || got.AccountTokenSecret != "a" || got.UnsubscribeSecret != "u" {
 		t.Errorf("both set: %+v, %v", got, err)
-	}
-}
-
-func TestNSQDHostWithPort(t *testing.T) {
-	for in, want := range map[string]string{"nsq:4999": "nsq:4999", "::1": "[::1]:4150", "[::1]:5": "[::1]:5"} {
-		c, _ := Load(env(map[string]string{"NSQD_HOST": in}))
-		if c.NSQAddr != want {
-			t.Errorf("NSQD_HOST=%q: NSQAddr = %q, want %q", in, c.NSQAddr, want)
-		}
 	}
 }
 

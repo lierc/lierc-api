@@ -89,36 +89,23 @@ func (s *Server) ConnectionChanged(ctx context.Context, c db.ConnectionChange) {
 	}
 }
 
-// statusChanged sends liercd's status message (topic status) to the
-// owner's streams as connection:connect or connection:disconnect.
-func (s *Server) statusChanged(body []byte) {
+// StatusChanged sends a connection's state from liercd, a NOTIFY payload
+// from the logger on "status" (see db.ListenStream), to its owner's
+// streams, UserId, as connection:connect or connection:disconnect. A
+// payload that can't be read, or has no owner, is logged and dropped.
+func (s *Server) StatusChanged(body []byte) {
 	var m struct {
-		Id        string
-		Connected bool
+		ConnectionId string
+		Connected    bool
+		UserId       string
 	}
-	if err := json.Unmarshal(body, &m); err != nil || m.Id == "" {
+	if err := json.Unmarshal(body, &m); err != nil || m.ConnectionId == "" || m.UserId == "" {
 		log.Printf("stream: bad status message: %q", body)
-		return
-	}
-	s.mu.Lock()
-	idle := len(s.streams) == 0
-	s.mu.Unlock()
-	if idle {
-		return
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-	owner, ok, err := s.db.LookupOwner(ctx, m.Id)
-	if err != nil {
-		log.Printf("stream: lookup owner: %v", err)
-		return
-	}
-	if !ok {
 		return
 	}
 	typ := "connection:disconnect"
 	if m.Connected {
 		typ = "connection:connect"
 	}
-	s.sendToUser(owner, connEventBytes(typ, connEvent{Id: m.Id}))
+	s.sendToUser(m.UserId, connEventBytes(typ, connEvent{Id: m.ConnectionId}))
 }

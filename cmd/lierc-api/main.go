@@ -73,19 +73,14 @@ func run(ctx context.Context, args []string, getenv func(string) string, stderr 
 
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	nsqErr := make(chan error, 1)
 
 	lc := liercd.NewRouted(liercd.Instances{Main: cfg.LiercdHost, Next: cfg.LiercdNextHost}, d.LookupLiercd)
 	s := stream.New(cfg, d, lc)
 	go s.Run(ctx)
-	go func() {
-		if err := s.Consume(ctx, cfg.NSQAddr); err != nil && ctx.Err() == nil {
-			nsqErr <- err
-		}
-	}()
-	// the logger's messages, as Postgres NOTIFYs on "logged"
-	go d.ListenLogged(ctx, 5*time.Second, s.Deliver, func(err error) {
-		logger.Printf("logged listener: %v (retrying in 5s)", err)
+	// the logger's messages and liercd's connection states, as Postgres
+	// NOTIFYs on "logged" and "status"
+	go d.ListenStream(ctx, 5*time.Second, s.Deliver, s.StatusChanged, func(err error) {
+		logger.Printf("stream listener: %v (retrying in 5s)", err)
 	})
 	// The whole API, the event stream included; /stats and the /admin/ API
 	// are on the admin listener only.
@@ -119,9 +114,6 @@ func run(ctx context.Context, args []string, getenv func(string) string, stderr 
 	code := 0
 	select {
 	case <-ctx.Done():
-	case err := <-nsqErr:
-		logger.Printf("nsq: %v", err)
-		code = 1
 	case err := <-serveErr:
 		logger.Printf("serve: %v", err)
 		code = 1
