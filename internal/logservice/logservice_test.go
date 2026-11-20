@@ -76,9 +76,6 @@ func TestServiceWithOptions(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if svc.nsq != nil {
-		t.Error("made an NSQ output though Options gave one")
-	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	if err := svc.Start(ctx); err != nil {
@@ -119,17 +116,52 @@ func TestServiceWithOptions(t *testing.T) {
 	}
 }
 
-// Without Options, the service publishes to NSQ's logged topic, and stops
-// its producer.
+// Without Options, the service sends each message as a NOTIFY on
+// "logged", which a ListenLogged gets, with its owner.
 func TestServiceDefaults(t *testing.T) {
 	d := testenv.Postgres(t)
-	nsqd, _ := testenv.NSQD(t)
+	testenv.AddConnection(t, d, "c1", "u1", `{}`)
+	nsqd, publish := testenv.NSQD(t)
 	svc, err := New(func(k string) string { return map[string]string{"NSQD_HOST": nsqd}[k] }, d, Options{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if svc.nsq == nil || svc.notifier == nil || svc.notifier.Streams != nil {
+	if svc.notifier == nil || svc.notifier.Streams != nil {
 		t.Fatalf("service %+v", svc)
 	}
-	svc.Stop() // never started: still stops cleanly
+
+	ctx, cancel := context.WithCancel(context.Background())
+	got := make(chan []byte, 10)
+	listening := make(chan struct{})
+	go func() {
+		defer close(listening)
+		d.ListenLogged(ctx, 10*time.Millisecond, func(p []byte) { got <- p }, func(error) {})
+	}()
+	defer func() { cancel(); <-listening }()
+
+	if err := svc.Start(ctx); err != nil {
+		t.Fatal(err)
+	}
+	defer svc.Stop()
+
+	// publish until the listener is in place: NOTIFYs before it are missed
+	body, _ := json.Marshal(ircwire.IRCClientMessage{Id: "c1", Message: &ircwire.IRCMessage{
+		Command: "TAGMSG", Params: []string{"#a"}, Prefix: &ircwire.IRCPrefix{Name: "bob"}}})
+	var payload []byte
+	waitFor(t, "a logged NOTIFY", func() bool {
+		publish("chats", body)
+		select {
+		case payload = <-got:
+			return true
+		case <-time.After(100 * time.Millisecond):
+			return false
+		}
+	})
+	var e logger.LoggedMessage
+	if err := json.Unmarshal(payload, &e); err != nil {
+		t.Fatal(err)
+	}
+	if e.ConnectionId != "c1" || e.UserId != "u1" || e.Message.Command != "TAGMSG" {
+		t.Errorf("got %s", payload)
+	}
 }

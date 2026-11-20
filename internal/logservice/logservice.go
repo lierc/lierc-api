@@ -15,8 +15,9 @@ import (
 
 // Options are what a process running the service may replace.
 type Options struct {
-	// Output gets every message the logger handles; nil means the NSQ
-	// topic "logged" on NSQD_HOST.
+	// Output gets every message the logger handles; nil means a Postgres
+	// NOTIFY on "logged" (logger.PGOutput), which the stream server
+	// listens on.
 	Output logger.Output
 	// Streams tells the notifier who's online; nil means asking
 	// API_STATS over HTTP.
@@ -28,9 +29,6 @@ type Options struct {
 type Service struct {
 	logger   *logger.Logger
 	notifier *notify.Notifier
-	// nsq is the Output the service made, which it stops; nil when
-	// Options gave one
-	nsq *logger.NSQOutput
 	// accumulating: Start started the notifier, so Stop waits for it
 	accumulating bool
 }
@@ -42,11 +40,7 @@ func New(getenv func(string) string, d *db.DB, o Options) (*Service, error) {
 	s := &Service{}
 	out := o.Output
 	if out == nil {
-		nsq, err := logger.NewNSQOutput(conf)
-		if err != nil {
-			return nil, err
-		}
-		s.nsq, out = nsq, nsq
+		out = logger.PGOutput{DB: d}
 	}
 	s.logger = logger.New(conf, d, out)
 
@@ -72,14 +66,11 @@ func (s *Service) Start(ctx context.Context) error {
 }
 
 // Stop stops the logger, once the messages in flight are handled, then the
-// notifier and the NSQ output. It may follow a Start that failed, or none.
+// notifier. It may follow a Start that failed, or none.
 func (s *Service) Stop() {
 	s.logger.Stop()
 	if s.accumulating {
 		s.notifier.Stop()
-	}
-	if s.nsq != nil {
-		s.nsq.Stop()
 	}
 }
 

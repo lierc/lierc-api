@@ -1,6 +1,6 @@
 // Package logger stores IRC messages from liercd in the log table and
 // hands them, with their ids, to its Output for the API's event streams
-// (NSQOutput: the NSQ topic "logged"). It hands highlights and private
+// (PGOutput: a Postgres NOTIFY on "logged"). It hands highlights and private
 // messages to the notifier, which runs in the same process.
 //
 // It reads the NSQ topic "chats", written by liercd: lines from a
@@ -35,7 +35,7 @@ func (c *Config) nsqd() string {
 }
 
 // LoggedMessage is a message the logger handled, as its Output and the
-// notifier get it, and as NSQOutput publishes it.
+// notifier get it, and as PGOutput sends it.
 type LoggedMessage struct {
 	Message      *ircwire.IRCMessage
 	ConnectionId string

@@ -196,3 +196,46 @@ func TestDeliverByUserId(t *testing.T) {
 		t.Errorf("bob got %+v, want id 7", ev)
 	}
 }
+
+// The logger's NOTIFYs on "logged" reach the owner's streams, as
+// lierc-api wires them (db.ListenLogged into Deliver).
+func TestDeliverFromNotify(t *testing.T) {
+	e := setup(t)
+	a := e.addUser("alice")
+	c := e.openReplayed(a)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		e.db.ListenLogged(ctx, 10*time.Millisecond, e.s.Deliver, func(error) {})
+	}()
+	t.Cleanup(func() { cancel(); <-done })
+
+	// notify until the listener is in place, then send the real one
+	probe := []byte(fmt.Sprintf(`{"ConnectionId":"x","UserId":%q,"probe":true}`, a))
+	for seen := false; !seen; {
+		if err := e.db.NotifyLogged(context.Background(), probe); err != nil {
+			t.Fatal(err)
+		}
+		select {
+		case ev := <-c.events:
+			seen = strings.Contains(ev.data, `"probe"`)
+		case <-time.After(50 * time.Millisecond):
+		}
+	}
+	msg := fmt.Sprintf(`{"ConnectionId":"x","MessageId":9,"UserId":%q,"Message":{"Command":"PRIVMSG"}}`, a)
+	if err := e.db.NotifyLogged(context.Background(), []byte(msg)); err != nil {
+		t.Fatal(err)
+	}
+	for {
+		ev := c.nextIRC()
+		if strings.Contains(ev.data, `"probe"`) {
+			continue
+		}
+		if ev.data != msg || ev.id != "9" {
+			t.Errorf("got %+v", ev)
+		}
+		break
+	}
+}

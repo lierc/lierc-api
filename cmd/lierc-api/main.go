@@ -7,8 +7,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	adminapi "github.com/lierc/lierc-api/internal/admin"
-	"github.com/lierc/lierc-api/internal/api"
 	"io"
 	"log"
 	"net"
@@ -17,6 +15,9 @@ import (
 	"os/signal"
 	"syscall"
 	"time"
+
+	adminapi "github.com/lierc/lierc-api/internal/admin"
+	"github.com/lierc/lierc-api/internal/api"
 
 	"github.com/lierc/lierc-api/internal/config"
 	"github.com/lierc/lierc-api/internal/db"
@@ -82,6 +83,11 @@ func run(ctx context.Context, args []string, getenv func(string) string, stderr 
 			nsqErr <- err
 		}
 	}()
+	// the logger's messages, as NOTIFYs on "logged"; NSQ's topic "logged"
+	// is still consumed too (Consume) until no logger publishes there
+	go d.ListenLogged(ctx, 5*time.Second, s.Deliver, func(err error) {
+		logger.Printf("logged listener: %v (retrying in 5s)", err)
+	})
 	// The whole API, the event stream included; /stats and the /admin/ API
 	// are on the admin listener only.
 	srv := newServer(proxy.Wrap(cfg.TrustedProxies, api.New(cfg, d, s, lc)), serverTimeouts)

@@ -11,7 +11,9 @@ import (
 	"github.com/nsqio/go-nsq"
 )
 
-// Consume subscribes to topic "logged", whose messages it delivers, and
+// Consume subscribes to topic "logged", whose messages it delivers (the
+// logger now sends them as NOTIFYs, db.ListenLogged; this goes once no
+// logger publishes on NSQ), and
 // topic "status", liercd's connection state, which it sends as
 // connection:connect and connection:disconnect. Each is on a channel of its
 // own, so every stream process sees every message, until ctx is done; if

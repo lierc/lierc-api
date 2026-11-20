@@ -3,6 +3,7 @@ package db_test
 import (
 	"context"
 	"errors"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -186,4 +187,69 @@ func TestListenHighlights(t *testing.T) {
 		t.Fatal(err)
 	}
 	waitFor(t, "a NOTIFY after reconnecting", func() bool { return calls.Load() == 4 })
+}
+
+// NotifyLogged's payloads reach ListenLogged whole and in order; one too
+// long for NOTIFY is refused before anything is sent.
+func TestNotifyLogged(t *testing.T) {
+	d := testenv.Postgres(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	got := make(chan string, 10)
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		d.ListenLogged(ctx, 10*time.Millisecond, func(p []byte) { got <- string(p) }, func(err error) { t.Logf("reported: %v", err) })
+	}()
+	t.Cleanup(func() { cancel(); <-done })
+
+	// probe until the LISTEN is in place, then drain stray probes
+	waitFor(t, "the logged listener", func() bool {
+		d.NotifyLogged(context.Background(), []byte("probe"))
+		select {
+		case <-got:
+			return true
+		case <-time.After(50 * time.Millisecond):
+			return false
+		}
+	})
+	for drained := false; !drained; {
+		select {
+		case <-got:
+		case <-time.After(100 * time.Millisecond):
+			drained = true
+		}
+	}
+
+	want := []string{`{"ConnectionId":"c1","MessageId":1,"UserId":"u1"}`, `{"ConnectionId":"c1","MessageId":2,"UserId":"u1","Message":{"Params":["#a","é ünïcode"]}}`}
+	for _, p := range want {
+		if err := d.NotifyLogged(context.Background(), []byte(p)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, w := range want {
+		select {
+		case p := <-got:
+			if p != w {
+				t.Errorf("got %s, want %s", p, w)
+			}
+		case <-time.After(5 * time.Second):
+			t.Fatalf("never got %s", w)
+		}
+	}
+
+	big := []byte(`"` + strings.Repeat("x", db.MaxNotifyPayload) + `"`)
+	if err := d.NotifyLogged(context.Background(), big); !errors.Is(err, db.ErrPayloadTooLong) {
+		t.Errorf("long payload: %v, want ErrPayloadTooLong", err)
+	}
+	if err := d.NotifyLogged(context.Background(), big[:db.MaxNotifyPayload]); err != nil {
+		t.Errorf("payload at the limit: %v", err)
+	}
+	select {
+	case p := <-got:
+		if len(p) != db.MaxNotifyPayload {
+			t.Errorf("got %d bytes, want %d", len(p), db.MaxNotifyPayload)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("never got the payload at the limit")
+	}
 }
