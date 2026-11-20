@@ -1,6 +1,7 @@
 package notify
 
 import (
+	"context"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -80,5 +81,30 @@ func TestStreamCountUnavailable(t *testing.T) {
 		if d := time.Since(start); d > 2*time.Second {
 			t.Errorf("%s: took %s", name, d)
 		}
+	}
+}
+
+// fakeStreams counts streams in memory, as the stream server could when
+// it runs in the same process.
+type fakeStreams struct {
+	counts map[string]int
+	ctxOK  bool
+}
+
+func (f *fakeStreams) StreamCount(ctx context.Context, user string) (int, error) {
+	_, f.ctxOK = ctx.Deadline()
+	return f.counts[user], nil
+}
+
+// A Streams set replaces the HTTP call, and still gets the time limit.
+func TestStreamCountFromStreams(t *testing.T) {
+	f := &fakeStreams{counts: map[string]int{"7": 1}}
+	n := statsNotifier("http://127.0.0.1:1/stats") // would fail if asked
+	n.Streams = f
+	if n.openStreams("7") != 1 || n.openStreams("8") != 0 {
+		t.Error("openStreams didn't use Streams")
+	}
+	if !f.ctxOK {
+		t.Error("Streams' context has no deadline")
 	}
 }

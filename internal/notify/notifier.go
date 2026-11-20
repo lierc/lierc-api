@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"log"
 	"net/http"
 	"strings"
@@ -32,8 +32,21 @@ type Notifier struct {
 	PushHTTP *http.Client
 	pushOnce sync.Once
 
+	// Streams says whether a user is online; nil means asking API_STATS
+	// over HTTP (StatsStreams, with Client).
+	Streams StreamCounter
+
 	// store is the logger's database, shared; nil in some tests
 	store Store
+
+	// accumulating is closed when Accumulate returns
+	accumulating chan struct{}
+}
+
+// StreamCounter says how many event streams a user has open; a user with
+// one gets no notification.
+type StreamCounter interface {
+	StreamCount(ctx context.Context, user string) (int, error)
 }
 
 // Store is the notifier's queries; *db.DB has them.
@@ -85,28 +98,30 @@ func (c *NotifierConfig) SetUserRateLimit(limit string) error {
 	return nil
 }
 
-// statsTimeout bounds one /stats request, so a hung stream server can't
+// statsTimeout bounds one stream count, so a hung stream server can't
 // stall the queue.
 var statsTimeout = 5 * time.Second
 
-// StreamCount asks the stream server's admin listener (API_STATS, on
-// loopback, no key) how many streams the user has open.
-func (n *Notifier) StreamCount(user string) (int, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), statsTimeout)
-	defer cancel()
+// StatsStreams asks the stream server's admin listener (API_STATS, on
+// loopback, no key) for a user's open streams.
+type StatsStreams struct {
+	Client *http.Client
+	URL    string
+}
 
-	req, err := http.NewRequestWithContext(ctx, "GET", n.Config.APIStats, nil)
+func (s StatsStreams) StreamCount(ctx context.Context, user string) (int, error) {
+	req, err := http.NewRequestWithContext(ctx, "GET", s.URL, nil)
 	if err != nil {
 		return 0, err
 	}
 
-	res, err := n.Client.Do(req)
+	res, err := s.Client.Do(req)
 	if err != nil {
 		return 0, err
 	}
 	defer res.Body.Close()
 
-	body, err := ioutil.ReadAll(res.Body)
+	body, err := io.ReadAll(res.Body)
 	if err != nil {
 		return 0, err
 	}
@@ -120,6 +135,17 @@ func (n *Notifier) StreamCount(user string) (int, error) {
 	}
 
 	return counts[user], nil
+}
+
+// StreamCount is how many streams user has open, from Streams.
+func (n *Notifier) StreamCount(user string) (int, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), statsTimeout)
+	defer cancel()
+	streams := n.Streams
+	if streams == nil {
+		streams = StatsStreams{Client: n.Client, URL: n.Config.APIStats}
+	}
+	return streams.StreamCount(ctx, user)
 }
 
 // openStreams is how many streams the user has open. If stats can't be
@@ -179,10 +205,21 @@ func (n *Notifier) AddNotification(u string, p *NotificationPref, m *logger.Logg
 // than notified, e.g. after the logger was down and nsqd replays a backlog of chats.
 const maxMessageAge = 5 * time.Minute
 
+// Accumulate handles what Notify queues, until Stop.
 func (n *Notifier) Accumulate() {
+	defer close(n.accumulating)
 	for m := range n.Queue {
 		n.accumulate(m)
 	}
+}
+
+// Stop ends Accumulate, once it has handled the queue, and waits for it,
+// so call it only once Accumulate has been started, and after the
+// logger's Stop: a Notify after Stop panics.
+// Notifications waiting for their delay are not sent.
+func (n *Notifier) Stop() {
+	close(n.Queue)
+	<-n.accumulating
 }
 
 // accumulate handles one highlight. Errors are logged and the highlight

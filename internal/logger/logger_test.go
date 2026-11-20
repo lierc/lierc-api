@@ -50,18 +50,13 @@ func (s *fakeStore) Highlights(ctx context.Context) (map[string]string, error) {
 	return nil, nil
 }
 
-type fakePublisher struct {
-	published []string // "topic id"
-	err       error
+// fakeOutput records what the logger hands its Output.
+type fakeOutput struct {
+	published []string // "logged command id"
 }
 
-func (p *fakePublisher) Publish(topic string, body []byte) error {
-	var e LoggedMessage
-	if err := json.Unmarshal(body, &e); err != nil {
-		panic(err)
-	}
-	p.published = append(p.published, topic+" "+e.Message.Command+" "+string(rune('0'+e.MessageId)))
-	return p.err
+func (o *fakeOutput) Logged(e *LoggedMessage) {
+	o.published = append(o.published, "logged "+e.Message.Command+" "+string(rune('0'+e.MessageId)))
 }
 
 // fakeNotifier records what the logger hands to the notifier.
@@ -72,12 +67,12 @@ func (f *fakeNotifier) Notify(e *LoggedMessage) {
 }
 
 // newTestLogger's notifier is a *fakeNotifier: notified(l) reads it.
-func newTestLogger() (*Logger, *fakeStore, *fakePublisher) {
+func newTestLogger() (*Logger, *fakeStore, *fakeOutput) {
 	store := &fakeStore{}
-	pub := &fakePublisher{}
+	pub := &fakeOutput{}
 	h := &Highlighters{}
 	h.Replace(map[string]*regexp.Regexp{"c1": regexp.MustCompile(`(?i)\bleedo\b`)})
-	return &Logger{store: store, pub: pub, highlights: h, notifier: &fakeNotifier{}}, store, pub
+	return &Logger{store: store, out: pub, highlights: h, notifier: &fakeNotifier{}}, store, pub
 }
 
 func notified(l *Logger) []string { return l.notifier.(*fakeNotifier).got }
@@ -198,16 +193,6 @@ func TestHandleChatErrors(t *testing.T) {
 	}
 	if !equal(pub.published, []string{"logged PRIVMSG 0"}) {
 		t.Errorf("missing connection: published %q", pub.published)
-	}
-
-	// publish failures are logged, not retried (it's already stored)
-	l, store, pub = newTestLogger()
-	pub.err = errors.New("nsqd is down")
-	if err := l.handleChat(chat(t, m)); err != nil {
-		t.Errorf("publish error: returned %v, want nil", err)
-	}
-	if len(store.messages) != 1 {
-		t.Errorf("publish error: stored %q", store.messages)
 	}
 }
 

@@ -24,8 +24,8 @@ Layout
 ------
 
 - `cmd/lierc-api`: the server (`lierc-api`, no arguments).
-- `cmd/lierc-logger`, `internal/logger`, `internal/notify`: the logger
-  and the notifier it runs. They read
+- `cmd/lierc-logger`, `internal/logservice`, `internal/logger`,
+  `internal/notify`: the logger and the notifier it runs. They read
   liercd's messages with lierc's `pkg/ircwire` (the lierc module).
 - `cmd/lctl`, `internal/lctl`: the admin command; `internal/admin`: the
   admin JSON API it talks to.

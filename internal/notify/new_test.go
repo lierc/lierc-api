@@ -92,3 +92,24 @@ func TestConfigFromEnv(t *testing.T) {
 		}
 	}
 }
+
+// Stop lets Accumulate finish the queue, then waits for it to return.
+func TestStop(t *testing.T) {
+	captureLog(t)
+	n := New(&NotifierConfig{}, nil) // no database: each highlight is discarded
+	for i := 0; i < 3; i++ {
+		n.Notify(highlight("c1", time.Now()))
+	}
+	go n.Accumulate()
+
+	done := make(chan struct{})
+	go func() { n.Stop(); close(done) }()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("Stop didn't return")
+	}
+	if len(n.Queue) != 0 {
+		t.Errorf("%d left in the queue", len(n.Queue))
+	}
+}

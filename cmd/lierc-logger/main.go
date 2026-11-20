@@ -10,7 +10,7 @@ import (
 
 	"github.com/lierc/lierc-api/internal/config"
 	"github.com/lierc/lierc-api/internal/db"
-	"github.com/lierc/lierc-api/internal/logger"
+	"github.com/lierc/lierc-api/internal/logservice"
 	"github.com/lierc/lierc/pkg/metrics"
 )
 
@@ -34,22 +34,15 @@ func main() {
 	}
 	defer d.Close()
 
-	l, err := logger.New(&logger.Config{NSQDHost: getenv("NSQD_HOST")}, d)
+	svc, err := logservice.New(getenv, d, logservice.Options{})
 	if err != nil {
 		log.Fatal(err)
-	}
-
-	// Only a non-nil notifier is set: a nil *notify.Notifier would make a
-	// non-nil logger.Notifier.
-	if n := newNotifier(getenv, d); n != nil {
-		go n.Accumulate()
-		l.SetNotifier(n)
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	if err := l.Start(ctx); err != nil {
+	if err := svc.Start(ctx); err != nil {
 		if ctx.Err() != nil {
 			log.Print("stopped while starting")
 			return
@@ -61,5 +54,5 @@ func main() {
 	<-ctx.Done()
 
 	log.Print("stopping")
-	l.Stop()
+	svc.Stop()
 }

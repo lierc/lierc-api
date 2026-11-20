@@ -1,4 +1,4 @@
-package main
+package logservice
 
 import "testing"
 

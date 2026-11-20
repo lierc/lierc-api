@@ -29,6 +29,7 @@ func New(conf *NotifierConfig, store Store) *Notifier {
 		Config:        conf,
 		Queue:         make(chan *logger.LoggedMessage, QueueSize),
 		store:         store,
+		accumulating:  make(chan struct{}),
 	}
 }
 

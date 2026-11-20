@@ -1,10 +1,10 @@
 // Package logger stores IRC messages from liercd in the log table and
-// republishes them, with their ids, for the API. It hands highlights and
-// private messages to the notifier, which runs in the same process.
+// hands them, with their ids, to its Output for the API's event streams
+// (NSQOutput: the NSQ topic "logged"). It hands highlights and private
+// messages to the notifier, which runs in the same process.
 //
 // It reads the NSQ topic "chats", written by liercd: lines from a
 // connection, where NICK and QUIT carry the channels they belong in.
-// Everything it handles is published to "logged".
 package logger
 
 import (
@@ -13,6 +13,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"net"
 	"time"
 
 	"github.com/lierc/lierc-api/internal/db"
@@ -21,15 +22,20 @@ import (
 )
 
 type Config struct {
+	// NSQDHost is nsqd's host (NSQD_HOST), with or without a port, as
+	// lierc-api reads it; without one, nsqd's default 4150 is used.
 	NSQDHost string
 }
 
 func (c *Config) nsqd() string {
-	return fmt.Sprintf("%s:4150", c.NSQDHost)
+	if _, _, err := net.SplitHostPort(c.NSQDHost); err == nil {
+		return c.NSQDHost
+	}
+	return net.JoinHostPort(c.NSQDHost, "4150")
 }
 
-// LoggedMessage is what's published to the logged topic, and handed to
-// the notifier.
+// LoggedMessage is a message the logger handled, as its Output and the
+// notifier get it, and as NSQOutput publishes it.
 type LoggedMessage struct {
 	Message      *ircwire.IRCMessage
 	ConnectionId string
@@ -44,16 +50,20 @@ type Notifier interface {
 	Notify(e *LoggedMessage)
 }
 
-type publisher interface {
-	Publish(topic string, body []byte) error
+// Output gets every message the logger handles, once stored. Logged must
+// not wait for long: it runs on the NSQ handler that stores messages.
+// Failures are its own to report; the message is already stored, and
+// retrying it would store it twice. It may keep e, which the logger
+// doesn't change after handing it over.
+type Output interface {
+	Logged(e *LoggedMessage)
 }
 
 type Logger struct {
 	config     *Config
 	db         *db.DB
 	store      Store
-	pub        publisher
-	producer   *nsq.Producer
+	out        Output
 	consumers  []*nsq.Consumer
 	highlights *Highlighters
 	// stopListening stops listenForHighlights' goroutine; listening is
@@ -64,22 +74,16 @@ type Logger struct {
 	notifier Notifier
 }
 
-// New returns a logger that stores messages in d. d stays the caller's to
-// close, after Stop.
-func New(config *Config, d *db.DB) (*Logger, error) {
-	producer, err := nsq.NewProducer(config.nsqd(), nsq.NewConfig())
-	if err != nil {
-		return nil, err
-	}
-
+// New returns a logger that stores messages in d and hands them to out.
+// d and out stay the caller's to close, after Stop.
+func New(config *Config, d *db.DB, out Output) *Logger {
 	return &Logger{
 		config:     config,
 		db:         d,
 		store:      &pgStore{db: d},
-		pub:        producer,
-		producer:   producer,
+		out:        out,
 		highlights: &Highlighters{},
-	}, nil
+	}
 }
 
 // Start loads highlights, starts listening for changes to them, and
@@ -90,9 +94,6 @@ func (l *Logger) Start(ctx context.Context) error {
 		return l.db.Pool.Ping(ctx)
 	})
 	if err != nil {
-		return err
-	}
-	if err := retry(ctx, "connecting to nsqd", l.producer.Ping); err != nil {
 		return err
 	}
 
@@ -171,7 +172,6 @@ func (l *Logger) Stop() {
 	for _, consumer := range l.consumers {
 		<-consumer.StopChan
 	}
-	l.producer.Stop()
 	if l.stopListening != nil {
 		l.stopListening()
 		<-l.listening
@@ -257,19 +257,10 @@ func (l *Logger) logMulti(m *ircwire.IRCClientMessage) error {
 	return nil
 }
 
-// publish sends e to the API, and hands it to the notifier if it's a
-// highlight or a private message. Failures are only logged: the message
-// is already stored, and retrying it would store it twice.
+// publish hands e to the Output, and to the notifier if it's a highlight
+// or a private message.
 func (l *Logger) publish(e *LoggedMessage) {
-	body, err := json.Marshal(e)
-	if err != nil {
-		log.Printf("encoding logged message: %v", err)
-		return
-	}
-
-	if err := l.pub.Publish("logged", body); err != nil {
-		log.Printf("publishing to logged: %v", err)
-	}
+	l.out.Logged(e)
 	if l.notifier != nil && (e.Highlight || (e.Message.Direct && !e.Message.Prefix.Self)) {
 		l.notifier.Notify(e)
 	}
