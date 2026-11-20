@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"io"
 	"mime/quotedprintable"
+	"net"
 	"net/mail"
+	"net/textproto"
 	"strings"
 	"testing"
 	"time"
@@ -99,5 +101,69 @@ func TestConfigUnsubscribeSecret(t *testing.T) {
 	c, err = ConfigFromEnv(func(string) string { return "" })
 	if err != nil || c.UnsubscribeSecret != "changeme" {
 		t.Errorf("unset: %v %q, want changeme", err, c.UnsubscribeSecret)
+	}
+}
+
+// SendEmail delivers the notification email over SMTP_OPTS' server, with
+// its headers and unsubscribe link.
+func TestSendEmailDelivers(t *testing.T) {
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer l.Close()
+	data := make(chan string, 1)
+	go func() {
+		c, err := l.Accept()
+		if err != nil {
+			return
+		}
+		defer c.Close()
+		tp := textproto.NewConn(c)
+		tp.PrintfLine("220 fake")
+		for {
+			line, err := tp.ReadLine()
+			if err != nil {
+				return
+			}
+			switch strings.ToUpper(line) {
+			case "DATA":
+				tp.PrintfLine("354 go")
+				b, _ := io.ReadAll(tp.DotReader())
+				data <- string(b)
+				tp.PrintfLine("250 queued")
+			case "QUIT":
+				tp.PrintfLine("221 bye")
+				return
+			default:
+				tp.PrintfLine("250 ok")
+			}
+		}
+	}()
+
+	n := &Notifier{Config: &NotifierConfig{APIURL: "https://relaychat.party", UnsubscribeSecret: "test-secret"}}
+	n.Config.SMTP.Host, n.Config.SMTP.Port = "127.0.0.1", l.Addr().(*net.TCPAddr).Port
+	n.Config.SMTP.Timeout = time.Second
+	if err := n.SendEmail([]*logger.LoggedMessage{highlight("c1", time.Now())}, "u1@example.com", "u1"); err != nil {
+		t.Fatal(err)
+	}
+	var got string
+	select {
+	case got = <-data:
+	case <-time.After(5 * time.Second):
+		t.Fatal("no email received")
+	}
+	m, err := mail.ReadMessage(strings.NewReader(got))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for k, want := range map[string]string{
+		"From":             `"Relaychat Party" <notifications@relaychat.party>`,
+		"To":               "<u1@example.com>",
+		"List-Unsubscribe": "<https://relaychat.party/api/unsubscribe?token=" + unsubscribeVector + ">",
+	} {
+		if v := m.Header.Get(k); v != want {
+			t.Errorf("%s: %q, want %q", k, v, want)
+		}
 	}
 }

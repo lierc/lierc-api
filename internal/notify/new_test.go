@@ -70,7 +70,7 @@ func TestConfigFromEnv(t *testing.T) {
 	}
 	if c.APIStats != env["API_STATS"] || c.APIURL != env["API_URL"] ||
 		c.VAPIDPrivateKey != "priv" || c.VAPIDPublicKey != "pub" ||
-		c.SMTPHost != "mail" || c.SMTPPort != 2525 ||
+		c.SMTP.Host != "mail" || c.SMTP.Port != 2525 ||
 		c.UserRateLimit != 5*time.Minute || c.Delay != 15*time.Second {
 		t.Fatalf("config %+v", c)
 	}

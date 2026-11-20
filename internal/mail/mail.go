@@ -1,5 +1,5 @@
-// Package mail sends the API's emails over SMTP, configured from SMTP_OPTS
-// (lierc-logger's notifier reads the same variable).
+// Package mail sends emails over SMTP, configured from SMTP_OPTS: the API's,
+// and lierc-logger's notifications.
 package mail
 
 import (
@@ -105,8 +105,12 @@ func (s *Sender) Send(to, subject, body string) error {
 	m.Subject(subject)
 	m.SetUserAgent("relaychat")
 	m.SetBodyString(gomail.TypeTextPlain, body)
+	return s.Opts.Send(m)
+}
 
-	c, err := client(s.Opts)
+// Send sends m, built by the caller, as o says (see client).
+func (o Opts) Send(m *gomail.Msg) error {
+	c, err := client(o)
 	if err != nil {
 		return err
 	}

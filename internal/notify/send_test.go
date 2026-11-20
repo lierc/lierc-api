@@ -102,7 +102,7 @@ func sendNotifier(t *testing.T, smtpAddr string) *Notifier {
 		if err != nil {
 			t.Fatal(err)
 		}
-		n.Config.SMTPHost, n.Config.SMTPPort = host, p
+		n.Config.SMTP.Host, n.Config.SMTP.Port = host, p
 	}
 	return n
 }

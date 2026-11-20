@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/lierc/lierc-api/internal/logger"
+	"github.com/lierc/lierc-api/internal/mail"
 	"golang.org/x/time/rate"
 )
 
@@ -61,9 +62,11 @@ func ConfigFromEnv(getenv func(string) string) (*NotifierConfig, error) {
 	if c.UnsubscribeSecret = getenv("UNSUBSCRIBE_SECRET"); c.UnsubscribeSecret == "" {
 		c.UnsubscribeSecret = "changeme"
 	}
-	if err := c.SetSMTPOpts(getenv("SMTP_OPTS")); err != nil {
+	smtp, err := mail.ParseOpts(getenv("SMTP_OPTS"))
+	if err != nil {
 		return nil, fmt.Errorf("SMTP_OPTS: %w", err)
 	}
+	c.SMTP = smtp
 	if err := c.SetUserRateLimit(getenv("USER_RATE_LIMIT")); err != nil {
 		return nil, fmt.Errorf("USER_RATE_LIMIT: %w", err)
 	}

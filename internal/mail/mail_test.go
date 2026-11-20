@@ -6,7 +6,6 @@ import (
 	"mime/quotedprintable"
 	"net"
 	"net/textproto"
-	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -164,28 +163,37 @@ func TestSendRefusesHeaderNewline(t *testing.T) {
 	}
 }
 
+// A server that says nothing, or greets and then says nothing, fails the
+// send within the timeout, with or without SSL.
 func TestSendTimeout(t *testing.T) {
-	l, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer l.Close()
-	go func() {
-		c, err := l.Accept()
-		if err == nil {
-			defer c.Close()
-			time.Sleep(5 * time.Second)
+	for _, greet := range []bool{false, true} {
+		l, err := net.Listen("tcp", "127.0.0.1:0")
+		if err != nil {
+			t.Fatal(err)
 		}
-	}()
-	port, _ := strconv.Atoi(strings.Split(l.Addr().String(), ":")[1])
-	for _, ssl := range []bool{false, true} {
-		s := &Sender{Opts: Opts{Host: "127.0.0.1", Port: port, SSL: ssl, Timeout: 300 * time.Millisecond}, From: "a@b.c"}
-		start := time.Now()
-		if err := s.Send("x@y.z", "s", "b"); err == nil {
-			t.Fatalf("ssl=%v: want an error", ssl)
-		}
-		if d := time.Since(start); d > 3*time.Second {
-			t.Errorf("ssl=%v: took %v", ssl, d)
+		defer l.Close()
+		go func() {
+			for {
+				c, err := l.Accept()
+				if err != nil {
+					return
+				}
+				defer c.Close()
+				if greet {
+					c.Write([]byte("220 stalling\r\n"))
+				}
+			}
+		}()
+		port := l.Addr().(*net.TCPAddr).Port
+		for _, ssl := range []bool{false, true} {
+			s := &Sender{Opts: Opts{Host: "127.0.0.1", Port: port, SSL: ssl, Timeout: 300 * time.Millisecond}, From: "a@b.c"}
+			start := time.Now()
+			if err := s.Send("x@y.z", "s", "b"); err == nil {
+				t.Fatalf("greet=%v ssl=%v: want an error", greet, ssl)
+			}
+			if d := time.Since(start); d > 3*time.Second {
+				t.Errorf("greet=%v ssl=%v: took %v", greet, ssl, d)
+			}
 		}
 	}
 }

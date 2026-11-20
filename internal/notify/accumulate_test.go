@@ -190,7 +190,7 @@ func TestSendEmailFailure(t *testing.T) {
 
 	n := accumulateNotifier(t, nil)
 	n.Limiter = rate.NewLimiter(rate.Inf, 1)
-	n.Config.SMTPHost, n.Config.SMTPPort = "127.0.0.1", port
+	n.Config.SMTP.Host, n.Config.SMTP.Port = "127.0.0.1", port
 	n.Send(&Notification{
 		User:     "u1",
 		Pref:     &NotificationPref{EmailEnabled: true, EmailAddress: "u1@example.com"},

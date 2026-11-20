@@ -14,6 +14,7 @@ import (
 
 	"github.com/lierc/lierc-api/internal/db"
 	"github.com/lierc/lierc-api/internal/logger"
+	"github.com/lierc/lierc-api/internal/mail"
 	"golang.org/x/time/rate"
 )
 
@@ -51,14 +52,11 @@ type NotifierConfig struct {
 	UnsubscribeSecret string
 	VAPIDPrivateKey   string
 	VAPIDPublicKey    string
-	SMTPHost          string
-	SMTPPort          int
-	SMTPSSL           bool
-	SMTPAuthUser      string
-	SMTPAuthPass      string
-	SMTPTimeout       time.Duration // per read and write; 0 means DefaultSMTPTimeout
-	Delay             time.Duration
-	UserRateLimit     time.Duration
+	// SMTP is where emails go (SMTP_OPTS, as lierc-api reads it); the
+	// zero Opts is mail's defaults
+	SMTP          mail.Opts
+	Delay         time.Duration
+	UserRateLimit time.Duration
 }
 
 // SetUserRateLimit sets how long to wait before notifying the same user
