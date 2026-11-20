@@ -92,6 +92,35 @@ func (e *env) liveConn(id, user string) {
 		fmt.Sprintf(`{"Id":%q,"Nick":"n","Config":{"Host":"irc.example"},"Status":{"Connected":false},"Registered":false}`, id))
 }
 
+// owned is body with its connection's owner added as UserId, as the
+// logger sends it; unchanged when the connection has no owner, or body has
+// no string ConnectionId.
+func (e *env) owned(body []byte) []byte {
+	var m struct{ ConnectionId string }
+	if json.Unmarshal(body, &m) != nil || m.ConnectionId == "" || len(body) < 2 || body[0] != '{' {
+		return body
+	}
+	owner, ok, err := e.db.LookupOwner(context.Background(), m.ConnectionId)
+	if err != nil {
+		e.t.Errorf("owner of %s: %v", m.ConnectionId, err)
+		return body
+	}
+	if !ok {
+		return body
+	}
+	return append([]byte(fmt.Sprintf(`{"UserId":%q,`, owner)), body[1:]...)
+}
+
+// owning wraps an NSQ publish so what goes to "logged" carries its owner.
+func (e *env) owning(publish func(string, []byte)) func(string, []byte) {
+	return func(topic string, body []byte) {
+		if topic == "logged" {
+			body = e.owned(body)
+		}
+		publish(topic, body)
+	}
+}
+
 type event struct {
 	typ, data, id string
 	hasID         bool
@@ -748,6 +777,7 @@ func awaitSubscribed(t *testing.T, publish func(string, []byte), conn string, cs
 func TestLiveDelivery(t *testing.T) {
 	addr, publish := testenv.NSQD(t)
 	e := setup(t)
+	publish = e.owning(publish)
 	a, b := e.addUser("alice"), e.addUser("bob")
 	e.liveConn("ca", a)
 	e.liveConn("cb", b)
@@ -781,13 +811,13 @@ func TestLiveDelivery(t *testing.T) {
 	for _, c := range []*client{a1, a2} {
 		for _, m := range msgs {
 			ev := c.nextIRC()
-			if ev.data != m.body || ev.hasID != (m.id != "") || ev.id != m.id {
+			if body := string(e.owned([]byte(m.body))); ev.data != body || ev.hasID != (m.id != "") || ev.id != m.id {
 				t.Errorf("got %+v, want data %s id %q", ev, m.body, m.id)
 			}
 		}
 	}
 	// bob's first live event is his own message: none of alice's reached him.
-	if ev := b1.nextIRC(); ev.data != `{"ConnectionId":"cb","MessageId":7}` || ev.id != "7" {
+	if ev := b1.nextIRC(); ev.data != string(e.owned([]byte(`{"ConnectionId":"cb","MessageId":7}`))) || ev.id != "7" {
 		t.Errorf("bob got %+v", ev)
 	}
 }
@@ -795,6 +825,7 @@ func TestLiveDelivery(t *testing.T) {
 func TestPingLastID(t *testing.T) {
 	addr, publish := testenv.NSQD(t)
 	e := setup(t)
+	publish = e.owning(publish)
 	a, b := e.addUser("alice"), e.addUser("bob")
 	e.liveConn("ca", a)
 	e.liveConn("cb", b)
@@ -1002,6 +1033,7 @@ func TestConsumeWaitsForNSQD(t *testing.T) {
 	time.Sleep(200 * time.Millisecond) // a few failed attempts
 
 	_, publish, _ := testenv.NSQDAt(t, addr)
+	publish = e.owning(publish)
 	awaitSubscribed(t, publish, "ca", c)
 	publish("logged", []byte(`{"ConnectionId":"ca","MessageId":1}`))
 	if ev := c.nextIRC(); ev.id != "1" {
@@ -1013,6 +1045,7 @@ func TestConsumeWaitsForNSQD(t *testing.T) {
 func TestConsumeReconnects(t *testing.T) {
 	addr, publish, stop := testenv.NSQDAt(t, "127.0.0.1:0")
 	e := setup(t)
+	publish = e.owning(publish)
 	e.s.NSQReconnect = 50 * time.Millisecond
 	u := e.addUser("alice")
 	e.liveConn("ca", u)
@@ -1022,6 +1055,7 @@ func TestConsumeReconnects(t *testing.T) {
 
 	stop()
 	_, publish, _ = testenv.NSQDAt(t, addr)
+	publish = e.owning(publish)
 	awaitSubscribed(t, publish, "ca", c)
 	publish("logged", []byte(`{"ConnectionId":"ca","MessageId":2}`))
 	if ev := c.nextIRC(); ev.id != "2" {
@@ -1051,6 +1085,7 @@ func TestConsumeStopsWhileWaiting(t *testing.T) {
 func TestTwoConsumersBothDeliver(t *testing.T) {
 	addr, publish := testenv.NSQD(t)
 	e1 := setup(t)
+	publish = e1.owning(publish)
 	e2 := setupWith(t, e1.db, e1.fake, e1.fake.URL)
 	u := e1.addUser("alice")
 	e1.liveConn("ca", u)
@@ -1074,6 +1109,7 @@ func TestTwoConsumersBothDeliver(t *testing.T) {
 func TestConcurrentWritesRace(t *testing.T) {
 	addr, publish := testenv.NSQD(t)
 	e := setup(t)
+	publish = e.owning(publish)
 	u := e.addUser("alice")
 	e.liveConn("ca", u)
 	c := e.openReplayed(u)
@@ -1092,7 +1128,7 @@ func TestConcurrentWritesRace(t *testing.T) {
 		go func(w int) {
 			defer wg.Done()
 			for i := 0; i < perWorker; i++ {
-				e.s.Deliver([]byte(fmt.Sprintf(`{"ConnectionId":"ca","MessageId":%d}`, 1+w*perWorker+i)))
+				e.s.Deliver(e.owned([]byte(fmt.Sprintf(`{"ConnectionId":"ca","MessageId":%d}`, 1+w*perWorker+i))))
 			}
 		}(w)
 	}
@@ -1231,7 +1267,7 @@ func TestWriteTimeout(t *testing.T) {
 		if i == 400 {
 			t.Fatal("writer never stalled")
 		}
-		e.s.Deliver(big)
+		e.s.Deliver(e.owned(big))
 		drained := false
 		for end := time.Now().Add(100 * time.Millisecond); time.Now().Before(end); time.Sleep(time.Millisecond) {
 			if len(st.out) == 0 {
@@ -1275,7 +1311,7 @@ func TestSlowClientDropped(t *testing.T) {
 		if i == 20000 {
 			t.Fatal("stream never dropped")
 		}
-		e.s.Deliver(msg)
+		e.s.Deliver(e.owned(msg))
 	}
 	// Deregistered by the delivery that overflowed, not later by the handler.
 	select {
@@ -1339,7 +1375,7 @@ func TestLargeReplaySurvivesLiveEvents(t *testing.T) {
 	const live = 300
 	for i := 0; i < live; i++ {
 		time.Sleep(time.Millisecond)
-		e.s.Deliver([]byte(fmt.Sprintf(`{"ConnectionId":"ca","MessageId":%d}`, i+1)))
+		e.s.Deliver(e.owned([]byte(fmt.Sprintf(`{"ConnectionId":"ca","MessageId":%d}`, i+1))))
 		if i%10 == 0 {
 			e.s.pingAll()
 		}

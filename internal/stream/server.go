@@ -204,13 +204,12 @@ func (s *Server) deregisterLocked(st *stream) {
 	}
 }
 
-// Deliver sends one NSQ "logged" message to every stream of the owner of its
-// ConnectionId. The body is passed through untouched. The logger sends
+// Deliver sends one NSQ "logged" message to every stream of its owner,
+// UserId. The body is passed through untouched. The logger sends
 // ConnectionId and UserId as strings and MessageId as a number (its
-// logger.LoggedMessage); a message with other types is logged and dropped. A
-// MessageId of 0 or none means the event goes out without an id. UserId is
-// the owner, which the logger always sends; only a message from an older
-// logger, without it, has its owner looked up.
+// logger.LoggedMessage); a message with other types, or without a UserId,
+// is logged and dropped. A MessageId of 0 or none means the event goes out
+// without an id.
 func (s *Server) Deliver(body []byte) {
 	var m struct {
 		ConnectionId string
@@ -233,20 +232,12 @@ func (s *Server) Deliver(body []byte) {
 	idle := len(s.streams) == 0
 	s.mu.Unlock()
 	if idle {
-		return // nobody to deliver to; skip the owner lookup
+		return // nobody to deliver to
 	}
-
 	owner := m.UserId
 	if owner == "" {
-		o, ok, err := s.lookupOwner(m.ConnectionId)
-		if err != nil {
-			log.Printf("stream: lookup owner: %v", err)
-			return
-		}
-		if !ok {
-			return
-		}
-		owner = o
+		log.Printf("stream: message on %s without its owner (UserId), dropped", m.ConnectionId)
+		return
 	}
 
 	var id string
@@ -263,13 +254,6 @@ func (s *Server) Deliver(body []byte) {
 	for _, st := range s.streams[owner] {
 		s.offerLocked(st, ev)
 	}
-}
-
-// lookupOwner is the user who owns connection.
-func (s *Server) lookupOwner(connection string) (string, bool, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-	return s.db.LookupOwner(ctx, connection)
 }
 
 // sseEvent formats a Server-Sent Event: the id line only when id is non-empty.
