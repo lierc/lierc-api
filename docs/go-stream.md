@@ -20,8 +20,8 @@ See also `docs/lierc-api.md`, "Event stream":
 - Any path on the main listener: 401 unless the `chats` cookie verifies and names an existing
   user. Then 2 KB of comment padding, a `stream` event with the stream's
   id (`{"id":"…"}`), a `ping`, the replay of each connection's state
-  (recreating it in liercd if needed), and live messages from NSQ topic
-  `logged` for the user's connections.
+  (recreating it in liercd if needed), and live messages for the user's
+  connections, which the logger sends as Postgres NOTIFYs on `logged`.
 - Pings every 5 s. Each ping's data is `{"time":…,"last_id":…}`, where
   `last_id` is the user's newest logged message id (0 if none), so a client
   can fetch what it missed. A stream whose write blocks for 3 minutes is

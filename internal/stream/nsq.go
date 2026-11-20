@@ -11,14 +11,12 @@ import (
 	"github.com/nsqio/go-nsq"
 )
 
-// Consume subscribes to topic "logged", whose messages it delivers (the
-// logger now sends them as NOTIFYs, db.ListenLogged; this goes once no
-// logger publishes on NSQ), and
-// topic "status", liercd's connection state, which it sends as
-// connection:connect and connection:disconnect. Each is on a channel of its
+// Consume subscribes to topic "status", liercd's connection state, which it
+// sends as connection:connect and connection:disconnect, on a channel of its
 // own, so every stream process sees every message, until ctx is done; if
 // nsqd is down, at start or later, it retries every NSQReconnect, and
-// messages published meanwhile are lost. It also consumes topic "config",
+// messages published meanwhile are lost. (The logger's messages come as
+// Postgres NOTIFYs instead: db.ListenLogged.) It also consumes topic "config",
 // liercd's own config changes, on the durable configChannel, so those
 // queue while the API is away and are saved one at a time, in order. It
 // returns early only if a consumer cannot be created.
@@ -27,16 +25,12 @@ func (s *Server) Consume(ctx context.Context, nsqAddr string) error {
 	if err != nil {
 		return err
 	}
-	logged, err := s.consumer("logged", s.Deliver)
-	if err != nil {
-		return err
-	}
 	config, err := s.consumerOn("config", configChannel, s.configChanged)
 	if err != nil {
 		return err
 	}
 	var wg sync.WaitGroup
-	for _, c := range []*nsq.Consumer{status, logged, config} {
+	for _, c := range []*nsq.Consumer{status, config} {
 		wg.Add(1)
 		go func() { defer wg.Done(); s.connect(ctx, c, nsqAddr) }()
 	}

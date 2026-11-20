@@ -204,7 +204,8 @@ func (s *Server) deregisterLocked(st *stream) {
 	}
 }
 
-// Deliver sends one NSQ "logged" message to every stream of its owner,
+// Deliver sends one logged message, a NOTIFY payload from the logger (see
+// db.ListenLogged), to every stream of its owner,
 // UserId. The body is passed through untouched. The logger sends
 // ConnectionId and UserId as strings and MessageId as a number (its
 // logger.LoggedMessage); a message with other types, or without a UserId,

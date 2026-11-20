@@ -83,8 +83,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, stderr 
 			nsqErr <- err
 		}
 	}()
-	// the logger's messages, as NOTIFYs on "logged"; NSQ's topic "logged"
-	// is still consumed too (Consume) until no logger publishes there
+	// the logger's messages, as Postgres NOTIFYs on "logged"
 	go d.ListenLogged(ctx, 5*time.Second, s.Deliver, func(err error) {
 		logger.Printf("logged listener: %v (retrying in 5s)", err)
 	})

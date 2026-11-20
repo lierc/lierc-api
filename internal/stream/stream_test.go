@@ -111,13 +111,24 @@ func (e *env) owned(body []byte) []byte {
 	return append([]byte(fmt.Sprintf(`{"UserId":%q,`, owner)), body[1:]...)
 }
 
-// owning wraps an NSQ publish so what goes to "logged" carries its owner.
-func (e *env) owning(publish func(string, []byte)) func(string, []byte) {
+// notifyLogged runs a ListenLogged into e's Deliver, as lierc-api does, and
+// returns a publish for awaitSubscribed and the tests: it sends a "logged"
+// message as a NOTIFY, with its owner added (owned).
+func (e *env) notifyLogged() func(topic string, body []byte) {
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		e.db.ListenLogged(ctx, 10*time.Millisecond, e.s.Deliver, func(error) {})
+	}()
+	e.t.Cleanup(func() { cancel(); <-done })
 	return func(topic string, body []byte) {
-		if topic == "logged" {
-			body = e.owned(body)
+		if topic != "logged" {
+			e.t.Fatalf("notifyLogged's publish sends only logged, not %s", topic)
 		}
-		publish(topic, body)
+		if err := e.db.NotifyLogged(context.Background(), e.owned(body)); err != nil {
+			e.t.Errorf("NotifyLogged: %v", err)
+		}
 	}
 }
 
@@ -775,14 +786,12 @@ func awaitSubscribed(t *testing.T, publish func(string, []byte), conn string, cs
 }
 
 func TestLiveDelivery(t *testing.T) {
-	addr, publish := testenv.NSQD(t)
 	e := setup(t)
-	publish = e.owning(publish)
+	publish := e.notifyLogged()
 	a, b := e.addUser("alice"), e.addUser("bob")
 	e.liveConn("ca", a)
 	e.liveConn("cb", b)
 	a1, a2, b1 := e.openReplayed(a), e.openReplayed(a), e.openReplayed(b)
-	consume(t, e.s, addr)
 	awaitSubscribed(t, publish, "ca", a1, a2)
 	awaitSubscribed(t, publish, "cb", b1)
 
@@ -823,9 +832,8 @@ func TestLiveDelivery(t *testing.T) {
 }
 
 func TestPingLastID(t *testing.T) {
-	addr, publish := testenv.NSQD(t)
 	e := setup(t)
-	publish = e.owning(publish)
+	publish := e.notifyLogged()
 	a, b := e.addUser("alice"), e.addUser("bob")
 	e.liveConn("ca", a)
 	e.liveConn("cb", b)
@@ -842,7 +850,6 @@ func TestPingLastID(t *testing.T) {
 	}
 	e.waitReplay()
 	e.waitReplay()
-	consume(t, e.s, addr)
 	awaitSubscribed(t, publish, "ca", ac)
 
 	// nextPing skips replay and probe events.
@@ -1021,6 +1028,36 @@ func TestNSQReconnectDefault(t *testing.T) {
 	}
 }
 
+// awaitStatus publishes conn's disconnection on "status" until c gets
+// it, so the status consumer is subscribed, then its connection, which c
+// must get next.
+func awaitStatus(t *testing.T, publish func(string, []byte), conn string, c *client) {
+	t.Helper()
+	deadline := time.Now().Add(waitFor)
+	for seen := false; !seen; {
+		if time.Now().After(deadline) {
+			t.Fatal("status consumer never subscribed")
+		}
+		publish("status", []byte(fmt.Sprintf(`{"Id":%q,"Connected":false}`, conn)))
+		select {
+		case ev := <-c.events:
+			seen = ev.typ == "connection:disconnect"
+		case <-time.After(50 * time.Millisecond):
+		}
+	}
+	publish("status", []byte(fmt.Sprintf(`{"Id":%q,"Connected":true}`, conn)))
+	for {
+		ev := c.next()
+		if ev.typ == "connection:disconnect" {
+			continue // a leftover from the loop
+		}
+		if ev.typ != "connection:connect" {
+			t.Fatalf("got %+v, want connection:connect", ev)
+		}
+		return
+	}
+}
+
 // nsqd is not running when Consume starts; it subscribes once nsqd is up.
 func TestConsumeWaitsForNSQD(t *testing.T) {
 	e := setup(t)
@@ -1033,34 +1070,23 @@ func TestConsumeWaitsForNSQD(t *testing.T) {
 	time.Sleep(200 * time.Millisecond) // a few failed attempts
 
 	_, publish, _ := testenv.NSQDAt(t, addr)
-	publish = e.owning(publish)
-	awaitSubscribed(t, publish, "ca", c)
-	publish("logged", []byte(`{"ConnectionId":"ca","MessageId":1}`))
-	if ev := c.nextIRC(); ev.id != "1" {
-		t.Fatalf("got %+v", ev)
-	}
+	awaitStatus(t, publish, "ca", c)
 }
 
 // nsqd restarts; the consumer reconnects after NSQReconnect.
 func TestConsumeReconnects(t *testing.T) {
 	addr, publish, stop := testenv.NSQDAt(t, "127.0.0.1:0")
 	e := setup(t)
-	publish = e.owning(publish)
 	e.s.NSQReconnect = 50 * time.Millisecond
 	u := e.addUser("alice")
 	e.liveConn("ca", u)
 	c := e.openReplayed(u)
 	consume(t, e.s, addr)
-	awaitSubscribed(t, publish, "ca", c)
+	awaitStatus(t, publish, "ca", c)
 
 	stop()
 	_, publish, _ = testenv.NSQDAt(t, addr)
-	publish = e.owning(publish)
-	awaitSubscribed(t, publish, "ca", c)
-	publish("logged", []byte(`{"ConnectionId":"ca","MessageId":2}`))
-	if ev := c.nextIRC(); ev.id != "2" {
-		t.Fatalf("got %+v", ev)
-	}
+	awaitStatus(t, publish, "ca", c)
 }
 
 // Consume returns nil when ctx ends while nsqd has never been reachable.
@@ -1082,16 +1108,16 @@ func TestConsumeStopsWhileWaiting(t *testing.T) {
 	}
 }
 
-func TestTwoConsumersBothDeliver(t *testing.T) {
-	addr, publish := testenv.NSQD(t)
+// Two stream servers on one database (two lierc-api processes) each get
+// every logged message.
+func TestTwoServersBothDeliver(t *testing.T) {
 	e1 := setup(t)
-	publish = e1.owning(publish)
+	publish := e1.notifyLogged()
 	e2 := setupWith(t, e1.db, e1.fake, e1.fake.URL)
+	e2.notifyLogged() // its own LISTEN: every NOTIFY reaches both
 	u := e1.addUser("alice")
 	e1.liveConn("ca", u)
 	c1, c2 := e1.openReplayed(u), e2.openReplayed(u)
-	consume(t, e1.s, addr)
-	consume(t, e2.s, addr)
 	awaitSubscribed(t, publish, "ca", c1, c2)
 
 	for i := 1; i <= 20; i++ {
@@ -1107,13 +1133,11 @@ func TestTwoConsumersBothDeliver(t *testing.T) {
 }
 
 func TestConcurrentWritesRace(t *testing.T) {
-	addr, publish := testenv.NSQD(t)
 	e := setup(t)
-	publish = e.owning(publish)
+	publish := e.notifyLogged()
 	u := e.addUser("alice")
 	e.liveConn("ca", u)
 	c := e.openReplayed(u)
-	consume(t, e.s, addr)
 	awaitSubscribed(t, publish, "ca", c)
 
 	e.s.PingInterval = time.Millisecond
@@ -1121,7 +1145,7 @@ func TestConcurrentWritesRace(t *testing.T) {
 	defer cancel()
 	go e.s.Run(ctx)
 
-	const viaNSQ, workers, perWorker = 300, 4, 100
+	const viaNotify, workers, perWorker = 300, 4, 100
 	var wg sync.WaitGroup
 	for w := 0; w < workers; w++ {
 		wg.Add(1)
@@ -1132,14 +1156,14 @@ func TestConcurrentWritesRace(t *testing.T) {
 			}
 		}(w)
 	}
-	for i := 0; i < viaNSQ; i++ {
+	for i := 0; i < viaNotify; i++ {
 		publish("logged", []byte(fmt.Sprintf(`{"ConnectionId":"ca","MessageId":%d}`, 100000+i)))
 	}
 	wg.Wait()
 
 	seen := map[string]bool{}
 	pings := 0
-	for len(seen) < viaNSQ+workers*perWorker {
+	for len(seen) < viaNotify+workers*perWorker {
 		ev := c.next()
 		switch {
 		case ev.typ == "ping":
