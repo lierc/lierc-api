@@ -132,14 +132,19 @@ func startContainer(ctx context.Context) (string, error) {
 			return "", fmt.Errorf("starting the tests' Postgres (docker run %s): %v: %s", pgImage, err, out)
 		}
 	}
-	for range 50 {
+	// another test process may have made it and still be starting it,
+	// which on a busy CI runner can take several seconds
+	for deadline := time.Now().Add(containerStart); time.Now().Before(deadline); time.Sleep(100 * time.Millisecond) {
 		if url, ok := containerURL(ctx); ok {
 			return url, nil
 		}
-		time.Sleep(100 * time.Millisecond)
 	}
-	return "", fmt.Errorf("the tests' Postgres container %s didn't start", pgContainer)
+	return "", fmt.Errorf("the tests' Postgres container %s didn't start within %s", pgContainer, containerStart)
 }
+
+// containerStart is how long startContainer waits for the container to
+// run, as waitForPostgres waits for the server in it.
+const containerStart = 60 * time.Second
 
 // containerURL is the running container's admin URL, from the host port
 // Docker gave it.
