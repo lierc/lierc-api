@@ -16,9 +16,9 @@ check against.
 
 The image also carries two binaries of their own: `lctl`, the admin
 command (`lctl help`), and `lierc-logger`, which reads everything liercd
-publishes on NSQ: it logs IRC traffic to Postgres, saves the config
-changes liercd makes (sent with the line that made them, or on the older
-`config` topic), hands messages and connection states to lierc-api as
+publishes on NSQ (the `chats` topic): it logs IRC traffic to Postgres,
+saves the config changes liercd makes (sent with the line that made
+them), hands messages, connection states included, to lierc-api as
 Postgres NOTIFYs, and sends the highlight notifications (web push and
 email). The logger runs as its own process, from `docker run --entrypoint
 /lierc-logger`; it moved here from the lierc repo, with its history.

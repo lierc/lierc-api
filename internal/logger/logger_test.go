@@ -94,15 +94,12 @@ func (s *fakeStore) Highlights(ctx context.Context) (map[string]string, error) {
 type fakeOutput struct {
 	published []string // "logged command id"
 	got       []*LoggedMessage
-	statuses  []StatusChange
 }
 
 func (o *fakeOutput) Logged(e *LoggedMessage) {
 	o.published = append(o.published, "logged "+e.Message.Command+" "+string(rune('0'+e.MessageId)))
 	o.got = append(o.got, e)
 }
-
-func (o *fakeOutput) Status(s *StatusChange) { o.statuses = append(o.statuses, *s) }
 
 // fakeNotifier records what the logger hands to the notifier.
 type fakeNotifier struct{ got []string } // "command id"

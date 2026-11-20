@@ -57,22 +57,13 @@ type Notifier interface {
 	Notify(e *LoggedMessage)
 }
 
-// Output gets every message the logger handles, once stored, and every
-// change in a connection's state. Its methods must not wait for long: they
-// run on the NSQ handlers. Failures are its own to report; the message is
-// already stored, and retrying it would store it twice. It may keep what
-// it's given, which the logger doesn't change after handing it over.
+// Output gets every message the logger handles, once stored. Logged must
+// not wait for long: it runs on the NSQ handler that stores messages.
+// Failures are its own to report; the message is already stored, and
+// retrying it would store it twice. It may keep e, which the logger
+// doesn't change after handing it over.
 type Output interface {
 	Logged(e *LoggedMessage)
-	Status(s *StatusChange)
-}
-
-// StatusChange is a connection's state from liercd (the status topic),
-// with its owner, as Output.Status gets it and PGOutput sends it.
-type StatusChange struct {
-	ConnectionId string
-	Connected    bool
-	UserId       string
 }
 
 type Logger struct {
@@ -123,16 +114,12 @@ func (l *Logger) Start(ctx context.Context) error {
 	}
 	l.listenForHighlights(ctx)
 
-	// a consumer each, so a config save waiting on a connection's row
-	// lock holds up only the config topic
 	for _, c := range []struct {
 		topic, channel string
 		config         *nsq.Config
 		handle         nsq.HandlerFunc
 	}{
 		{"chats", "logger", consumerConfig(), l.handleChat},
-		{"config", "logger", retryForeverConfig(), l.handleConfig},
-		{"status", "logger#ephemeral", consumerConfig(), l.handleStatus},
 	} {
 		topic := c.topic
 		consumer, err := nsq.NewConsumer(topic, c.channel, c.config)
@@ -163,18 +150,6 @@ const reconnectInterval = 5 * time.Second
 func consumerConfig() *nsq.Config {
 	config := nsq.NewConfig()
 	config.LookupdPollInterval = reconnectInterval
-	return config
-}
-
-// retryForeverConfig is consumerConfig for config changes, which mustn't
-// be lost: a message the handler fails is delivered again reconnectInterval
-// times the attempts later, for as long as it takes (go-nsq would drop it
-// after 5 attempts), and the consumer backs off meanwhile.
-func retryForeverConfig() *nsq.Config {
-	config := consumerConfig()
-	config.DefaultRequeueDelay = reconnectInterval
-	config.BackoffMultiplier = reconnectInterval
-	config.MaxAttempts = 0
 	return config
 }
 

@@ -77,9 +77,9 @@ func run(ctx context.Context, args []string, getenv func(string) string, stderr 
 	lc := liercd.NewRouted(liercd.Instances{Main: cfg.LiercdHost, Next: cfg.LiercdNextHost}, d.LookupLiercd)
 	s := stream.New(cfg, d, lc)
 	go s.Run(ctx)
-	// the logger's messages and liercd's connection states, as Postgres
-	// NOTIFYs on "logged" and "status"
-	go d.ListenStream(ctx, 5*time.Second, s.Deliver, s.StatusChanged, func(err error) {
+	// the logger's messages, liercd's status lines among them, as Postgres
+	// NOTIFYs on "logged"
+	go d.ListenStream(ctx, 5*time.Second, s.Deliver, func(err error) {
 		logger.Printf("stream listener: %v (retrying in 5s)", err)
 	})
 	// The whole API, the event stream included; /stats and the /admin/ API

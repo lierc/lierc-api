@@ -63,9 +63,10 @@ func (d *DB) DeleteConnection(ctx context.Context, id string) error {
 
 // MergeConfig merges fields, a JSON object, into the connection's saved
 // config in one statement: liercd's own changes (its channels as it joins
-// and parts, a nick), from the config topic. It waits for an EditConfig
-// of the same row, then lands on top of it. A missing connection, or a
-// config or fields that aren't objects, change nothing and aren't errors.
+// and parts, a nick), sent with the line that made them and saved by the
+// logger's config queue. It waits for an EditConfig of the same row, then
+// lands on top of it. A missing connection, or a config or fields that
+// aren't objects, change nothing and aren't errors.
 func (d *DB) MergeConfig(ctx context.Context, id string, fields []byte) error {
 	f := string(fields)
 	_, err := exec(ctx, d.Pool, psql.Update("connections").Set("config", sq.Expr("config::jsonb || ?::jsonb", f)).

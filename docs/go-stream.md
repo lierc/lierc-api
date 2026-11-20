@@ -60,9 +60,7 @@ Postgres NOTIFY on `logged`, which it LISTENs for on one connection of its
 own (`lierc stream listener` in `pg_stat_activity`), so several instances
 each get every one. liercd's `000` status line comes with a `Status` field,
 set by liercd in its message envelope (never from an IRC server's line),
-and goes out as `connection:connect` or `:disconnect` too. (For a liercd
-from before that field, the logger forwards its `status` topic as NOTIFYs
-on `status`, on the same connection.)
+and goes out as `connection:connect` or `:disconnect` too.
 If that connection drops it keeps serving streams (replay works; live
 messages wait) and reconnects every 5 s. Notifications sent while it is
 disconnected are lost; clients catch up from `last_id`.

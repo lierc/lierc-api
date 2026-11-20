@@ -10,8 +10,8 @@ import (
 )
 
 // LISTEN and NOTIFY: highlights (lierc-api tells the logger to reload
-// highlight words), and logged and status (the logger hands the stream
-// server each message it handled, and liercd's connection state).
+// highlight words) and logged (the logger hands the stream server each
+// message it handled).
 
 // ListenerName is the application_name of ListenHighlights' connection;
 // StreamListenerName is ListenStream's.
@@ -46,12 +46,6 @@ func (d *DB) NotifyLogged(ctx context.Context, payload []byte) error {
 	return d.notify(ctx, "logged", payload)
 }
 
-// NotifyStatus sends payload, a connection's state from liercd, to
-// ListenStream, as NotifyLogged does.
-func (d *DB) NotifyStatus(ctx context.Context, payload []byte) error {
-	return d.notify(ctx, "status", payload)
-}
-
 func (d *DB) notify(ctx context.Context, channel string, payload []byte) error {
 	if len(payload) > MaxNotifyPayload {
 		return fmt.Errorf("%w: %d bytes", ErrPayloadTooLong, len(payload))
@@ -60,14 +54,12 @@ func (d *DB) notify(ctx context.Context, channel string, payload []byte) error {
 	return err
 }
 
-// ListenStream calls logged with each NotifyLogged payload and status with
-// each NotifyStatus one, in the order they were sent, on one connection.
-// Notifications sent while it's reconnecting are missed: clients catch up
-// from the database. See listenLoop.
-func (d *DB) ListenStream(ctx context.Context, retry time.Duration, logged, status func(payload []byte), report func(error)) {
+// ListenStream calls logged with each NotifyLogged payload, in the order
+// they were sent. Notifications sent while it's reconnecting are missed:
+// clients catch up from the database. See listenLoop.
+func (d *DB) ListenStream(ctx context.Context, retry time.Duration, logged func(payload []byte), report func(error)) {
 	d.listenLoop(ctx, StreamListenerName, retry, func() {}, map[string]func(string){
 		"logged": func(p string) { logged([]byte(p)) },
-		"status": func(p string) { status([]byte(p)) },
 	}, report)
 }
 

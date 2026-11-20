@@ -19,13 +19,6 @@ import (
 type fakeLoggedNotifier struct {
 	payload []byte
 	err     error
-	// status is NotifyStatus's payload
-	status []byte
-}
-
-func (n *fakeLoggedNotifier) NotifyStatus(ctx context.Context, payload []byte) error {
-	n.status = payload
-	return n.err
 }
 
 func (n *fakeLoggedNotifier) NotifyLogged(ctx context.Context, payload []byte) error {

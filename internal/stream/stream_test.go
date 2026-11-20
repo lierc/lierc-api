@@ -111,30 +111,24 @@ func (e *env) owned(body []byte) []byte {
 	return append([]byte(fmt.Sprintf(`{"UserId":%q,`, owner)), body[1:]...)
 }
 
-// notifyLogged runs a ListenStream into e's Deliver and StatusChanged, as
-// lierc-api does, and returns a publish for awaitSubscribed and the tests:
-// it sends a "logged" or "status" payload as a NOTIFY, with its owner
-// added (owned), as the logger does.
+// notifyLogged runs a ListenStream into e's Deliver, as lierc-api does,
+// and returns a publish for awaitSubscribed and the tests: it sends a
+// "logged" payload as a NOTIFY, with its owner added (owned), as the
+// logger does.
 func (e *env) notifyLogged() func(channel string, body []byte) {
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		e.db.ListenStream(ctx, 10*time.Millisecond, e.s.Deliver, e.s.StatusChanged, func(error) {})
+		e.db.ListenStream(ctx, 10*time.Millisecond, e.s.Deliver, func(error) {})
 	}()
 	e.t.Cleanup(func() { cancel(); <-done })
 	return func(channel string, body []byte) {
-		var err error
-		switch channel {
-		case "logged":
-			err = e.db.NotifyLogged(context.Background(), e.owned(body))
-		case "status":
-			err = e.db.NotifyStatus(context.Background(), e.owned(body))
-		default:
-			e.t.Fatalf("notifyLogged's publish sends logged or status, not %s", channel)
+		if channel != "logged" {
+			e.t.Fatalf("notifyLogged's publish sends only logged, not %s", channel)
 		}
-		if err != nil {
-			e.t.Errorf("notify %s: %v", channel, err)
+		if err := e.db.NotifyLogged(context.Background(), e.owned(body)); err != nil {
+			e.t.Errorf("NotifyLogged: %v", err)
 		}
 	}
 }

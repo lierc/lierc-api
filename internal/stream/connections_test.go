@@ -131,47 +131,6 @@ func TestDeliverDropsCreateDeletePassesConnect(t *testing.T) {
 	}
 }
 
-// The logger's status NOTIFYs reach the owner's streams as
-// connection:connect and :disconnect, with no SSE id; one without an
-// owner is dropped.
-func TestStatusEvents(t *testing.T) {
-	e := setup(t)
-	publish := e.notifyLogged()
-	u := e.addUser("alice")
-	e.liveConn("c1", u)
-	c := e.openReplayed(u)
-
-	deadline := time.Now().Add(waitFor)
-	for seen := false; !seen; {
-		if time.Now().After(deadline) {
-			t.Fatal("status listener never subscribed")
-		}
-		publish("status", []byte(`{"ConnectionId":"c1","Connected":false}`))
-		select {
-		case ev := <-c.events:
-			if ev.typ == "connection:disconnect" {
-				seen = true
-				if ev.data != `{"Id":"c1"}` || ev.hasID {
-					t.Errorf("disconnect: %+v", ev)
-				}
-			}
-		case <-time.After(50 * time.Millisecond):
-		}
-	}
-	publish("status", []byte(`{"ConnectionId":"nobody","Connected":true}`)) // no owner: dropped
-	publish("status", []byte(`{"ConnectionId":"c1","Connected":true}`))
-	for {
-		ev := nextConnEvent(c)
-		if ev.typ == "connection:disconnect" {
-			continue // a leftover from the subscribe loop
-		}
-		if ev.typ != "connection:connect" || ev.data != `{"Id":"c1"}` {
-			t.Errorf("connect: %+v", ev)
-		}
-		break
-	}
-}
-
 // Deliver goes by UserId alone: a message goes to its owner's streams
 // even for a connection that isn't in the database, and one without a
 // UserId is dropped, though its connection has an owner.
@@ -206,7 +165,7 @@ func TestDeliverFromNotify(t *testing.T) {
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		e.db.ListenStream(ctx, 10*time.Millisecond, e.s.Deliver, e.s.StatusChanged, func(error) {})
+		e.db.ListenStream(ctx, 10*time.Millisecond, e.s.Deliver, func(error) {})
 	}()
 	t.Cleanup(func() { cancel(); <-done })
 

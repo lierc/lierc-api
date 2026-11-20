@@ -15,7 +15,6 @@ import (
 // loggedNotifier is the part of *db.DB PGOutput uses.
 type loggedNotifier interface {
 	NotifyLogged(ctx context.Context, payload []byte) error
-	NotifyStatus(ctx context.Context, payload []byte) error
 }
 
 // Payload sizes, by kind: "stored" (a message with an id) or "passed"
@@ -72,9 +71,8 @@ func countTooLong(e *LoggedMessage) {
 const notifyTimeout = 5 * time.Second
 
 // PGOutput sends each message, as JSON, as a Postgres NOTIFY on the
-// channel "logged", and each status change on "status", which the API's
-// stream server listens on (db.ListenStream). Each goes to whoever is
-// listening when it's sent.
+// channel "logged", which the API's stream server listens on
+// (db.ListenStream). It goes to whoever is listening when it's sent.
 type PGOutput struct {
 	DB loggedNotifier
 }
@@ -95,19 +93,5 @@ func (o PGOutput) Logged(e *LoggedMessage) {
 			countTooLong(e)
 		}
 		log.Printf("notifying logged (message %d on %s): %v", e.MessageId, e.ConnectionId, err)
-	}
-}
-
-// Status sends s; failures are logged.
-func (o PGOutput) Status(s *StatusChange) {
-	body, err := json.Marshal(s)
-	if err != nil {
-		log.Printf("encoding status change: %v", err)
-		return
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), notifyTimeout)
-	defer cancel()
-	if err := o.DB.NotifyStatus(ctx, body); err != nil {
-		log.Printf("notifying status of %s: %v", s.ConnectionId, err)
 	}
 }

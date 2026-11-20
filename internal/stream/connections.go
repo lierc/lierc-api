@@ -88,26 +88,3 @@ func (s *Server) ConnectionChanged(ctx context.Context, c db.ConnectionChange) {
 		log.Printf("stream: unknown connection change %+v", c)
 	}
 }
-
-// StatusChanged sends a connection's state from liercd, a NOTIFY payload
-// from the logger on "status" (see db.ListenStream), to its owner's
-// streams, UserId, as connection:connect or connection:disconnect. A
-// payload that can't be read, or has no owner, is logged and dropped.
-// It's for a liercd from before the 000 status line carried the state in
-// its envelope (Deliver sends that); it goes once none is left.
-func (s *Server) StatusChanged(body []byte) {
-	var m struct {
-		ConnectionId string
-		Connected    bool
-		UserId       string
-	}
-	if err := json.Unmarshal(body, &m); err != nil || m.ConnectionId == "" || m.UserId == "" {
-		log.Printf("stream: bad status message: %q", body)
-		return
-	}
-	typ := "connection:disconnect"
-	if m.Connected {
-		typ = "connection:connect"
-	}
-	s.sendToUser(m.UserId, connEventBytes(typ, connEvent{Id: m.ConnectionId}))
-}
