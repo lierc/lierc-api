@@ -127,6 +127,17 @@ func TestStoreInsertPrivate(t *testing.T) {
 	}
 }
 
+func TestStoreOwner(t *testing.T) {
+	s, _ := testStore(t)
+	ctx := context.Background()
+	if u, ok, err := s.Owner(ctx, "c2"); u != "u2" || !ok || err != nil {
+		t.Errorf("c2: %q %v %v", u, ok, err)
+	}
+	if _, ok, err := s.Owner(ctx, "nope"); ok || err != nil {
+		t.Errorf("nope: %v %v", ok, err)
+	}
+}
+
 func TestStoreHighlights(t *testing.T) {
 	s, _ := testStore(t)
 

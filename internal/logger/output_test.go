@@ -1,11 +1,8 @@
 package logger
 
 import (
-	"bytes"
 	"encoding/json"
 	"errors"
-	"log"
-	"os"
 	"strings"
 	"testing"
 
@@ -28,7 +25,7 @@ func (p *fakePublisher) Publish(topic string, body []byte) error {
 func TestNSQOutput(t *testing.T) {
 	p := &fakePublisher{}
 	o := &NSQOutput{pub: p}
-	o.Logged(&LoggedMessage{ConnectionId: "c1", MessageId: 7, Highlight: true,
+	o.Logged(&LoggedMessage{ConnectionId: "c1", MessageId: 7, Highlight: true, UserId: "u1",
 		Message: &ircwire.IRCMessage{Command: "PRIVMSG", Params: []string{"#a", "hi"}}})
 	if p.topic != "logged" {
 		t.Errorf("topic %q", p.topic)
@@ -37,12 +34,13 @@ func TestNSQOutput(t *testing.T) {
 		ConnectionId string
 		MessageId    int64
 		Highlight    bool
+		UserId       string
 		Message      struct{ Command string }
 	}
 	if err := json.Unmarshal(p.body, &got); err != nil {
 		t.Fatal(err)
 	}
-	if got.ConnectionId != "c1" || got.MessageId != 7 || !got.Highlight || got.Message.Command != "PRIVMSG" {
+	if got.ConnectionId != "c1" || got.MessageId != 7 || !got.Highlight || got.UserId != "u1" || got.Message.Command != "PRIVMSG" {
 		t.Errorf("published %s", p.body)
 	}
 }
@@ -50,9 +48,7 @@ func TestNSQOutput(t *testing.T) {
 // A publish failure is only logged: the message is already stored, and
 // the handler mustn't retry it.
 func TestNSQOutputFailureLogged(t *testing.T) {
-	var b bytes.Buffer
-	log.SetOutput(&b)
-	t.Cleanup(func() { log.SetOutput(os.Stderr) })
+	b := captureLog(t)
 
 	o := &NSQOutput{pub: &fakePublisher{err: errors.New("nsqd is down")}}
 	o.Logged(&LoggedMessage{ConnectionId: "c1", Message: &ircwire.IRCMessage{Command: "PRIVMSG"}})

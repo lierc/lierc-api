@@ -97,7 +97,7 @@ func TestServiceWithOptions(t *testing.T) {
 	publish("chats", body)
 
 	waitFor(t, "the output", func() bool { return len(out.messages()) == 1 })
-	if e := out.messages()[0]; e.ConnectionId != "c1" || e.MessageId == 0 || !e.Highlight {
+	if e := out.messages()[0]; e.ConnectionId != "c1" || e.MessageId == 0 || !e.Highlight || e.UserId != "u1" {
 		t.Errorf("output got %+v", e)
 	}
 	waitFor(t, "the stream count", func() bool { return len(streams.users()) == 1 })

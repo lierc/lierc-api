@@ -1,10 +1,14 @@
 package logger
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	"log"
+	"os"
 	"regexp"
+	"strings"
 	"testing"
 
 	"github.com/lierc/lierc/pkg/ircwire"
@@ -16,6 +20,20 @@ type fakeStore struct {
 	privates []string // "connection nick"
 	err      error
 	nextId   int
+	// owners are the connections' owners; Owner fails with ownerErr, and
+	// counts its calls in lookups
+	owners   map[string]string
+	ownerErr error
+	lookups  int
+}
+
+func (s *fakeStore) Owner(ctx context.Context, connection string) (string, bool, error) {
+	s.lookups++
+	if s.ownerErr != nil {
+		return "", false, s.ownerErr
+	}
+	u, ok := s.owners[connection]
+	return u, ok, nil
 }
 
 func (s *fakeStore) InsertMessage(ctx context.Context, connection string, m *ircwire.IRCMessage, channel string, highlight bool) (int, error) {
@@ -53,10 +71,12 @@ func (s *fakeStore) Highlights(ctx context.Context) (map[string]string, error) {
 // fakeOutput records what the logger hands its Output.
 type fakeOutput struct {
 	published []string // "logged command id"
+	got       []*LoggedMessage
 }
 
 func (o *fakeOutput) Logged(e *LoggedMessage) {
 	o.published = append(o.published, "logged "+e.Message.Command+" "+string(rune('0'+e.MessageId)))
+	o.got = append(o.got, e)
 }
 
 // fakeNotifier records what the logger hands to the notifier.
@@ -68,7 +88,7 @@ func (f *fakeNotifier) Notify(e *LoggedMessage) {
 
 // newTestLogger's notifier is a *fakeNotifier: notified(l) reads it.
 func newTestLogger() (*Logger, *fakeStore, *fakeOutput) {
-	store := &fakeStore{}
+	store := &fakeStore{owners: map[string]string{"c1": "u1"}}
 	pub := &fakeOutput{}
 	h := &Highlighters{}
 	h.Replace(map[string]*regexp.Regexp{"c1": regexp.MustCompile(`(?i)\bleedo\b`)})
@@ -185,14 +205,19 @@ func TestHandleChatErrors(t *testing.T) {
 		t.Errorf("published %q after a database error", pub.published)
 	}
 
-	// a missing connection is still published, with id 0, as before
+	// a connection deleted after its owner was cached: the insert finds
+	// none, so the message is dropped and the connection forgotten
 	l, store, pub = newTestLogger()
+	l.handleChat(chat(t, m)) // caches c1's owner
 	store.err = ErrNoConnection
 	if err := l.handleChat(chat(t, m)); err != nil {
-		t.Errorf("missing connection: returned %v, want nil", err)
+		t.Errorf("deleted connection: returned %v, want nil", err)
 	}
-	if !equal(pub.published, []string{"logged PRIVMSG 0"}) {
-		t.Errorf("missing connection: published %q", pub.published)
+	if !equal(pub.published, []string{"logged PRIVMSG 1"}) {
+		t.Errorf("deleted connection: published %q, want only the first", pub.published)
+	}
+	if _, cached := l.owners.m["c1"]; cached {
+		t.Error("deleted connection still cached")
 	}
 }
 
@@ -251,4 +276,105 @@ func TestHandleChatPlainUnchanged(t *testing.T) {
 	if !equal(store.messages, []string{"c1 #chan PRIVMSG"}) || !equal(pub.published, []string{"logged PRIVMSG 1"}) {
 		t.Errorf("stored %q, published %q", store.messages, pub.published)
 	}
+}
+
+// Every message published carries its connection's owner, stored or not,
+// looked up once per connection.
+func TestHandleChatUserId(t *testing.T) {
+	l, store, out := newTestLogger()
+	for _, m := range []*nsq.Message{chat(t, stored()), chat(t, passed()), nick("c1", `["#a"]`), nick("c1", `[]`)} {
+		if err := l.handleChat(m); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if len(out.got) != 4 {
+		t.Fatalf("published %d messages, want 4", len(out.got))
+	}
+	for _, e := range out.got {
+		if e.UserId != "u1" {
+			t.Errorf("%s: owner %q, want u1", e.Message.Command, e.UserId)
+		}
+	}
+	if store.lookups != 1 {
+		t.Errorf("%d lookups for one connection, want 1", store.lookups)
+	}
+}
+
+func stored() *ircwire.IRCMessage {
+	return &ircwire.IRCMessage{Command: "PRIVMSG", Params: []string{"#chan", "hi"}, Prefix: &ircwire.IRCPrefix{Name: "bob"}}
+}
+
+func passed() *ircwire.IRCMessage {
+	return &ircwire.IRCMessage{Command: "TAGMSG", Params: []string{"#chan"}, Prefix: &ircwire.IRCPrefix{Name: "bob"}}
+}
+
+func nick(connection, channels string) *nsq.Message {
+	return &nsq.Message{Body: []byte(`{"Id":"` + connection + `","Message":{"Command":"NICK","Params":["robert"],"Prefix":{"Name":"bob"}},"Channels":` + channels + `}`)}
+}
+
+func on(t *testing.T, connection string, m *ircwire.IRCMessage) *nsq.Message {
+	body, err := json.Marshal(ircwire.IRCClientMessage{Id: connection, Message: m})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return &nsq.Message{Body: body}
+}
+
+// A connection that doesn't exist: every kind of message is dropped,
+// silently, nothing stored, and the miss isn't cached.
+func TestHandleChatNoConnection(t *testing.T) {
+	logs := captureLog(t)
+	l, store, out := newTestLogger()
+	for _, m := range []*nsq.Message{on(t, "gone", stored()), on(t, "gone", passed()), nick("gone", `["#a"]`), nick("gone", `[]`)} {
+		if err := l.handleChat(m); err != nil {
+			t.Errorf("returned %v, want nil", err)
+		}
+	}
+	if len(out.got)+len(store.messages)+len(store.privates) != 0 || len(notified(l)) != 0 {
+		t.Errorf("published %q, stored %q %q", out.published, store.messages, store.privates)
+	}
+	if store.lookups != 4 {
+		t.Errorf("%d lookups, want 4: a miss isn't cached", store.lookups)
+	}
+	if s := logs.String(); s != "" {
+		t.Errorf("logged %q, want nothing", s)
+	}
+}
+
+// When the owner can't be looked up, a message to store goes back to NSQ
+// (an error) before anything is stored; one only passed on is dropped,
+// and logged. Neither is published, and nothing is cached.
+func TestHandleChatOwnerLookupFails(t *testing.T) {
+	logs := captureLog(t)
+	l, store, out := newTestLogger()
+	store.ownerErr = errors.New("database is down")
+	for _, m := range []*nsq.Message{chat(t, stored()), nick("c1", `["#a"]`)} {
+		if err := l.handleChat(m); err == nil {
+			t.Error("message to store: returned nil, want an error to retry")
+		}
+	}
+	for _, m := range []*nsq.Message{chat(t, passed()), nick("c1", `[]`)} {
+		if err := l.handleChat(m); err != nil {
+			t.Errorf("message passed on: returned %v, want nil", err)
+		}
+	}
+	if len(out.got)+len(store.messages) != 0 {
+		t.Errorf("published %q, stored %q", out.published, store.messages)
+	}
+	if !strings.Contains(logs.String(), "dropping TAGMSG on c1: looking up its owner: database is down") {
+		t.Errorf("logged %q", logs.String())
+	}
+
+	store.ownerErr = nil
+	if err := l.handleChat(chat(t, passed())); err != nil || len(out.got) != 1 || out.got[0].UserId != "u1" {
+		t.Errorf("after the database is back: %v, %+v", err, out.got)
+	}
+}
+
+// captureLog collects what's logged during t.
+func captureLog(t *testing.T) *bytes.Buffer {
+	var b bytes.Buffer
+	log.SetOutput(&b)
+	t.Cleanup(func() { log.SetOutput(os.Stderr) })
+	return &b
 }

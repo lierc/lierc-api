@@ -41,6 +41,9 @@ type LoggedMessage struct {
 	ConnectionId string
 	MessageId    int
 	Highlight    bool
+	// UserId is the connection's owner, so the stream server needn't
+	// look it up. The logger always sets it.
+	UserId string
 }
 
 // Notifier is sent highlights and private messages once they're stored.
@@ -66,6 +69,7 @@ type Logger struct {
 	out        Output
 	consumers  []*nsq.Consumer
 	highlights *Highlighters
+	owners     owners
 	// stopListening stops listenForHighlights' goroutine; listening is
 	// closed when it has
 	stopListening context.CancelFunc
@@ -178,6 +182,13 @@ func (l *Logger) Stop() {
 	}
 }
 
+// handleChat stores a chats message, if it's a kind that's stored, and
+// publishes it with its connection's owner. A message for a connection
+// that doesn't exist, or is deleted while it's stored, is dropped
+// silently: liercd can send a few after a connection is deleted. When the
+// owner can't be looked up, a message to store is returned as an error,
+// for NSQ to retry, as when its insert fails; one that's only passed on is
+// dropped, since it's of use only live.
 func (l *Logger) handleChat(n *nsq.Message) error {
 	var m ircwire.IRCClientMessage
 	if err := json.Unmarshal(n.Body, &m); err != nil {
@@ -196,16 +207,23 @@ func (l *Logger) handleChat(n *nsq.Message) error {
 
 	route := routeChat(m.Message)
 	countCommand(m.Message.Command)
-
-	switch route.kind {
-	case logSkip:
-		return nil
-	case logPass:
-		l.publish(&LoggedMessage{Message: m.Message, ConnectionId: m.Id})
+	if route.kind == logSkip {
 		return nil
 	}
 
-	storedTotal.Inc()
+	user, ok, err := l.owner(m.Id)
+	if err != nil {
+		return l.ownerFailed(&m, route.kind != logPass, err)
+	}
+	if !ok {
+		return nil
+	}
+
+	if route.kind == logPass {
+		l.publish(&LoggedMessage{Message: m.Message, ConnectionId: m.Id, UserId: user})
+		return nil
+	}
+
 	if route.private {
 		if err := l.store.InsertPrivate(ctx, m.Id, route.channel, m.Message.Time); err != nil {
 			return fmt.Errorf("logging private message: %w", err)
@@ -213,16 +231,18 @@ func (l *Logger) handleChat(n *nsq.Message) error {
 	}
 
 	highlight := l.highlights.Match(m.Id, m.Message)
-	if highlight {
-		highlightsTotal.Inc()
-	}
 
 	id, err := l.store.InsertMessage(ctx, m.Id, m.Message, route.channel, highlight)
-	if err != nil && !errors.Is(err, ErrNoConnection) {
-		return fmt.Errorf("logging message for %s: %w", m.Id, err)
+	if errors.Is(err, ErrNoConnection) {
+		l.forget(m.Id)
+		return nil
 	}
 	if err != nil {
-		log.Printf("got message for missing connection %q: %s %q", m.Id, m.Message.Command, m.Message.Params)
+		return fmt.Errorf("logging message for %s: %w", m.Id, err)
+	}
+	storedTotal.Inc()
+	if highlight {
+		highlightsTotal.Inc()
 	}
 
 	l.publish(&LoggedMessage{
@@ -230,30 +250,54 @@ func (l *Logger) handleChat(n *nsq.Message) error {
 		ConnectionId: m.Id,
 		MessageId:    id,
 		Highlight:    highlight,
+		UserId:       user,
 	})
 	return nil
 }
 
 // logMulti stores a line in each of its channels (NICK, QUIT), and
 // publishes it once, with the last id. With no channels, nothing is
-// stored but it's still published.
+// stored but it's still published. A missing connection, or a failed
+// owner lookup, is handled as in handleChat.
 func (l *Logger) logMulti(m *ircwire.IRCClientMessage) error {
 	countCommand(m.Message.Command)
-	storedTotal.Inc()
+
+	user, ok, err := l.owner(m.Id)
+	if err != nil {
+		return l.ownerFailed(m, len(m.Channels) > 0, err)
+	}
+	if !ok {
+		return nil
+	}
 
 	id, err := l.store.InsertMessages(context.Background(), m.Id, m.Message, m.Channels)
-	if err != nil && !errors.Is(err, ErrNoConnection) {
-		return fmt.Errorf("logging message for %s: %w", m.Id, err)
+	if errors.Is(err, ErrNoConnection) {
+		l.forget(m.Id)
+		return nil
 	}
 	if err != nil {
-		log.Printf("got message for missing connection %q: %s %q", m.Id, m.Message.Command, m.Message.Params)
+		return fmt.Errorf("logging message for %s: %w", m.Id, err)
+	}
+	if len(m.Channels) > 0 {
+		storedTotal.Inc()
 	}
 
 	l.publish(&LoggedMessage{
 		Message:      m.Message,
 		ConnectionId: m.Id,
 		MessageId:    id,
+		UserId:       user,
 	})
+	return nil
+}
+
+// ownerFailed handles a failed owner lookup: a message to store goes back
+// to NSQ to retry; one that's only passed on is dropped.
+func (l *Logger) ownerFailed(m *ircwire.IRCClientMessage, stored bool, err error) error {
+	if stored {
+		return fmt.Errorf("looking up the owner of %s: %w", m.Id, err)
+	}
+	log.Printf("dropping %s on %s: looking up its owner: %v", m.Message.Command, m.Id, err)
 	return nil
 }
 

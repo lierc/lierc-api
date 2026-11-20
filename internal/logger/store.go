@@ -25,6 +25,9 @@ type Store interface {
 	InsertPrivate(ctx context.Context, connection string, nick string, time float64) error
 	// Highlights returns each connection's highlight words, as JSON.
 	Highlights(ctx context.Context) (map[string]string, error)
+	// Owner returns the user who owns connection; ok is false when
+	// there's no such connection.
+	Owner(ctx context.Context, connection string) (user string, ok bool, err error)
 }
 
 // pgStore is the Store on lierc-api's database layer.
@@ -90,6 +93,10 @@ func (s *pgStore) InsertPrivate(ctx context.Context, connection string, nick str
 		return nil
 	}
 	return err
+}
+
+func (s *pgStore) Owner(ctx context.Context, connection string) (string, bool, error) {
+	return s.db.LookupOwner(ctx, connection)
 }
 
 func (s *pgStore) Highlights(ctx context.Context) (map[string]string, error) {

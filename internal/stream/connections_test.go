@@ -172,3 +172,32 @@ func TestStatusTopicEvents(t *testing.T) {
 		break
 	}
 }
+
+// A message carrying its owner (UserId, from the logger's insert) goes to
+// that user's streams without a lookup: here its connection isn't in the
+// database, so a lookup would drop it. Without UserId, the lookup decides.
+func TestDeliverUsesUserId(t *testing.T) {
+	e := setup(t)
+	a, b := e.addUser("alice"), e.addUser("bob")
+	e.liveConn("cb", b)
+	ca, cb := e.openReplayed(a), e.openReplayed(b)
+
+	withOwner := fmt.Sprintf(`{"ConnectionId":"nowhere","MessageId":5,"UserId":%q,"Message":{"Command":"PRIVMSG"}}`, a)
+	e.s.Deliver([]byte(withOwner))
+	e.s.Deliver([]byte(`{"ConnectionId":"nowhere","MessageId":6,"Message":{"Command":"PRIVMSG"}}`)) // looked up: nobody's
+	e.s.Deliver([]byte(`{"ConnectionId":"cb","MessageId":7,"Message":{"Command":"PRIVMSG"}}`))      // looked up: bob's
+
+	e.s.Deliver([]byte(fmt.Sprintf(`{"ConnectionId":"nowhere","MessageId":8,"UserId":%q,"Message":{"Command":"PRIVMSG"}}`, a)))
+
+	if ev := ca.nextIRC(); ev.data != withOwner || ev.id != "5" {
+		t.Errorf("alice got %+v", ev)
+	}
+	// then 8, the last: neither 6 nor bob's 7 reached her
+	if ev := ca.nextIRC(); ev.id != "8" {
+		t.Errorf("alice's next %+v, want id 8", ev)
+	}
+	// bob's first event is his own, so neither of the others reached him
+	if ev := cb.nextIRC(); ev.id != "7" {
+		t.Errorf("bob got %+v", ev)
+	}
+}

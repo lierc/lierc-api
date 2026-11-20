@@ -206,13 +206,16 @@ func (s *Server) deregisterLocked(st *stream) {
 
 // Deliver sends one NSQ "logged" message to every stream of the owner of its
 // ConnectionId. The body is passed through untouched. The logger sends
-// ConnectionId as a string and MessageId as a number (lierc's LoggedMessage);
-// a message with other types is logged and dropped. A MessageId of 0 or none
-// means the event goes out without an id.
+// ConnectionId and UserId as strings and MessageId as a number (its
+// logger.LoggedMessage); a message with other types is logged and dropped. A
+// MessageId of 0 or none means the event goes out without an id. UserId is
+// the owner, which the logger always sends; only a message from an older
+// logger, without it, has its owner looked up.
 func (s *Server) Deliver(body []byte) {
 	var m struct {
 		ConnectionId string
 		MessageId    int64
+		UserId       string
 	}
 	if err := json.Unmarshal(body, &m); err != nil {
 		log.Printf("stream: bad message: %v", err)
@@ -233,15 +236,17 @@ func (s *Server) Deliver(body []byte) {
 		return // nobody to deliver to; skip the owner lookup
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-	owner, ok, err := s.db.LookupOwner(ctx, m.ConnectionId)
-	if err != nil {
-		log.Printf("stream: lookup owner: %v", err)
-		return
-	}
-	if !ok {
-		return
+	owner := m.UserId
+	if owner == "" {
+		o, ok, err := s.lookupOwner(m.ConnectionId)
+		if err != nil {
+			log.Printf("stream: lookup owner: %v", err)
+			return
+		}
+		if !ok {
+			return
+		}
+		owner = o
 	}
 
 	var id string
@@ -258,6 +263,13 @@ func (s *Server) Deliver(body []byte) {
 	for _, st := range s.streams[owner] {
 		s.offerLocked(st, ev)
 	}
+}
+
+// lookupOwner is the user who owns connection.
+func (s *Server) lookupOwner(connection string) (string, bool, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	return s.db.LookupOwner(ctx, connection)
 }
 
 // sseEvent formats a Server-Sent Event: the id line only when id is non-empty.
