@@ -8,7 +8,7 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// The logger's and its notifier's queries (cmd/lierc-logger).
+// The logger's and its notifier's queries (lierc ingest).
 
 // LogEntry is an IRC line the logger stores.
 type LogEntry struct {

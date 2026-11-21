@@ -1,5 +1,5 @@
 // Package logservice runs the logger and its notifier together: what
-// cmd/lierc-logger runs, and what another process (lierc-api) could run
+// `lierc ingest` runs, and what another process (lierc api) could run
 // in place of it, handing the logger's output and the notifier's stream
 // counts to its own stream server.
 package logservice

@@ -14,7 +14,7 @@ type Config struct {
 	// links (ACCOUNT_TOKEN_SECRET).
 	AccountTokenSecret string
 	// UnsubscribeSecret signs the unsubscribe links in notification
-	// emails (UNSUBSCRIBE_SECRET); lierc-logger's notifier reads it too.
+	// emails (UNSUBSCRIBE_SECRET); lierc ingest's notifier reads it too.
 	UnsubscribeSecret string
 	Listen            string
 	// AdminListen is the internal admin listener (ADMIN_LISTEN), serving
@@ -68,7 +68,7 @@ func orElse(getenv func(string) string, key, def string) string {
 }
 
 // LoadDB builds a Config with only the database settings, read as Load
-// reads them (POSTGRES_*, DB_MAX_CONNS), for lierc-logger, which has none
+// reads them (POSTGRES_*, DB_MAX_CONNS), for lierc ingest, which has none
 // of the API's other settings. An empty variable counts as unset.
 func LoadDB(getenv func(string) string) (Config, error) {
 	c := Config{

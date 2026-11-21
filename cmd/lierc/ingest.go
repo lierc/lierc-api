@@ -3,10 +3,8 @@ package main
 import (
 	"context"
 	"fmt"
+	"io"
 	"log"
-	"os"
-	"os/signal"
-	"syscall"
 
 	"github.com/lierc/lierc-api/internal/config"
 	"github.com/lierc/lierc-api/internal/db"
@@ -14,45 +12,49 @@ import (
 	"github.com/lierc/lierc/pkg/metrics"
 )
 
-func main() {
-	// Production's secrets are files, named by NAME_FILE.
-	getenv, err := config.WithFiles(os.Environ(), os.Getenv)
-	if err != nil {
-		log.Fatal(err)
+// runIngest runs `lierc ingest` until ctx is done and returns the exit
+// code; any argument is a usage error.
+func runIngest(ctx context.Context, args []string, getenv func(string) string, stderr io.Writer) int {
+	if len(args) != 0 {
+		fmt.Fprintln(stderr, "usage: lierc ingest (no arguments)")
+		return 2
 	}
+	logger := log.New(stderr, "", log.LstdFlags)
 	metrics.Serve(getenv("METRICS_LISTEN"))
 
-	// the database settings as lierc-api reads them; the pool connects
+	// the database settings as lierc api reads them; the pool connects
 	// when first used, and Start waits for postgres
 	dbConf, err := config.LoadDB(getenv)
 	if err != nil {
-		log.Fatal(err)
+		logger.Printf("config: %v", err)
+		return 1
 	}
 	d, err := db.Open(context.Background(), dbConf)
 	if err != nil {
-		log.Fatal(err)
+		logger.Printf("database: %v", err)
+		return 1
 	}
 	defer d.Close()
 
 	svc, err := logservice.New(getenv, d, logservice.Options{})
 	if err != nil {
-		log.Fatal(err)
+		logger.Printf("ingest: %v", err)
+		return 1
 	}
-
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
 
 	if err := svc.Start(ctx); err != nil {
 		if ctx.Err() != nil {
-			log.Print("stopped while starting")
-			return
+			logger.Print("stopped while starting")
+			return 0
 		}
-		log.Fatal(err)
+		logger.Printf("start: %v", err)
+		return 1
 	}
 
 	fmt.Print("Ready!\n")
 	<-ctx.Done()
 
-	log.Print("stopping")
+	logger.Print("stopping")
 	svc.Stop()
+	return 0
 }

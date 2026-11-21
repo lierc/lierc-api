@@ -1,6 +1,3 @@
-// Command lierc-api runs the API, the SSE event stream and the admin
-// listener, after applying any pending schema migrations. It takes no
-// arguments; the admin commands are the separate lctl binary (cmd/lctl).
 package main
 
 import (
@@ -11,9 +8,6 @@ import (
 	"log"
 	"net"
 	"net/http"
-	"os"
-	"os/signal"
-	"syscall"
 	"time"
 
 	adminapi "github.com/lierc/lierc-api/internal/admin"
@@ -30,23 +24,13 @@ import (
 // channels and last_login.
 const shutdownTimeout = 10 * time.Second
 
-func main() {
-	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
-	defer stop()
-	getenv, err := config.WithFiles(os.Environ(), os.Getenv)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "config: %v\n", err)
-		os.Exit(1)
-	}
-	os.Exit(run(ctx, os.Args[1:], getenv, os.Stderr, nil))
-}
-
-// run runs the server and returns the process exit code; any argument is a
-// usage error. onListen, if non-nil, is called with the stream and admin
-// addresses once both are bound.
-func run(ctx context.Context, args []string, getenv func(string) string, stderr io.Writer, onListen func(stream, admin net.Addr)) int {
+// runAPI runs `lierc api`: the API, the SSE event stream and the admin
+// listener, after applying any pending schema migrations. It returns the
+// process exit code; any argument is a usage error. onListen, if non-nil,
+// is called with the stream and admin addresses once both are bound.
+func runAPI(ctx context.Context, args []string, getenv func(string) string, stderr io.Writer, onListen func(stream, admin net.Addr)) int {
 	if len(args) != 0 {
-		fmt.Fprintln(stderr, "usage: lierc-api (no arguments; the admin commands are lctl)")
+		fmt.Fprintln(stderr, "usage: lierc api (no arguments; the admin commands are lctl)")
 		return 2
 	}
 	logger := log.New(stderr, "", log.LstdFlags)

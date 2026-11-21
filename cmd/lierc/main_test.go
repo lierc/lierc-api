@@ -18,12 +18,32 @@ import (
 
 func TestMain(m *testing.M) { testenv.Main(m) }
 
-// lierc-api takes no arguments: it just runs the server. The old "stream"
-// subcommand and "lctl" (now its own binary) are usage errors.
+// lierc needs a command, api or ingest; anything else is a usage error,
+// and help prints the usage.
+func TestDispatch(t *testing.T) {
+	for _, tc := range []struct {
+		args []string
+		code int
+	}{
+		{nil, 2}, {[]string{"bogus"}, 2}, {[]string{"lctl"}, 2}, {[]string{"stream"}, 2},
+		{[]string{"help"}, 0}, {[]string{"-h"}, 0},
+		{[]string{"api", "extra"}, 2}, {[]string{"ingest", "extra"}, 2},
+	} {
+		var buf bytes.Buffer
+		if code := dispatch(context.Background(), tc.args, func(string) string { return "" }, &buf); code != tc.code {
+			t.Errorf("%v: exit %d, want %d", tc.args, code, tc.code)
+		}
+		if !strings.Contains(buf.String(), "usage:") {
+			t.Errorf("%v: no usage in %q", tc.args, buf.String())
+		}
+	}
+}
+
+// lierc api takes no arguments of its own: it just runs the server.
 func TestArgumentsRefused(t *testing.T) {
 	for _, args := range [][]string{{"bogus"}, {"stream"}, {"lctl", "help"}, {"stream", "extra"}} {
 		var buf bytes.Buffer
-		if code := run(context.Background(), args, func(string) string { return "" }, &buf, nil); code != 2 {
+		if code := runAPI(context.Background(), args, func(string) string { return "" }, &buf, nil); code != 2 {
 			t.Errorf("%v: exit %d, want 2", args, code)
 		}
 		if !strings.Contains(buf.String(), "usage:") {
@@ -45,7 +65,7 @@ func TestServesStreamUnauthorized(t *testing.T) {
 	done := make(chan int, 1)
 	var logs bytes.Buffer
 	go func() {
-		done <- run(ctx, nil, func(k string) string { return env[k] }, &logs, func(a, _ net.Addr) { addr <- a })
+		done <- runAPI(ctx, nil, func(k string) string { return env[k] }, &logs, func(a, _ net.Addr) { addr <- a })
 	}()
 
 	var a net.Addr
@@ -90,7 +110,7 @@ func TestServesWithoutNSQ(t *testing.T) {
 	done := make(chan int, 1)
 	var logs syncBuffer
 	go func() {
-		done <- run(ctx, nil, func(k string) string { return env[k] }, &logs, func(a, _ net.Addr) { addr <- a })
+		done <- runAPI(ctx, nil, func(k string) string { return env[k] }, &logs, func(a, _ net.Addr) { addr <- a })
 	}()
 	var a net.Addr
 	select {
@@ -139,7 +159,7 @@ func TestAdminListenerServesStats(t *testing.T) {
 	done := make(chan int, 1)
 	var logs syncBuffer
 	go func() {
-		done <- run(ctx, nil, func(k string) string { return env[k] }, &logs,
+		done <- runAPI(ctx, nil, func(k string) string { return env[k] }, &logs,
 			func(s, a net.Addr) { addrs <- [2]net.Addr{s, a} })
 	}()
 	var a [2]net.Addr
@@ -194,7 +214,7 @@ func TestAdminListenInUse(t *testing.T) {
 		"UNSUBSCRIBE_SECRET":   "unsub",
 	})
 	var logs syncBuffer
-	if code := run(context.Background(), nil, func(k string) string { return env[k] }, &logs, nil); code != 1 {
+	if code := runAPI(context.Background(), nil, func(k string) string { return env[k] }, &logs, nil); code != 1 {
 		t.Errorf("exit %d, want 1", code)
 	}
 	if !strings.Contains(logs.String(), "admin listen") {
@@ -215,7 +235,7 @@ func TestRefusesWithoutSecrets(t *testing.T) {
 		}
 		delete(env, missing)
 		var logs syncBuffer
-		if code := run(context.Background(), nil, func(k string) string { return env[k] }, &logs, nil); code != 1 {
+		if code := runAPI(context.Background(), nil, func(k string) string { return env[k] }, &logs, nil); code != 1 {
 			t.Errorf("without %s: exit %d, want 1", missing, code)
 		}
 		if !strings.Contains(logs.String(), missing+" is not set") {
@@ -258,7 +278,7 @@ func TestAdminRoutesMounted(t *testing.T) {
 	done := make(chan int, 1)
 	var logs syncBuffer
 	go func() {
-		done <- run(ctx, nil, func(k string) string { return env[k] }, &logs,
+		done <- runAPI(ctx, nil, func(k string) string { return env[k] }, &logs,
 			func(s, a net.Addr) { addrs <- [2]net.Addr{s, a} })
 	}()
 	var a [2]net.Addr
@@ -342,7 +362,7 @@ func exitsBeforeListening(t *testing.T, env map[string]string, want string) {
 	defer cancel()
 	var logs syncBuffer
 	listened := false
-	code := run(ctx, nil, func(k string) string { return env[k] }, &logs, func(_, _ net.Addr) { listened = true; cancel() })
+	code := runAPI(ctx, nil, func(k string) string { return env[k] }, &logs, func(_, _ net.Addr) { listened = true; cancel() })
 	if code != 1 {
 		t.Errorf("exit %d, want 1", code)
 	}

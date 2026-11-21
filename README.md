@@ -14,22 +14,25 @@ route for route; that code is in this repository's git history, and the
 JSON fixtures in `testdata/fixtures` record its behaviour, which the Go tests
 check against.
 
-The image also carries two binaries of their own: `lctl`, the admin
-command (`lctl help`), and `lierc-logger`, which reads everything liercd
+The image holds two binaries: `lierc`, which runs either service, and
+`lctl`, the admin command (`lctl help`). `lierc api` (the image's
+default) is the API above. `lierc ingest` reads everything liercd
 publishes on NSQ (the `chats` topic): it logs IRC traffic to Postgres,
 saves the config changes liercd makes (sent with the line that made
 them), hands messages, connection states included, to lierc-api as
 Postgres NOTIFYs, and sends the highlight notifications (web push and
-email). The logger runs as its own process, from `docker run --entrypoint
-/lierc-logger`; it moved here from the lierc repo, with its history.
+email). The two run as separate processes (`docker run IMAGE ingest`
+for the ingester). The ingester was lierc-logger, and moved here from the
+lierc repo with its history; its code is still `internal/logger` and
+`internal/notify`, and its NSQ channel on `chats` is still `logger`.
 
 Layout
 ------
 
-- `cmd/lierc-api`: the server (`lierc-api`, no arguments).
-- `cmd/lierc-logger`, `internal/logservice`, `internal/logger`,
-  `internal/notify`: the logger and the notifier it runs. They read
-  liercd's messages with lierc's `pkg/ircwire` (the lierc module).
+- `cmd/lierc`: `lierc api` and `lierc ingest`.
+- `internal/logservice`, `internal/logger`, `internal/notify`: the
+  ingester, its logger and the notifier it runs. They read liercd's
+  messages with lierc's `pkg/ircwire` (the lierc module).
 - `cmd/lctl`, `internal/lctl`: the admin command; `internal/admin`: the
   admin JSON API it talks to.
 - `internal/api`: the HTTP routes, behind a same-origin check.
@@ -50,12 +53,12 @@ Running it
 
 The easiest way is the dev stack in `lierc-docker-compose`. To run it by
 hand you need an empty PostgreSQL database (lierc-api creates the
-schema) and liercd; the logger (`cmd/lierc-logger`) also needs nsqd:
+schema) and liercd; `lierc ingest` also needs nsqd:
 
 ```
-go build ./cmd/lierc-api ./cmd/lctl
+go build ./cmd/lierc ./cmd/lctl
 POSTGRES_HOST=127.0.0.1 LIERCD_HOST=127.0.0.1 \
-  LISTEN=127.0.0.1:5003 ADMIN_LISTEN=127.0.0.1:5009 ./lierc-api
+  LISTEN=127.0.0.1:5003 ADMIN_LISTEN=127.0.0.1:5009 ./lierc api
 ```
 
 `internal/config` lists every setting and its default.

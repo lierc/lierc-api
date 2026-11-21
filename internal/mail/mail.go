@@ -1,5 +1,5 @@
 // Package mail sends emails over SMTP, configured from SMTP_OPTS: the API's,
-// and lierc-logger's notifications.
+// and lierc ingest's notifications.
 package mail
 
 import (

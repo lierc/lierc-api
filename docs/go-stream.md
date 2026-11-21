@@ -1,6 +1,6 @@
 # Go stream server
 
-`lierc-api stream` is the Server-Sent Events stream. It replaced the Perl
+The Server-Sent Events stream, part of `lierc api`. It replaced the Perl
 `bin/stream.psgi` and is the first piece of the Go rewrite: the JSON API stays
 on `bin/api.psgi` for now.
 
@@ -37,10 +37,10 @@ See also `docs/lierc-api.md`, "Event stream":
 
 ## Running it
 
-    lierc-api stream
+    lierc api
 
-or the image `ghcr.io/lierc/lierc-api-go` (built from `go.Dockerfile`; the
-default command is `stream`).
+or the image `ghcr.io/lierc/lierc-api` (built from `go.Dockerfile`; the
+default command is `api`).
 
 | Variable | Default | Notes |
 |----------|---------|-------|
