@@ -417,7 +417,11 @@ func TestMessageByLogIDOneBlock(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, id := range []int{250, 150250, 299250} { // the oldest, a middle and the newest block
-		rows, err := d.Pool.Query(ctx, "EXPLAIN (ANALYZE, COSTS OFF) "+db.Query("message_by_log_id"), "c1", "#a", id)
+		sql, args, err := db.BlockHoldingSQL("c1", "#a", int32(id))
+		if err != nil {
+			t.Fatal(err)
+		}
+		rows, err := d.Pool.Query(ctx, "EXPLAIN (ANALYZE, COSTS OFF) "+sql, args...)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -471,7 +475,11 @@ func TestMessageByMsgidIndexes(t *testing.T) {
 		}
 		return p
 	}
-	if p := plan(db.Query("message_ids_lookup"), "c1", "f3"); !strings.Contains(p, "message_ids_msgid_idx") {
+	lookup, largs, err := db.MessageIDsLookupSQL("c1", "f3")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p := plan(lookup, largs...); !strings.Contains(p, "message_ids_msgid_idx") {
 		t.Errorf("message_ids lookup doesn't use message_ids_msgid_idx:\n%s", p)
 	}
 	var idx string
@@ -487,7 +495,11 @@ func TestMessageByMsgidIndexes(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer c.Exec(ctx, "RESET enable_seqscan")
-	rows, err := c.Query(ctx, "EXPLAIN "+db.Query("message_by_log_id"), "c1", "#a", 3)
+	bsql, bargs, err := db.BlockHoldingSQL("c1", "#a", 3)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rows, err := c.Query(ctx, "EXPLAIN "+bsql, bargs...)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/lierc/lierc-api/internal/db"
 	"github.com/lierc/lierc-api/internal/testenv"
 )
 
@@ -111,17 +112,19 @@ func readFixture(d *tdb) []int {
 	return idList
 }
 
+// readCase is a read run before and after archiving: raw SQL (the
+// channel read queries still in internal/db/sql), or a db.DB method (the
+// backlog pages, which moved into Go).
 type readCase struct {
 	name string
 	sql  string
 	args []any
+	page func(*db.DB) ([]db.Message, error)
 }
 
 func strp(s string) *string { return &s }
 
 func readCases(t *testing.T, fixtureIDs []int) []readCase {
-	logsSQL := readSQL(t, "channel_logs.sql")
-	beforeSQL := readSQL(t, "channel_logs_before.sql")
 	dateSQL := readSQL(t, "channel_date.sql")
 
 	pairs := [][2]string{{"c1", "#a"}, {"c1", "#b"}, {"c2", "#a"}, {"c1", "#none"}}
@@ -131,7 +134,7 @@ func readCases(t *testing.T, fixtureIDs []int) []readCase {
 		for _, limit := range []int{1, 3, 10, 100} {
 			cs = append(cs, readCase{
 				name: fmt.Sprintf("logs %s %s limit %d", conn, ch, limit),
-				sql:  logsSQL, args: []any{ch, conn, limit},
+				page: func(d *db.DB) ([]db.Message, error) { return d.ChannelLogs(context.Background(), conn, ch, limit) },
 			})
 		}
 		cursors := append([]int{}, fixtureIDs...)
@@ -140,7 +143,9 @@ func readCases(t *testing.T, fixtureIDs []int) []readCase {
 			for _, limit := range []int{1, 2, 5} {
 				cs = append(cs, readCase{
 					name: fmt.Sprintf("logs_before %s %s before %d limit %d", conn, ch, before, limit),
-					sql:  beforeSQL, args: []any{ch, conn, before, limit},
+					page: func(d *db.DB) ([]db.Message, error) {
+						return d.ChannelLogsBefore(context.Background(), conn, ch, int32(before), limit)
+					},
 				})
 			}
 		}
@@ -226,6 +231,26 @@ func runRead(t *testing.T, conn *pgxpool.Conn, sql string, args []any) []readRow
 	return out
 }
 
+// runPage is a db.DB read's rows as runRead gives them.
+func runPage(t *testing.T, d *db.DB, page func(*db.DB) ([]db.Message, error)) []readRow {
+	t.Helper()
+	ms, err := page(d)
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := []readRow{}
+	for _, m := range ms {
+		r := readRow{ID: int(m.MessageId), Connection: m.ConnectionId, Highlight: m.Highlight}
+		dec := json.NewDecoder(strings.NewReader(string(m.Message)))
+		dec.UseNumber()
+		if err := dec.Decode(&r.Message); err != nil {
+			t.Fatalf("message %q: %v", m.Message, err)
+		}
+		out = append(out, r)
+	}
+	return out
+}
+
 func rowIDs(rs []readRow) []int {
 	ids := []int{}
 	for _, r := range rs {
@@ -261,6 +286,10 @@ func runZone(t *testing.T, d *tdb, zone string, cases []readCase, got map[string
 	}
 	defer conn.Exec(context.Background(), "RESET TIME ZONE")
 	for _, c := range cases {
+		if c.page != nil {
+			got[zone+" "+c.name] = runPage(t, d.db, c.page)
+			continue
+		}
 		got[zone+" "+c.name] = runRead(t, conn, c.sql, c.args)
 	}
 }
