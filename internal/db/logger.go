@@ -2,6 +2,7 @@ package db
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 
 	sq "github.com/Masterminds/squirrel"
@@ -20,24 +21,137 @@ type LogEntry struct {
 }
 
 // InsertLog stores e once under each of channels, in order, for its
-// connection's owner, and returns the last id; a highlight also goes in
-// highlights, with the same id. ErrGone when the connection doesn't exist
-// or is deleted meanwhile: nothing was stored. With no channels it stores
-// nothing and returns 0.
+// connection's owner, and returns the last id. In the same transaction, so
+// a failure leaves nothing behind for NSQ's retry to duplicate:
+//   - a highlight also goes in highlights, with the same id;
+//   - a PRIVMSG or NOTICE with a msgid is mapped in message_ids under each
+//     channel it was stored in, and a reply goes in replies with its
+//     thread's root (mapMessage). Archiving leaves both tables alone.
+//
+// ErrGone when the connection doesn't exist or is deleted meanwhile:
+// nothing was stored. With no channels it stores nothing and returns 0.
 func (d *DB) InsertLog(ctx context.Context, e LogEntry, channels []string, highlight bool) (int64, error) {
 	if len(channels) == 0 {
 		return 0, nil
 	}
-	var id *int64
-	err := d.Pool.QueryRow(ctx, Query("insert_logs"),
-		e.Connection, channels, e.Command, e.Message, e.Time, e.Self, highlight).Scan(&id)
+	tx, err := d.Pool.Begin(ctx)
+	if err != nil {
+		return 0, err
+	}
+	defer tx.Rollback(ctx)
+
+	rows, err := tx.Query(ctx, Query("insert_logs"),
+		e.Connection, channels, e.Command, e.Message, e.Time, e.Self, highlight)
 	if err != nil {
 		return 0, gone(err)
 	}
-	if id == nil {
+	logged, err := pgx.CollectRows(rows, pgx.RowToStructByPos[loggedRow])
+	if err != nil {
+		return 0, gone(err)
+	}
+	if len(logged) == 0 {
 		return 0, ErrGone
 	}
-	return *id, nil
+
+	if highlight {
+		ids := make([]int64, len(logged))
+		for i, l := range logged {
+			ids[i] = l.ID
+		}
+		cols := []string{"id", "user_id", "connection_id", "channel", "time", "message", "self"}
+		if _, err := exec(ctx, tx, psql.Insert("highlights").Columns(cols...).
+			Select(psql.Select(cols...).From("logs").Where(sq.Eq{"id": ids}))); err != nil {
+			return 0, gone(err)
+		}
+	}
+	if err := mapMessage(ctx, tx, e, logged); err != nil {
+		return 0, gone(err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return 0, gone(err)
+	}
+	return logged[len(logged)-1].ID, nil
+}
+
+// loggedRow is a logs row InsertLog stored: its id and channel.
+type loggedRow struct {
+	ID      int64
+	Channel string
+}
+
+// mapMessage maps a stored PRIVMSG or NOTICE that has a msgid in
+// message_ids, under each channel it was stored in (logged), and records
+// it in replies if it's a reply (+reply, else +draft/reply), with its
+// thread's root. Anything else is left alone.
+func mapMessage(ctx context.Context, tx pgx.Tx, e LogEntry, logged []loggedRow) error {
+	if e.Command != "PRIVMSG" && e.Command != "NOTICE" {
+		return nil
+	}
+	var m struct{ Tags map[string]string }
+	if err := json.Unmarshal(e.Message, &m); err != nil {
+		return err
+	}
+	msgid := m.Tags["msgid"]
+	if msgid == "" {
+		return nil
+	}
+	replyTo := m.Tags["+reply"]
+	if replyTo == "" {
+		replyTo = m.Tags["+draft/reply"]
+	}
+	var root string
+	if replyTo != "" {
+		var err error
+		if root, err = threadRoot(ctx, tx, e.Connection, replyTo); err != nil {
+			return err
+		}
+	}
+	for _, l := range logged {
+		channel, err := channelID(ctx, tx, e.Connection, l.Channel)
+		if err != nil {
+			return err
+		}
+		if _, err := exec(ctx, tx, psql.Insert("message_ids").Columns("channel_id", "msgid", "log_id").
+			Values(channel, msgid, l.ID)); err != nil {
+			return err
+		}
+		if replyTo != "" {
+			if _, err := exec(ctx, tx, psql.Insert("replies").Columns("channel_id", "msgid", "reply_to", "thread_root").
+				Values(channel, msgid, replyTo, root)); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// channelID is the channels row of channel on conn, made the first time.
+// A row another transaction made meanwhile is found too: ON CONFLICT waits
+// for it, and the SELECT after it is a new statement, so it sees it.
+func channelID(ctx context.Context, tx pgx.Tx, conn, channel string) (int32, error) {
+	var id int32
+	err := queryRow(ctx, tx, psql.Insert("channels").Columns("connection_id", "channel").Values(conn, channel).
+		Suffix("ON CONFLICT DO NOTHING RETURNING id")).Scan(&id)
+	if errors.Is(err, pgx.ErrNoRows) {
+		err = queryRow(ctx, tx, psql.Select("id").From("channels").
+			Where(sq.Eq{"connection_id": conn, "channel": channel})).Scan(&id)
+	}
+	return id, err
+}
+
+// threadRoot is the root of the thread a reply to replyTo on conn belongs
+// to: replyTo's own root when it's a reply on this connection (logged
+// before: the logger stores one line at a time), else replyTo itself.
+func threadRoot(ctx context.Context, tx pgx.Tx, conn, replyTo string) (string, error) {
+	var root string
+	err := queryRow(ctx, tx, psql.Select("r.thread_root").From("replies AS r").
+		Join("channels AS c ON c.id = r.channel_id").
+		Where(sq.Eq{"r.msgid": replyTo, "c.connection_id": conn}).
+		OrderBy("r.channel_id").Limit(1)).Scan(&root)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return replyTo, nil
+	}
+	return root, err
 }
 
 // SavePrivateAt records a private message with nick on conn at unix time
