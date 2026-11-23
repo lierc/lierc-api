@@ -55,6 +55,26 @@ type channel struct {
 
 const liercdPrefix = "liercd"
 
+// isupportPerLine is the most tokens in one 005, as servers send them:
+// the nick, the tokens and the trailing text stay within 15 params.
+const isupportPerLine = 13
+
+// isupportLines is the params of the 005s that send tokens: the nick, a
+// param per token (up to isupportPerLine), then the trailing text.
+func isupportLines(nick string, tokens []string) [][]any {
+	var lines [][]any
+	for len(tokens) > 0 {
+		n := min(len(tokens), isupportPerLine)
+		params := []any{nick}
+		for _, tok := range tokens[:n] {
+			params = append(params, tok)
+		}
+		lines = append(lines, append(params, "are supported by this server"))
+		tokens = tokens[n:]
+	}
+	return lines
+}
+
 type ircPrefix struct{ Name string }
 
 type ircMessage struct {
@@ -124,14 +144,15 @@ func (s *Server) replay(ctx context.Context, st *stream, conns []db.Connection) 
 	// The connections snapshot, first: every connection the user has, so
 	// the UI adds missing ones and drops ones deleted while it was away.
 	evs = append(evs, snapshotEvent(statuses))
-	// Welcome, ISUPPORT and CAP ACK; a missing Isupport is treated as empty.
+	// Welcome, ISUPPORT and CAP ACK, shaped as a server sends them; a
+	// missing Isupport is treated as empty.
 	for _, stat := range registered {
 		emit(stat.Id, liercdPrefix, rplWelcome, stat.Nick, "Welcome to the Internet Relay Network "+stat.Nick)
-		if len(stat.Isupport) > 0 {
-			emit(stat.Id, liercdPrefix, rplISupport, stat.Nick, strings.Join(stat.Isupport, " "))
+		for _, params := range isupportLines(stat.Nick, stat.Isupport) {
+			emit(stat.Id, liercdPrefix, rplISupport, params...)
 		}
 		if len(stat.CapsAcked) > 0 {
-			emit(stat.Id, liercdPrefix, "CAP", "*", "ACK", strings.Join(stat.CapsAcked, " "))
+			emit(stat.Id, liercdPrefix, "CAP", stat.Nick, "ACK", strings.Join(stat.CapsAcked, " "))
 		}
 	}
 	// Joins

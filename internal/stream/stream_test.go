@@ -584,7 +584,7 @@ func TestReplayOrder(t *testing.T) {
 	e.addConn("c1", u, `{"Host":"irc.one"}`)
 	e.fake.Respond("GET", "/c1/status", 200, statusJSON("c1", "me1", true, true, `,
 		"Config":{"Alias":"Net1","Host":"irc.one","Port":6697},
-		"Isupport":["A=1","B=2"],"CapsAcked":["sasl","multi-prefix"],
+		"Isupport":["A=1","B=2","C","D=4","E","F","G","H","I","J","K","L","M","N=a=b"],"CapsAcked":["sasl","multi-prefix"],
 		"Channels":[
 			{"Name":"#a","Mode":"+nt","Topic":{"Topic":"hello","User":"bob!b@h","Time":1700000000},"Nicks":`+string(nj)+`},
 			{"Name":"#b","Mode":"","Topic":{"Topic":"","User":"","Time":0},"Nicks":["x","y","z"]}]`))
@@ -625,8 +625,10 @@ func TestReplayOrder(t *testing.T) {
 	want := map[string][]string{
 		`"c1"`: {
 			`"c1" "liercd" 001 ["me1","Welcome to the Internet Relay Network me1"]`,
-			`"c1" "liercd" 005 ["me1","A=1 B=2"]`,
-			`"c1" "liercd" CAP ["*","ACK","sasl multi-prefix"]`,
+			// a token per param, 13 to a line, then the trailing text
+			`"c1" "liercd" 005 ["me1","A=1","B=2","C","D=4","E","F","G","H","I","J","K","L","M","are supported by this server"]`,
+			`"c1" "liercd" 005 ["me1","N=a=b","are supported by this server"]`,
+			`"c1" "liercd" CAP ["me1","ACK","sasl multi-prefix"]`,
 			`"c1" "me1" JOIN ["#a"]`,
 			`"c1" "me1" JOIN ["#b"]`,
 			`"c1" "liercd" 332 ["me1","#a","hello"]`,
