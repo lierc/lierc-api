@@ -47,7 +47,7 @@ func (e *env) wantIDs(path, user string, want ...int64) {
 }
 
 var historyPaths = []string{"/log/1", "/highlight", "/highlight/5", "/connection/c1/channel/%23a/events",
-	"/connection/c1/channel/%23a/events/5", "/connection/c1/channel/%23a/last"}
+	"/connection/c1/channel/%23a/events/5", "/connection/c1/channel/%23a/last", "/connection/c1/message/abc"}
 
 func TestHistoryNeedsLogin(t *testing.T) {
 	e := setup(t)
@@ -142,7 +142,29 @@ func TestLastRoute(t *testing.T) {
 
 func TestHistoryOtherMethodsNotFound(t *testing.T) {
 	e := setup(t)
-	for _, p := range []string{"/log/5", "/connection/c1/channel/a/events"} {
+	for _, p := range []string{"/log/5", "/connection/c1/channel/a/events", "/connection/c1/message/abc"} {
 		checkNotFound(t, e, "POST", p, "")
 	}
+}
+
+// A reply's original, by connection and IRC msgid: the owner gets the
+// message as a history event, a msgid with none gets 404, and someone
+// else's connection is refused like every owned route.
+func TestMessageByMsgidRoute(t *testing.T) {
+	e := setup(t)
+	a, b := testenv.AddUser(t, e.db, "alice"), testenv.AddUser(t, e.db, "bob")
+	testenv.AddConnection(t, e.db, "c1", a, "{}")
+	e.exec(`INSERT INTO logs (id, connection_id, user_id, channel, command, time, message)
+		VALUES (7, 'c1', $1, '#a', 'PRIVMSG', now(), '{"Command":"PRIVMSG","Params":["#a","hi"],"Tags":{"msgid":"abc"}}')`, a)
+	c, body := e.getJSON("/connection/c1/message/abc", a)
+	var m struct {
+		MessageId    int64
+		ConnectionId string
+		Message      struct{ Tags struct{ Msgid string } }
+	}
+	if c != 200 || json.Unmarshal([]byte(body), &m) != nil || m.MessageId != 7 || m.ConnectionId != "c1" || m.Message.Tags.Msgid != "abc" {
+		t.Errorf("found: %d %s", c, body)
+	}
+	e.want("/connection/c1/message/nope", a, 404, `{"status":"error","error":"no such message"}`)
+	e.want("/connection/c1/message/abc", b, 401, `{"status":"error","error":"Invalid connection id 'c1'"}`)
 }

@@ -18,6 +18,7 @@ func (a *api) history(mux *http.ServeMux) {
 	mux.Handle("GET /connection/{id}/channel/{channel}/events", a.users.Require(a.owned(a.channelLogs)))
 	mux.Handle("GET /connection/{id}/channel/{channel}/events/{event}", a.users.Require(a.owned(a.channelLogs)))
 	mux.Handle("GET /connection/{id}/channel/{channel}/last", a.users.Require(a.owned(a.channelLast)))
+	mux.Handle("GET /connection/{id}/message/{msgid}", a.users.Require(a.owned(a.messageByMsgid)))
 }
 
 // limit is q's "limit": def when missing, not a number or below 1, and at
@@ -93,6 +94,20 @@ func (a *api) channelLogs(w http.ResponseWriter, r *http.Request, user, id strin
 	}
 	ms, err := a.db.ChannelLogsBefore(r.Context(), id, channel(r), before, n)
 	list(w, "channel logs", ms, err)
+}
+
+// messageByMsgid is a reply's original: the message on the connection with
+// IRC msgid {msgid}, as a history event, or 404 when logs has none.
+func (a *api) messageByMsgid(w http.ResponseWriter, r *http.Request, user, id string) {
+	m, ok, err := a.db.MessageByMsgid(r.Context(), id, pathText(r, "msgid"))
+	switch {
+	case err != nil:
+		respond.Internal(w, "message", err)
+	case !ok:
+		respond.Error(w, http.StatusNotFound, "no such message")
+	default:
+		respond.JSON(w, http.StatusOK, m)
+	}
 }
 
 func (a *api) channelLast(w http.ResponseWriter, r *http.Request, user, id string) {
