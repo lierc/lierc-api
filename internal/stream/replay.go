@@ -6,6 +6,7 @@ import (
 	"errors"
 	"log"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -166,7 +167,8 @@ func (s *Server) replay(ctx context.Context, st *stream, conns []db.Connection) 
 		for _, ch := range stat.Channels {
 			if ch.Topic != nil && ch.Topic.Topic != "" {
 				emit(stat.Id, liercdPrefix, rplTopic, stat.Nick, ch.Name, ch.Topic.Topic)
-				emit(stat.Id, liercdPrefix, rplTopicTime, stat.Nick, ch.Name, ch.Topic.User, ch.Topic.Time)
+				// the time as a string, like every param a server sends
+				emit(stat.Id, liercdPrefix, rplTopicTime, stat.Nick, ch.Name, ch.Topic.User, strconv.FormatInt(ch.Topic.Time, 10))
 			}
 		}
 	}
@@ -260,15 +262,27 @@ type snapshotEntry struct {
 	Connected      bool
 	Host           string `json:",omitempty"`
 	Port           int    `json:",omitempty"`
+	// Channels is the channels a registered connection is in (the replay
+	// joins them next), so the UI can drop ones left while it was away;
+	// absent before registration, when liercd's list isn't current.
+	Channels *[]string `json:",omitempty"`
 }
 
 // snapshotEvent is the replay's connections event: each connection's id,
 // network name (its alias, else its host), current nick, whether it's
-// connected, and its server (host and port), as liercd's status says.
+// connected, its server (host and port) and, once registered, its
+// channels, as liercd's status says.
 func snapshotEvent(statuses []*status) []byte {
 	list := make([]snapshotEntry, 0, len(statuses))
 	for _, stat := range statuses {
 		e := snapshotEntry{Id: stat.Id, Nick: stat.Nick, Connected: stat.Status != nil && stat.Status.Connected}
+		if stat.Registered {
+			names := make([]string, 0, len(stat.Channels))
+			for _, ch := range stat.Channels {
+				names = append(names, ch.Name)
+			}
+			e.Channels = &names
+		}
 		if stat.Config != nil {
 			e.Name, e.Host, e.Port = stat.Config.Alias, stat.Config.Host, stat.Config.Port
 			if e.Name == "" {

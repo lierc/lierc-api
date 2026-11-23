@@ -602,8 +602,10 @@ func TestReplayOrder(t *testing.T) {
 	checkSnapshot(t, evs[0], map[string]string{
 		// the server (Host, Port) comes along, for the UI's share links;
 		// a status without a port leaves Port out
-		"c1": `{"Id":"c1","Name":"Net1","Nick":"me1","Connected":true,"Host":"irc.one","Port":6697}`,
-		"c2": `{"Id":"c2","Name":"irc.two","Nick":"me2","Connected":false,"Host":"irc.two","Port":6667}`,
+		// a registered connection's channels come too, so the UI drops
+		// ones left while it was away; an unregistered one (c3) has none
+		"c1": `{"Id":"c1","Name":"Net1","Nick":"me1","Connected":true,"Host":"irc.one","Port":6697,"Channels":["#a","#b"]}`,
+		"c2": `{"Id":"c2","Name":"irc.two","Nick":"me2","Connected":false,"Host":"irc.two","Port":6667,"Channels":["#c"]}`,
 		"c3": `{"Id":"c3","Name":"irc.three","Nick":"me3","Connected":true,"Host":"irc.three"}`,
 	})
 	evs = evs[1:]
@@ -632,7 +634,7 @@ func TestReplayOrder(t *testing.T) {
 			`"c1" "me1" JOIN ["#a"]`,
 			`"c1" "me1" JOIN ["#b"]`,
 			`"c1" "liercd" 332 ["me1","#a","hello"]`,
-			`"c1" "liercd" 333 ["me1","#a","bob!b@h",1700000000]`,
+			`"c1" "liercd" 333 ["me1","#a","bob!b@h","1700000000"]`,
 			`"c1" "liercd" 353 ["me1","=","#a",` + names(0, 50) + `]`,
 			`"c1" "liercd" 353 ["me1","=","#a",` + names(50, 100) + `]`,
 			`"c1" "liercd" 353 ["me1","=","#a",` + names(100, 120) + `]`,
@@ -645,7 +647,7 @@ func TestReplayOrder(t *testing.T) {
 			`"c2" "liercd" 001 ["me2","Welcome to the Internet Relay Network me2"]`,
 			`"c2" "me2" JOIN ["#c"]`,
 			`"c2" "liercd" 332 ["me2","#c","t2"]`,
-			`"c2" "liercd" 333 ["me2","#c","carol",1700000001]`,
+			`"c2" "liercd" 333 ["me2","#c","carol","1700000001"]`,
 			`"c2" "liercd" 324 ["me2","#c","+s"]`,
 		},
 	}
@@ -1397,6 +1399,19 @@ func TestReplayRejectsLooseTypes(t *testing.T) {
 	}
 }
 
+// A registered connection in no channels lists none in the snapshot, an
+// empty list rather than none at all, so the UI drops every channel it has.
+func TestReplayNoChannels(t *testing.T) {
+	e := setup(t)
+	u := e.addUser("alice")
+	e.addConn("c1", u, `{"Host":"irc.one"}`)
+	e.fake.Respond("GET", "/c1/status", 200, statusJSON("c1", "me", true, true, `,"Channels":null`))
+	c := e.open(u)
+	evs := e.replayEvents(c)
+	checkSnapshot(t, evs[0], map[string]string{"c1": `{"Id":"c1","Name":"","Nick":"me","Connected":true,"Channels":[]}`})
+	c.checkErr()
+}
+
 // Go sends null for a missing topic, nick list, status or channel list; the
 // replay treats each as absent.
 func TestReplayNulls(t *testing.T) {
@@ -1408,7 +1423,7 @@ func TestReplayNulls(t *testing.T) {
 			`"Channels":[{"Name":"#a","Mode":"","Topic":null,"Nicks":null}]}`)
 	c := e.open(u)
 	evs := e.replayEvents(c)
-	checkSnapshot(t, evs[0], map[string]string{"c1": `{"Id":"c1","Name":"","Nick":"me","Connected":false}`})
+	checkSnapshot(t, evs[0], map[string]string{"c1": `{"Id":"c1","Name":"","Nick":"me","Connected":false,"Channels":["#a"]}`})
 	var lines []string
 	for _, ev := range evs[1:] {
 		_, line := decodeIRC(t, ev)
