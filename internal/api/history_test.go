@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/lierc/lierc-api/internal/archive"
+	"github.com/lierc/lierc-api/internal/db"
 	"github.com/lierc/lierc-api/internal/testenv"
 )
 
@@ -154,15 +155,19 @@ func TestMessageByMsgidRoute(t *testing.T) {
 	e := setup(t)
 	a, b := testenv.AddUser(t, e.db, "alice"), testenv.AddUser(t, e.db, "bob")
 	testenv.AddConnection(t, e.db, "c1", a, "{}")
-	e.exec(`INSERT INTO logs (id, connection_id, user_id, channel, command, time, message)
-		VALUES (7, 'c1', $1, '#a', 'PRIVMSG', now(), '{"Command":"PRIVMSG","Params":["#a","hi"],"Tags":{"msgid":"abc"}}')`, a)
+	// logged as the logger does, so it's mapped in message_ids
+	id, err := e.db.InsertLog(context.Background(), db.LogEntry{Connection: "c1", Command: "PRIVMSG",
+		Message: []byte(`{"Command":"PRIVMSG","Params":["#a","hi"],"Tags":{"msgid":"abc"}}`), Time: 1700000000}, []string{"#a"}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
 	c, body := e.getJSON("/connection/c1/message/abc", a)
 	var m struct {
 		MessageId    int64
 		ConnectionId string
 		Message      struct{ Tags struct{ Msgid string } }
 	}
-	if c != 200 || json.Unmarshal([]byte(body), &m) != nil || m.MessageId != 7 || m.ConnectionId != "c1" || m.Message.Tags.Msgid != "abc" {
+	if c != 200 || json.Unmarshal([]byte(body), &m) != nil || m.MessageId != id || m.ConnectionId != "c1" || m.Message.Tags.Msgid != "abc" {
 		t.Errorf("found: %d %s", c, body)
 	}
 	e.want("/connection/c1/message/nope", a, 404, `{"status":"error","error":"no such message"}`)

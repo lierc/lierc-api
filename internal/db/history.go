@@ -83,26 +83,19 @@ func (d *DB) ChannelLast(ctx context.Context, conn, channel string, query *strin
 
 // MessageByMsgid is conn's PRIVMSG or NOTICE with IRC msgid msgid, for a
 // reply's original; ok is false when there's none. message_ids (never
-// archived) says where it was logged, and it's read from logs or from its
-// archive block; a message from before message_ids existed falls back to
-// the earliest match in logs (an archived one of those isn't found).
+// archived; 0008 mapped what was in logs before it) says where it was
+// logged, and it's read from logs or from its archive block.
 func (d *DB) MessageByMsgid(ctx context.Context, conn, msgid string) (Message, bool, error) {
 	var channel string
 	var logID int32
 	err := d.Pool.QueryRow(ctx, Query("message_ids_lookup"), conn, msgid).Scan(&channel, &logID)
-	switch {
-	case err == nil:
-		ms, err := d.messages(ctx, Query("message_by_log_id"), conn, channel, logID)
-		if err != nil {
-			return Message{}, false, err
-		}
-		if len(ms) > 0 {
-			return ms[0], true, nil
-		}
-	case !errors.Is(err, pgx.ErrNoRows):
+	if errors.Is(err, pgx.ErrNoRows) {
+		return Message{}, false, nil
+	}
+	if err != nil {
 		return Message{}, false, err
 	}
-	ms, err := d.messages(ctx, Query("message_by_msgid"), conn, msgid)
+	ms, err := d.messages(ctx, Query("message_by_log_id"), conn, channel, logID)
 	if err != nil || len(ms) == 0 {
 		return Message{}, false, err
 	}

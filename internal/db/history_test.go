@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
 	"strings"
 	"testing"
 
@@ -192,6 +193,19 @@ func TestChannelDateLimit(t *testing.T) {
 }
 
 // msgidRow inserts log row id on conn in channel: command with IRC msgid.
+// backfill runs migration 0008's SQL, which maps the logs rows that have no
+// message_ids row (logged before 0007); it may run again, as here.
+func backfill(t *testing.T, d *db.DB) {
+	t.Helper()
+	sql, err := fs.ReadFile(db.Migrations(), "migrations/0008_message_ids_from_logs.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	exec(t, d, string(sql))
+}
+
+// msgidRow inserts a logs row as before message_ids (0007): not mapped
+// until backfill.
 func msgidRow(t *testing.T, d *db.DB, id int64, conn, user, channel, command, msgid string) {
 	t.Helper()
 	msg := fmt.Sprintf(`{"Command":%q,"Params":[%q,"text %d"],"Prefix":{"Name":"bob"},"Tags":{"msgid":%q}}`, command, channel, id, msgid)
@@ -215,6 +229,7 @@ func TestMessageByMsgid(t *testing.T) {
 	msgidRow(t, d, 4, "c1", a, "#a", "NOTICE", "m4")
 	msgidRow(t, d, 5, "c2", b, "#a", "PRIVMSG", "m5")
 	msgidRow(t, d, 6, "c1", a, "#b", "PRIVMSG", "m1")
+	backfill(t, d)
 	for _, tc := range []struct {
 		conn, msgid string
 		id          int64
@@ -239,7 +254,7 @@ func TestMessageByMsgid(t *testing.T) {
 	}
 }
 
-// Only logs is searched: an archived original isn't found.
+// A pre-0007 message, mapped by 0008, is still found once archived.
 func TestMessageByMsgidArchived(t *testing.T) {
 	d := testenv.Postgres(t)
 	ctx := context.Background()
@@ -247,46 +262,12 @@ func TestMessageByMsgidArchived(t *testing.T) {
 	testenv.AddConnection(t, d, "c1", a, "{}")
 	msgidRow(t, d, 1, "c1", a, "#a", "PRIVMSG", "m1")
 	msgidRow(t, d, 2, "c1", a, "#a", "PRIVMSG", "m2")
+	backfill(t, d)
 	if _, ok, err := archive.MoveBlock(ctx, d, archive.Channel{Connection: "c1", Channel: "#a"}, archive.Options{Keep: 1, Block: 1}); !ok || err != nil {
 		t.Fatalf("archive: %v %v", ok, err)
 	}
-	if _, ok, err := d.MessageByMsgid(ctx, "c1", "m1"); ok || err != nil {
-		t.Errorf("archived m1: %v %v, want not found", ok, err)
-	}
-	if _, ok, err := d.MessageByMsgid(ctx, "c1", "m2"); !ok || err != nil {
-		t.Errorf("m2: %v %v, want found", ok, err)
-	}
-}
-
-// The lookup uses the msgid index, not a scan of logs.
-func TestMessageByMsgidUsesIndex(t *testing.T) {
-	d := testenv.Postgres(t)
-	ctx := context.Background()
-	a := testenv.AddUser(t, d, "alice")
-	testenv.AddConnection(t, d, "c1", a, "{}")
-	exec(t, d, `INSERT INTO logs (id, connection_id, user_id, channel, command, time, message)
-		SELECT g, 'c1', $1, '#a', 'PRIVMSG', now(), jsonb_build_object('Command','PRIVMSG','Params',jsonb_build_array('#a','x'),'Tags',jsonb_build_object('msgid','m'||g))
-		FROM generate_series(1, 2000) g`, a)
-	exec(t, d, `ANALYZE logs`)
-	var plan string
-	rows, err := d.Pool.Query(ctx, "EXPLAIN "+db.Query("message_by_msgid"), "c1", "m1")
-	if err != nil {
-		t.Fatal(err)
-	}
-	for rows.Next() {
-		var line string
-		if err := rows.Scan(&line); err != nil {
-			t.Fatal(err)
-		}
-		plan += line + "\n"
-	}
-	rows.Close()
-	if err := rows.Err(); err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(plan, "logs_connection_id_msgid_idx") {
-		t.Errorf("plan doesn't use the msgid index:\n%s", plan)
-	}
+	wantFound(t, d, "c1", "m1", 1)
+	wantFound(t, d, "c1", "m2", 2)
 }
 
 // logged logs a PRIVMSG with msgid on conn in channel through InsertLog,
@@ -369,18 +350,47 @@ func TestMessageByMsgidOwnConnection(t *testing.T) {
 	wantFound(t, d, "c2", "x", i2)
 }
 
-// A message from before message_ids existed (no row) is still found while
-// it's in logs, and not once it's archived.
-func TestMessageByMsgidFallback(t *testing.T) {
+// There's no fallback to logs: a row logged before message_ids (0007) is
+// found only once 0008 has mapped it.
+func TestMessageByMsgidNoFallback(t *testing.T) {
 	d := testenv.Postgres(t)
 	a := testenv.AddUser(t, d, "alice")
 	testenv.AddConnection(t, d, "c1", a, "{}")
 	msgidRow(t, d, 1, "c1", a, "#a", "PRIVMSG", "old")
-	msgidRow(t, d, 2, "c1", a, "#a", "PRIVMSG", "old2")
-	wantFound(t, d, "c1", "old", 1)
-	archiveAll(t, d, "c1", "#a", 1, 1)
 	if _, ok, err := d.MessageByMsgid(context.Background(), "c1", "old"); ok || err != nil {
-		t.Errorf("archived, no message_ids row: %v %v, want not found", ok, err)
+		t.Errorf("unmapped: %v %v, want not found", ok, err)
+	}
+	backfill(t, d)
+	wantFound(t, d, "c1", "old", 1)
+}
+
+// Migration 0008 maps the PRIVMSG and NOTICE rows in logs that have a
+// msgid and no message_ids row, under their own connection's channel;
+// it skips other commands, maps nothing twice, and drops the logs msgid
+// index.
+func TestBackfillMessageIDs(t *testing.T) {
+	d := testenv.Postgres(t)
+	ctx := context.Background()
+	a, b := testenv.AddUser(t, d, "alice"), testenv.AddUser(t, d, "bob")
+	testenv.AddConnection(t, d, "c1", a, "{}")
+	testenv.AddConnection(t, d, "c2", b, "{}")
+	msgidRow(t, d, 1001, "c1", a, "#a", "PRIVMSG", "p1")
+	msgidRow(t, d, 1002, "c1", a, "#a", "NICK", "k1")
+	msgidRow(t, d, 1003, "c1", a, "#b", "NOTICE", "n1")
+	msgidRow(t, d, 1004, "c2", b, "#a", "PRIVMSG", "p1") // bob's copy
+	exec(t, d, `INSERT INTO logs (id, connection_id, user_id, channel, command, time, message) VALUES (1005, 'c1', $1, '#a', 'PRIVMSG', now(), '{"Command":"PRIVMSG","Params":["#a","no tags"]}')`, a)
+	id6 := logged(t, d, "c1", "#a", "p6") // logged after 0007: mapped already
+	backfill(t, d)
+	backfill(t, d) // again: nothing twice
+	// ordered by log_id: the logger's (from the sequence) before the explicit ids
+	want := []string{fmt.Sprintf("c1 #a p6 %d", id6), "c1 #a p1 1001", "c1 #b n1 1003", "c2 #a p1 1004"}
+	if got := msgidRows(t, d); fmt.Sprint(got) != fmt.Sprint(want) {
+		t.Errorf("message_ids:\n%v\nwant:\n%v", got, want)
+	}
+	var n int
+	d.Pool.QueryRow(ctx, `SELECT count(*) FROM pg_indexes WHERE indexname = 'logs_connection_id_msgid_idx'`).Scan(&n)
+	if n != 0 {
+		t.Error("logs_connection_id_msgid_idx is still there")
 	}
 }
 
