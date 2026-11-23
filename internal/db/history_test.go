@@ -502,3 +502,62 @@ func TestMessageByMsgidIndexes(t *testing.T) {
 		t.Errorf("message_by_log_id can't use %q:\n%s", idx, p)
 	}
 }
+
+// Backlog pages across logs and the archive match a brute-force answer —
+// every id of the channel below before, newest first, the first limit —
+// for every before and limit, with two channels' ids interleaved, several
+// archive blocks (one straddling before), and the newest rows left in
+// logs. A characterization of channel_logs(_before) before they moved to
+// Go.
+func TestChannelLogsPaging(t *testing.T) {
+	d := testenv.Postgres(t)
+	ctx := context.Background()
+	a := testenv.AddUser(t, d, "alice")
+	testenv.AddConnection(t, d, "c1", a, "{}")
+	var all []int64 // #a's ids, oldest first
+	for i := 0; i < 37; i++ {
+		for _, ch := range []string{"#a", "#b"} {
+			id := logged(t, d, "c1", ch, fmt.Sprintf("%s-%d", ch[1:], i))
+			if ch == "#a" {
+				all = append(all, id)
+			}
+		}
+	}
+	archiveAll(t, d, "c1", "#a", 3, 5)
+	archiveAll(t, d, "c1", "#b", 3, 5)
+	// 6 full blocks of 5 per channel; 7 each left in logs (the newest 3,
+	// and 4 short of a block)
+	if n := count(t, d, "logs"); n != 14 {
+		t.Fatalf("%d rows left in logs, want 14", n)
+	}
+	want := func(before int64, limit int) []int64 {
+		out := []int64{}
+		for i := len(all) - 1; i >= 0 && len(out) < limit; i-- {
+			if all[i] < before {
+				out = append(out, all[i])
+			}
+		}
+		return out
+	}
+	check := func(what string, got []db.Message, err error, w []int64) {
+		t.Helper()
+		if err != nil || !eq(ids(got, mid), w) {
+			t.Errorf("%s: %v %v, want %v", what, ids(got, mid), err, w)
+			return
+		}
+		for _, m := range got {
+			var msg struct{ Params []string }
+			if json.Unmarshal(m.Message, &msg) != nil || len(msg.Params) < 1 || msg.Params[0] != "#a" || m.ConnectionId != "c1" {
+				t.Errorf("%s: message %d is %s on %s", what, m.MessageId, m.Message, m.ConnectionId)
+			}
+		}
+	}
+	for _, limit := range []int{1, 2, 3, 4, 5, 6, 9, 10, 11, 37, 40} {
+		got, err := d.ChannelLogs(ctx, "c1", "#a", limit)
+		check(fmt.Sprintf("newest %d", limit), got, err, want(1<<30, limit))
+		for before := all[0] - 1; before <= all[len(all)-1]+2; before++ {
+			got, err := d.ChannelLogsBefore(ctx, "c1", "#a", int32(before), limit)
+			check(fmt.Sprintf("before %d, %d", before, limit), got, err, want(before, limit))
+		}
+	}
+}
