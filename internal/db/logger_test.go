@@ -353,3 +353,60 @@ func TestInsertLogAtomic(t *testing.T) {
 		t.Errorf("%d logs rows after the failed insert, want 0", n)
 	}
 }
+
+// repliesRows is replies as "connection msgid reply_to thread_root" lines.
+func repliesRows(t *testing.T, d *db.DB) map[string]string {
+	t.Helper()
+	rows, err := d.Pool.Query(context.Background(), `SELECT c.connection_id || ' ' || r.msgid, r.reply_to || ' ' || r.thread_root
+		FROM replies r JOIN channels c ON c.id = r.channel_id`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	out := map[string]string{}
+	for rows.Next() {
+		var k, v string
+		rows.Scan(&k, &v)
+		out[k] = v
+	}
+	return out
+}
+
+// Each reply is recorded with what it answers and its thread's root: the
+// parent's root when the parent is a reply on the same connection, else
+// the parent itself.
+func TestInsertLogReplies(t *testing.T) {
+	d := testenv.Postgres(t)
+	a, b := testenv.AddUser(t, d, "alice"), testenv.AddUser(t, d, "bob")
+	testenv.AddConnection(t, d, "c1", a, "{}")
+	testenv.AddConnection(t, d, "c2", b, "{}")
+	say := func(conn, msgid, tags string) {
+		t.Helper()
+		logMsg(t, d, conn, "PRIVMSG", fmt.Sprintf(`{"Command":"PRIVMSG","Params":["#a","x"],"Tags":{"msgid":%q%s}}`, msgid, tags), "#a")
+	}
+	say("c1", "o", "")
+	say("c1", "r1", `,"+reply":"o"`)
+	say("c1", "r2", `,"+reply":"r1"`)
+	say("c1", "r3", `,"+draft/reply":"r2"`)
+	say("c1", "r4", `,"+reply":"x","+draft/reply":"y"`)
+	say("c1", "u1", `,"+reply":"unknown"`)
+	say("c1", "e1", `,"+reply":""`)
+	say("c1", "s1", `,"+reply":"s1"`)
+	say("c2", "b1", `,"+reply":"r1"`)
+	// a reaction carries +reply too, but it's a TAGMSG: no row
+	logMsg(t, d, "c1", "TAGMSG", `{"Command":"TAGMSG","Params":["#a"],"Tags":{"msgid":"t1","+reply":"o","+draft/react":"👍"}}`, "#a")
+
+	want := map[string]string{
+		"c1 r1": "o o",
+		"c1 r2": "r1 o",
+		"c1 r3": "r2 o",
+		"c1 r4": "x x",
+		"c1 u1": "unknown unknown",
+		"c1 s1": "s1 s1",
+		"c2 b1": "r1 r1", // roots don't cross connections
+	}
+	got := repliesRows(t, d)
+	if fmt.Sprint(got) != fmt.Sprint(want) {
+		t.Errorf("replies:\n%v\nwant:\n%v", got, want)
+	}
+}

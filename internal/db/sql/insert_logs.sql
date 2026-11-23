@@ -10,7 +10,8 @@
 -- A PRIVMSG or NOTICE with a msgid is also mapped in message_ids (msgid
 -- -> id, through its channels row, made here when it's the channel's
 -- first), which archiving also leaves alone: same statement, so a failed
--- insert leaves nothing behind for NSQ's retry to duplicate.
+-- insert leaves nothing behind for NSQ's retry to duplicate. A reply also
+-- goes in replies, with its thread's root.
 WITH logged AS (
   INSERT INTO logs (user_id, connection_id, channel, command, message, time, self, highlight)
   SELECT connections.user_id, connections.id, c.channel, $3, $4, to_timestamp($5), $6, $7
@@ -39,6 +40,25 @@ WITH logged AS (
   INSERT INTO message_ids (channel_id, msgid, log_id)
   SELECT chans.id, wanted.msgid, wanted.id
   FROM wanted JOIN chans USING (connection_id, channel)
+), replied AS (
+  -- a reply (+reply, else +draft/reply; an empty one isn't): what it
+  -- answers, and its thread's root, the parent's root when the parent is a
+  -- reply on the same connection (already logged: the logger stores one
+  -- line at a time), else the parent itself
+  INSERT INTO replies (channel_id, msgid, reply_to, thread_root)
+  SELECT chans.id, wanted.msgid, r.reply_to,
+    coalesce((
+      SELECT p.thread_root
+      FROM replies p JOIN channels pc ON pc.id = p.channel_id
+      WHERE p.msgid = r.reply_to AND pc.connection_id = wanted.connection_id
+      ORDER BY p.channel_id
+      LIMIT 1
+    ), r.reply_to)
+  FROM wanted
+  JOIN chans USING (connection_id, channel)
+  CROSS JOIN (SELECT coalesce(nullif($4::jsonb->'Tags'->>'+reply', ''),
+                              nullif($4::jsonb->'Tags'->>'+draft/reply', '')) AS reply_to) r
+  WHERE r.reply_to IS NOT NULL
 ), highlighted AS (
   INSERT INTO highlights (id, user_id, connection_id, channel, time, message, self)
   SELECT id, user_id, connection_id, channel, time, message, self FROM logged WHERE highlight
