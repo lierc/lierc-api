@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"os"
 	"strings"
 	"testing"
 
@@ -571,5 +572,52 @@ func TestChannelLogsPaging(t *testing.T) {
 			got, err := d.ChannelLogsBefore(ctx, "c1", "#a", int32(before), limit)
 			check(fmt.Sprintf("before %d, %d", before, limit), got, err, want(before, limit))
 		}
+	}
+}
+
+// scripts/backfill-archived-message-ids.sql maps the PRIVMSGs and NOTICEs
+// with a msgid in archive blocks from the last 90 days, so a reply to an
+// archived message from before message_ids (0007) finds it; older blocks,
+// other commands and lines without a msgid are left out, and nothing is
+// mapped twice (it runs twice here).
+func TestBackfillArchivedMessageIDs(t *testing.T) {
+	d := testenv.Postgres(t)
+	ctx := context.Background()
+	a := testenv.AddUser(t, d, "alice")
+	testenv.AddConnection(t, d, "c1", a, "{}")
+	block := func(first, last int, age string, messages string) {
+		t.Helper()
+		exec(t, d, `INSERT INTO log_archives (connection_id, user_id, channel, first_id, last_id, min_time, max_time, count, messages)
+			VALUES ('c1', $1, '#a', $2::int, $3::int, now() - $4::interval, now() - $4::interval, $3::int - $2::int + 1, $5::json)`, a, first, last, age, messages)
+	}
+	el := func(id int, command, tags string) string {
+		return fmt.Sprintf(`{"id":%d,"time":0,"highlight":false,"message":{"Command":%q,"Params":["#a","x %d"],"Tags":{%s}}}`, id, command, id, tags)
+	}
+	block(1, 2, "200 days", "["+el(1, "PRIVMSG", `"msgid":"old"`)+","+el(2, "PRIVMSG", `"msgid":"old2"`)+"]")
+	block(3, 7, "10 days", "["+el(3, "PRIVMSG", `"msgid":"r1"`)+","+el(4, "NOTICE", `"msgid":"r2"`)+","+
+		el(5, "JOIN", `"msgid":"j1"`)+","+el(6, "PRIVMSG", "")+","+el(7, "PRIVMSG", `"msgid":"pre"`)+"]")
+	// "pre" is mapped already (as if logged after 0007, then archived)
+	exec(t, d, `INSERT INTO channels (connection_id, channel) VALUES ('c1', '#a')`)
+	exec(t, d, `INSERT INTO message_ids (channel_id, msgid, log_id) SELECT id, 'pre', 7 FROM channels`)
+
+	sql, err := os.ReadFile("../../scripts/backfill-archived-message-ids.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for range 2 {
+		if _, err := d.Pool.Exec(ctx, string(sql)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	want := []string{"c1 #a r1 3", "c1 #a r2 4", "c1 #a pre 7"}
+	if got := msgidRows(t, d); fmt.Sprint(got) != fmt.Sprint(want) {
+		t.Errorf("message_ids:\n%v\nwant:\n%v", got, want)
+	}
+	m, ok, err := d.MessageByMsgid(ctx, "c1", "r1")
+	if !ok || err != nil || m.MessageId != 3 {
+		t.Errorf("r1: %v %v %v", m.MessageId, ok, err)
+	}
+	if _, ok, err := d.MessageByMsgid(ctx, "c1", "old"); ok || err != nil {
+		t.Errorf("old (outside 90 days): %v %v, want not found", ok, err)
 	}
 }
