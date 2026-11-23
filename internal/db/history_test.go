@@ -288,3 +288,158 @@ func TestMessageByMsgidUsesIndex(t *testing.T) {
 		t.Errorf("plan doesn't use the msgid index:\n%s", plan)
 	}
 }
+
+// logged logs a PRIVMSG with msgid on conn in channel through InsertLog,
+// so message_ids is filled as in production, and returns its id.
+func logged(t *testing.T, d *db.DB, conn, channel, msgid string) int64 {
+	t.Helper()
+	id, err := d.InsertLog(context.Background(), db.LogEntry{Connection: conn, Command: "PRIVMSG",
+		Message: []byte(fmt.Sprintf(`{"Command":"PRIVMSG","Params":[%q,"text %s"],"Prefix":{"Name":"bob"},"Tags":{"msgid":%q}}`, channel, msgid, msgid)),
+		Time:    1700000000}, []string{channel}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return id
+}
+
+func archiveAll(t *testing.T, d *db.DB, conn, channel string, keep, block int) {
+	t.Helper()
+	for n := 0; n < 20; n++ {
+		_, ok, err := archive.MoveBlock(context.Background(), d, archive.Channel{Connection: conn, Channel: channel}, archive.Options{Keep: keep, Block: block})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !ok {
+			return
+		}
+	}
+}
+
+func wantFound(t *testing.T, d *db.DB, conn, msgid string, id int64) {
+	t.Helper()
+	m, ok, err := d.MessageByMsgid(context.Background(), conn, msgid)
+	var got struct{ Tags struct{ Msgid string } }
+	if err != nil || !ok || m.MessageId != id || json.Unmarshal(m.Message, &got) != nil || got.Tags.Msgid != msgid || m.ConnectionId != conn {
+		t.Errorf("%s %s: %d %v %v %s, want id %d", conn, msgid, m.MessageId, ok, err, m.Message, id)
+	}
+}
+
+// An original that has been archived is found through message_ids.
+func TestMessageByMsgidAfterArchiving(t *testing.T) {
+	d := testenv.Postgres(t)
+	a := testenv.AddUser(t, d, "alice")
+	testenv.AddConnection(t, d, "c1", a, "{}")
+	id1, id2, id3 := logged(t, d, "c1", "#a", "m1"), logged(t, d, "c1", "#a", "m2"), logged(t, d, "c1", "#a", "m3")
+	archiveAll(t, d, "c1", "#a", 1, 2)
+	if n := count(t, d, "logs"); n != 1 {
+		t.Fatalf("%d rows left in logs, want 1", n)
+	}
+	wantFound(t, d, "c1", "m1", id1)
+	wantFound(t, d, "c1", "m2", id2)
+	wantFound(t, d, "c1", "m3", id3)
+}
+
+// Blocks are per channel: an archived message is read from its own
+// channel's block, with other channels' ids interleaved.
+func TestMessageByMsgidOtherChannelsBlock(t *testing.T) {
+	d := testenv.Postgres(t)
+	a := testenv.AddUser(t, d, "alice")
+	testenv.AddConnection(t, d, "c1", a, "{}")
+	var ids = map[string]int64{}
+	for i := 0; i < 4; i++ {
+		for _, ch := range []string{"#a", "#b"} {
+			k := fmt.Sprintf("%s-%d", ch[1:], i)
+			ids[k] = logged(t, d, "c1", ch, k)
+		}
+	}
+	archiveAll(t, d, "c1", "#a", 1, 3)
+	archiveAll(t, d, "c1", "#b", 1, 3)
+	wantFound(t, d, "c1", "b-1", ids["b-1"])
+	wantFound(t, d, "c1", "a-2", ids["a-2"])
+}
+
+// Two connections (two lierc users) log the same msgid: each gets its own.
+func TestMessageByMsgidOwnConnection(t *testing.T) {
+	d := testenv.Postgres(t)
+	a, b := testenv.AddUser(t, d, "alice"), testenv.AddUser(t, d, "bob")
+	testenv.AddConnection(t, d, "c1", a, "{}")
+	testenv.AddConnection(t, d, "c2", b, "{}")
+	i1, i2 := logged(t, d, "c1", "#a", "x"), logged(t, d, "c2", "#a", "x")
+	wantFound(t, d, "c1", "x", i1)
+	wantFound(t, d, "c2", "x", i2)
+}
+
+// A message from before message_ids existed (no row) is still found while
+// it's in logs, and not once it's archived.
+func TestMessageByMsgidFallback(t *testing.T) {
+	d := testenv.Postgres(t)
+	a := testenv.AddUser(t, d, "alice")
+	testenv.AddConnection(t, d, "c1", a, "{}")
+	msgidRow(t, d, 1, "c1", a, "#a", "PRIVMSG", "old")
+	msgidRow(t, d, 2, "c1", a, "#a", "PRIVMSG", "old2")
+	wantFound(t, d, "c1", "old", 1)
+	archiveAll(t, d, "c1", "#a", 1, 1)
+	if _, ok, err := d.MessageByMsgid(context.Background(), "c1", "old"); ok || err != nil {
+		t.Errorf("archived, no message_ids row: %v %v, want not found", ok, err)
+	}
+}
+
+// The lookups use their indexes.
+func TestMessageByMsgidIndexes(t *testing.T) {
+	d := testenv.Postgres(t)
+	ctx := context.Background()
+	a := testenv.AddUser(t, d, "alice")
+	testenv.AddConnection(t, d, "c1", a, "{}")
+	for i := 0; i < 50; i++ {
+		logged(t, d, "c1", "#a", fmt.Sprint("f", i))
+	}
+	exec(t, d, `INSERT INTO message_ids (channel_id, msgid, log_id) SELECT (SELECT id FROM channels LIMIT 1), 'g' || g, g + 100000 FROM generate_series(1, 3000) g`)
+	exec(t, d, `ANALYZE message_ids`)
+	exec(t, d, `ANALYZE log_archives`)
+	plan := func(sql string, args ...any) string {
+		rows, err := d.Pool.Query(ctx, "EXPLAIN "+sql, args...)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer rows.Close()
+		var p string
+		for rows.Next() {
+			var line string
+			if err := rows.Scan(&line); err != nil {
+				t.Fatal(err)
+			}
+			p += line + "\n"
+		}
+		return p
+	}
+	if p := plan(db.Query("message_ids_lookup"), "c1", "f3"); !strings.Contains(p, "message_ids_msgid_idx") {
+		t.Errorf("message_ids lookup doesn't use message_ids_msgid_idx:\n%s", p)
+	}
+	var idx string
+	d.Pool.QueryRow(ctx, `SELECT indexname FROM pg_indexes WHERE tablename = 'log_archives' AND indexdef LIKE '%last_id%'`).Scan(&idx)
+	// the archive is tiny here, so a sequential scan is the cheaper plan;
+	// what matters is that the query can use the index at all
+	c, err := d.Pool.Acquire(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer c.Release()
+	if _, err := c.Exec(ctx, "SET enable_seqscan = off"); err != nil {
+		t.Fatal(err)
+	}
+	defer c.Exec(ctx, "RESET enable_seqscan")
+	rows, err := c.Query(ctx, "EXPLAIN "+db.Query("message_by_log_id"), "c1", "#a", 3)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var p string
+	for rows.Next() {
+		var line string
+		rows.Scan(&line)
+		p += line + "\n"
+	}
+	rows.Close()
+	if idx == "" || !strings.Contains(p, idx) {
+		t.Errorf("message_by_log_id can't use %q:\n%s", idx, p)
+	}
+}
