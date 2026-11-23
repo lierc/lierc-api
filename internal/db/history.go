@@ -81,6 +81,17 @@ func (d *DB) ChannelLast(ctx context.Context, conn, channel string, query *strin
 	return d.messages(ctx, Query("channel_last"), channel, conn, query, limit)
 }
 
+// MessageByMsgid is the earliest PRIVMSG or NOTICE on conn with IRC msgid
+// msgid, for a reply's original; ok is false when logs has none (an
+// archived message isn't searched).
+func (d *DB) MessageByMsgid(ctx context.Context, conn, msgid string) (Message, bool, error) {
+	ms, err := d.messages(ctx, Query("message_by_msgid"), conn, msgid)
+	if err != nil || len(ms) == 0 {
+		return Message{}, false, err
+	}
+	return ms[0], true, nil
+}
+
 // ErrUnknownTimeZone is ChannelDate's error for a time zone Postgres
 // doesn't know.
 var ErrUnknownTimeZone = errors.New("unknown time zone")

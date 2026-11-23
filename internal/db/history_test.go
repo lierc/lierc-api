@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/lierc/lierc-api/internal/archive"
@@ -187,5 +188,103 @@ func TestChannelDateLimit(t *testing.T) {
 	got, err = d.ChannelDate(ctx, "c1", "#a", "2026-01-01", "2026-01-03", "UTC", nil, nil, 2)
 	if err != nil || !eq(ids(got, mid), []int64{1, 2}) {
 		t.Errorf("limit 2 = %v, %v", ids(got, mid), err)
+	}
+}
+
+// msgidRow inserts log row id on conn in channel: command with IRC msgid.
+func msgidRow(t *testing.T, d *db.DB, id int64, conn, user, channel, command, msgid string) {
+	t.Helper()
+	msg := fmt.Sprintf(`{"Command":%q,"Params":[%q,"text %d"],"Prefix":{"Name":"bob"},"Tags":{"msgid":%q}}`, command, channel, id, msgid)
+	exec(t, d, `INSERT INTO logs (id, connection_id, user_id, channel, command, time, message) VALUES ($1,$2,$3,$4,$5,now(),$6)`,
+		id, conn, user, channel, command, msg)
+}
+
+// A reply's original is found by its connection and IRC msgid: the
+// earliest PRIVMSG or NOTICE, never a NICK or QUIT logged per channel
+// with the same msgid, and never another connection's.
+func TestMessageByMsgid(t *testing.T) {
+	d := testenv.Postgres(t)
+	ctx := context.Background()
+	a := testenv.AddUser(t, d, "alice")
+	b := testenv.AddUser(t, d, "bob")
+	testenv.AddConnection(t, d, "c1", a, "{}")
+	testenv.AddConnection(t, d, "c2", b, "{}")
+	msgidRow(t, d, 1, "c1", a, "#a", "PRIVMSG", "m1")
+	msgidRow(t, d, 2, "c1", a, "#a", "NICK", "n1")
+	msgidRow(t, d, 3, "c1", a, "#b", "NICK", "n1")
+	msgidRow(t, d, 4, "c1", a, "#a", "NOTICE", "m4")
+	msgidRow(t, d, 5, "c2", b, "#a", "PRIVMSG", "m5")
+	msgidRow(t, d, 6, "c1", a, "#b", "PRIVMSG", "m1")
+	for _, tc := range []struct {
+		conn, msgid string
+		id          int64
+		ok          bool
+	}{
+		{"c1", "m1", 1, true},
+		{"c1", "m4", 4, true},
+		{"c1", "n1", 0, false},
+		{"c1", "m5", 0, false},
+		{"c1", "nope", 0, false},
+		{"c2", "m5", 5, true},
+	} {
+		m, ok, err := d.MessageByMsgid(ctx, tc.conn, tc.msgid)
+		if err != nil || ok != tc.ok || (ok && m.MessageId != tc.id) {
+			t.Errorf("%s %s: %d %v %v, want %d %v", tc.conn, tc.msgid, m.MessageId, ok, err, tc.id, tc.ok)
+		}
+	}
+	m, _, _ := d.MessageByMsgid(ctx, "c1", "m1")
+	var got struct{ Tags struct{ Msgid string } }
+	if json.Unmarshal(m.Message, &got) != nil || got.Tags.Msgid != "m1" || m.ConnectionId != "c1" {
+		t.Errorf("message = %s on %s", m.Message, m.ConnectionId)
+	}
+}
+
+// Only logs is searched: an archived original isn't found.
+func TestMessageByMsgidArchived(t *testing.T) {
+	d := testenv.Postgres(t)
+	ctx := context.Background()
+	a := testenv.AddUser(t, d, "alice")
+	testenv.AddConnection(t, d, "c1", a, "{}")
+	msgidRow(t, d, 1, "c1", a, "#a", "PRIVMSG", "m1")
+	msgidRow(t, d, 2, "c1", a, "#a", "PRIVMSG", "m2")
+	if _, ok, err := archive.MoveBlock(ctx, d, archive.Channel{Connection: "c1", Channel: "#a"}, archive.Options{Keep: 1, Block: 1}); !ok || err != nil {
+		t.Fatalf("archive: %v %v", ok, err)
+	}
+	if _, ok, err := d.MessageByMsgid(ctx, "c1", "m1"); ok || err != nil {
+		t.Errorf("archived m1: %v %v, want not found", ok, err)
+	}
+	if _, ok, err := d.MessageByMsgid(ctx, "c1", "m2"); !ok || err != nil {
+		t.Errorf("m2: %v %v, want found", ok, err)
+	}
+}
+
+// The lookup uses the msgid index, not a scan of logs.
+func TestMessageByMsgidUsesIndex(t *testing.T) {
+	d := testenv.Postgres(t)
+	ctx := context.Background()
+	a := testenv.AddUser(t, d, "alice")
+	testenv.AddConnection(t, d, "c1", a, "{}")
+	exec(t, d, `INSERT INTO logs (id, connection_id, user_id, channel, command, time, message)
+		SELECT g, 'c1', $1, '#a', 'PRIVMSG', now(), jsonb_build_object('Command','PRIVMSG','Params',jsonb_build_array('#a','x'),'Tags',jsonb_build_object('msgid','m'||g))
+		FROM generate_series(1, 2000) g`, a)
+	exec(t, d, `ANALYZE logs`)
+	var plan string
+	rows, err := d.Pool.Query(ctx, "EXPLAIN "+db.Query("message_by_msgid"), "c1", "m1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for rows.Next() {
+		var line string
+		if err := rows.Scan(&line); err != nil {
+			t.Fatal(err)
+		}
+		plan += line + "\n"
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(plan, "logs_connection_id_msgid_idx") {
+		t.Errorf("plan doesn't use the msgid index:\n%s", plan)
 	}
 }
