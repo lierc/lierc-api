@@ -185,11 +185,11 @@ func (s *Server) replay(ctx context.Context, st *stream, conns []db.Connection) 
 			emit(stat.Id, liercdPrefix, rplEndOfNames, stat.Nick, ch.Name, "End of /NAMES list.")
 		}
 	}
-	// Modes
+	// Modes, as a server's 324: the nick, the channel, then the modes
 	for _, stat := range registered {
 		for _, ch := range stat.Channels {
 			if ch.Mode != "" {
-				emit(stat.Id, liercdPrefix, rplChannelModeIs, ch.Name, ch.Mode)
+				emit(stat.Id, liercdPrefix, rplChannelModeIs, stat.Nick, ch.Name, ch.Mode)
 			}
 		}
 	}

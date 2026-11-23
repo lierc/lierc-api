@@ -639,14 +639,14 @@ func TestReplayOrder(t *testing.T) {
 			`"c1" "liercd" 366 ["me1","#a","End of /NAMES list."]`,
 			`"c1" "liercd" 353 ["me1","=","#b","x y z"]`,
 			`"c1" "liercd" 366 ["me1","#b","End of /NAMES list."]`,
-			`"c1" "liercd" 324 ["#a","+nt"]`,
+			`"c1" "liercd" 324 ["me1","#a","+nt"]`,
 		},
 		`"c2"`: {
 			`"c2" "liercd" 001 ["me2","Welcome to the Internet Relay Network me2"]`,
 			`"c2" "me2" JOIN ["#c"]`,
 			`"c2" "liercd" 332 ["me2","#c","t2"]`,
 			`"c2" "liercd" 333 ["me2","#c","carol",1700000001]`,
-			`"c2" "liercd" 324 ["#c","+s"]`,
+			`"c2" "liercd" 324 ["me2","#c","+s"]`,
 		},
 	}
 	for id, w := range want {
