@@ -384,6 +384,55 @@ func TestMessageByMsgidFallback(t *testing.T) {
 	}
 }
 
+// The archive read goes straight to its block through the last_id index,
+// with a realistic number of blocks and no planner settings changed: one
+// probe, not every block of the channel (the plan production showed for
+// first_id <= id AND last_id >= id was a scan of all 3,010 of #lobsters').
+func TestMessageByLogIDOneBlock(t *testing.T) {
+	d := testenv.Postgres(t)
+	ctx := context.Background()
+	a := testenv.AddUser(t, d, "alice")
+	testenv.AddConnection(t, d, "c1", a, "{}")
+	// 300 blocks of 500 ids in #a (and as many in #b), as lctl archive makes
+	for _, ch := range []string{"#a", "#b"} {
+		exec(t, d, `INSERT INTO log_archives (connection_id, user_id, channel, first_id, last_id, min_time, max_time, count, messages)
+			SELECT 'c1', $1, $2, g * 1000 + o + 1, g * 1000 + o + 500, now(), now(), 500,
+			  json_build_array(json_build_object('id', g * 1000 + o + 250, 'time', 0, 'highlight', false,
+			    'message', json_build_object('Command', 'PRIVMSG', 'Params', json_build_array($2::text, 'x'))))
+			FROM generate_series(0, 299) g, (SELECT CASE WHEN $2 = '#a' THEN 0 ELSE 500 END AS o) off`, a, ch)
+	}
+	exec(t, d, `ANALYZE log_archives`)
+	var idx string
+	if err := d.Pool.QueryRow(ctx, `SELECT indexname FROM pg_indexes WHERE tablename = 'log_archives' AND indexdef LIKE '%last_id%'`).Scan(&idx); err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range []int{250, 150250, 299250} { // the oldest, a middle and the newest block
+		rows, err := d.Pool.Query(ctx, "EXPLAIN (ANALYZE, COSTS OFF) "+db.Query("message_by_log_id"), "c1", "#a", id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var plan string
+		for rows.Next() {
+			var line string
+			if err := rows.Scan(&line); err != nil {
+				t.Fatal(err)
+			}
+			plan += line + "\n"
+		}
+		rows.Close()
+		if err := rows.Err(); err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(plan, "Index Scan") || !strings.Contains(plan, idx) || strings.Contains(plan, "Rows Removed by Filter: 2") {
+			t.Errorf("id %d: the archive read isn't one probe of %s:\n%s", id, idx, plan)
+		}
+	}
+	m, ok, err := d.MessageByMsgid(ctx, "c1", "nope")
+	if ok || err != nil {
+		t.Errorf("unknown msgid: %v %v %v", m, ok, err)
+	}
+}
+
 // The lookups use their indexes.
 func TestMessageByMsgidIndexes(t *testing.T) {
 	d := testenv.Postgres(t)
