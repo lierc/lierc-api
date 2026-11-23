@@ -3,6 +3,7 @@ package db_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -251,5 +252,104 @@ func TestNotifyLogged(t *testing.T) {
 		}
 	case <-time.After(5 * time.Second):
 		t.Fatal("never got the payload at the limit")
+	}
+}
+
+// logMsg logs one line on conn under channels through InsertLog, as the
+// logger does, and returns its id.
+func logMsg(t *testing.T, d *db.DB, conn, command, message string, channels ...string) int64 {
+	t.Helper()
+	id, err := d.InsertLog(context.Background(), db.LogEntry{Connection: conn, Command: command, Message: []byte(message), Time: 1700000000}, channels, false)
+	if err != nil {
+		t.Fatalf("InsertLog %s: %v", message, err)
+	}
+	return id
+}
+
+// msgidRows is message_ids as "channel msgid log_id" lines, in order.
+func msgidRows(t *testing.T, d *db.DB) []string {
+	t.Helper()
+	rows, err := d.Pool.Query(context.Background(), `SELECT c.connection_id || ' ' || c.channel || ' ' || m.msgid || ' ' || m.log_id
+		FROM message_ids m JOIN channels c ON c.id = m.channel_id ORDER BY m.log_id, c.channel`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	var out []string
+	for rows.Next() {
+		var s string
+		rows.Scan(&s)
+		out = append(out, s)
+	}
+	return out
+}
+
+func count(t *testing.T, d *db.DB, table string) int {
+	t.Helper()
+	var n int
+	if err := d.Pool.QueryRow(context.Background(), "SELECT count(*) FROM "+table).Scan(&n); err != nil {
+		t.Fatal(err)
+	}
+	return n
+}
+
+// Each logged PRIVMSG or NOTICE with a msgid is mapped, under each channel
+// it's logged in; other commands and lines without a msgid aren't, and a
+// channel gets one channels row.
+func TestInsertLogMessageIDs(t *testing.T) {
+	d := testenv.Postgres(t)
+	a := testenv.AddUser(t, d, "alice")
+	testenv.AddConnection(t, d, "c1", a, "{}")
+	id1 := logMsg(t, d, "c1", "PRIVMSG", `{"Command":"PRIVMSG","Params":["#a","hi"],"Tags":{"msgid":"m1"}}`, "#a")
+	id2 := logMsg(t, d, "c1", "PRIVMSG", `{"Command":"PRIVMSG","Params":["#a","hi"],"Tags":{"msgid":"m2"}}`, "#a")
+	id3 := logMsg(t, d, "c1", "NOTICE", `{"Command":"NOTICE","Params":["#a","hi"],"Tags":{"msgid":"n1"}}`, "#a")
+	logMsg(t, d, "c1", "JOIN", `{"Command":"JOIN","Params":["#a"],"Tags":{"msgid":"j1"}}`, "#a")
+	logMsg(t, d, "c1", "NICK", `{"Command":"NICK","Params":["new"],"Tags":{"msgid":"k1"}}`, "#a", "#b")
+	logMsg(t, d, "c1", "PRIVMSG", `{"Command":"PRIVMSG","Params":["#a","no tags"]}`, "#a")
+	// one line logged under two channels: a row for each logged row
+	id4 := logMsg(t, d, "c1", "PRIVMSG", `{"Command":"PRIVMSG","Params":["#a","hi"],"Tags":{"msgid":"m3"}}`, "#a", "#b")
+	want := []string{
+		fmt.Sprintf("c1 #a m1 %d", id1),
+		fmt.Sprintf("c1 #a m2 %d", id2),
+		fmt.Sprintf("c1 #a n1 %d", id3),
+		fmt.Sprintf("c1 #a m3 %d", id4-1),
+		fmt.Sprintf("c1 #b m3 %d", id4),
+	}
+	if got := msgidRows(t, d); fmt.Sprint(got) != fmt.Sprint(want) {
+		t.Errorf("message_ids:\n%v\nwant:\n%v", got, want)
+	}
+	if n := count(t, d, "channels"); n != 2 {
+		t.Errorf("%d channels rows, want 2 (#a, #b)", n)
+	}
+}
+
+// Nothing is mapped for a connection that doesn't exist.
+func TestInsertLogMessageIDsGoneConnection(t *testing.T) {
+	d := testenv.Postgres(t)
+	e := db.LogEntry{Connection: "nope", Command: "PRIVMSG", Message: []byte(`{"Command":"PRIVMSG","Params":["#a","hi"],"Tags":{"msgid":"m1"}}`), Time: 1700000000}
+	if _, err := d.InsertLog(context.Background(), e, []string{"#a"}, false); !errors.Is(err, db.ErrGone) {
+		t.Errorf("InsertLog: %v, want ErrGone", err)
+	}
+	for _, table := range []string{"channels", "message_ids", "replies"} {
+		if n := count(t, d, table); n != 0 {
+			t.Errorf("%d %s rows, want 0", n, table)
+		}
+	}
+}
+
+// The insert is one statement: when mapping fails, nothing is logged, so
+// NSQ's retry doesn't leave half the rows behind.
+func TestInsertLogAtomic(t *testing.T) {
+	d := testenv.Postgres(t)
+	a := testenv.AddUser(t, d, "alice")
+	testenv.AddConnection(t, d, "c1", a, "{}")
+	exec(t, d, `CREATE FUNCTION refuse() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'refused'; END $$`)
+	exec(t, d, `CREATE TRIGGER refuse BEFORE INSERT ON message_ids FOR EACH ROW EXECUTE FUNCTION refuse()`)
+	e := db.LogEntry{Connection: "c1", Command: "PRIVMSG", Message: []byte(`{"Command":"PRIVMSG","Params":["#a","hi"],"Tags":{"msgid":"m1"}}`), Time: 1700000000}
+	if _, err := d.InsertLog(context.Background(), e, []string{"#a"}, false); err == nil {
+		t.Fatal("InsertLog succeeded with message_ids refusing rows")
+	}
+	if n := count(t, d, "logs"); n != 0 {
+		t.Errorf("%d logs rows after the failed insert, want 0", n)
 	}
 }
