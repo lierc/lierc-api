@@ -21,7 +21,7 @@ type LogEntry struct {
 }
 
 // InsertLog stores e once under each of channels, in order, for its
-// connection's owner, and returns the last id. In the same transaction, so
+// connection's owner, and returns the last id. In one transaction, so
 // a failure leaves nothing behind for NSQ's retry to duplicate:
 //   - a highlight also goes in highlights, with the same id;
 //   - a PRIVMSG or NOTICE with a msgid is mapped in message_ids under each
@@ -40,17 +40,25 @@ func (d *DB) InsertLog(ctx context.Context, e LogEntry, channels []string, highl
 	}
 	defer tx.Rollback(ctx)
 
-	rows, err := tx.Query(ctx, Query("insert_logs"),
-		e.Connection, channels, e.Command, e.Message, e.Time, e.Self, highlight)
-	if err != nil {
-		return 0, gone(err)
-	}
-	logged, err := pgx.CollectRows(rows, pgx.RowToStructByPos[loggedRow])
-	if err != nil {
-		return 0, gone(err)
-	}
-	if len(logged) == 0 {
-		return 0, ErrGone
+	// one row per channel, in order, for the connection's owner: none (no
+	// row from connections) when the connection doesn't exist
+	logged := make([]loggedRow, 0, len(channels))
+	for _, channel := range channels {
+		var id int64
+		err := queryRow(ctx, tx, psql.Insert("logs").
+			Columns("user_id", "connection_id", "channel", "command", "message", "time", "self", "highlight").
+			Select(psql.Select("user_id", "id").
+				Column("?::text", channel).Column("?::text", e.Command).Column("?::jsonb", e.Message).
+				Column("to_timestamp(?)", e.Time).Column("?::boolean", e.Self).Column("?::boolean", highlight).
+				From("connections").Where(sq.Eq{"id": e.Connection})).
+			Suffix("RETURNING id")).Scan(&id)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return 0, ErrGone
+		}
+		if err != nil {
+			return 0, gone(err)
+		}
+		logged = append(logged, loggedRow{ID: id, Channel: channel})
 	}
 
 	if highlight {
