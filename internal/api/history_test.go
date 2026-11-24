@@ -17,11 +17,11 @@ import (
 func (e *env) msg(id int64, conn, user, channel, text string, self, highlight bool, when string) {
 	e.t.Helper()
 	m := fmt.Sprintf(`{"Command":"PRIVMSG","Params":[%q,%q]}`, channel, text)
-	e.exec(`INSERT INTO logs (id, connection_id, user_id, channel, command, self, highlight, time, message) VALUES ($1,$2,$3,$4,'PRIVMSG',$5,$6,$7::timestamp,$8)`,
+	e.exec(`INSERT INTO logs (channel_id, id, connection_id, user_id, channel, command, self, highlight, time, message) VALUES (test_channel_id($2, $4), $1,$2,$3,$4,'PRIVMSG',$5,$6,$7::timestamp,$8)`,
 		id, conn, user, channel, self, highlight, when, m)
 	if highlight { // as the logger does
-		e.exec(`INSERT INTO highlights (id, connection_id, user_id, channel, time, message, self)
-			SELECT id, connection_id, user_id, channel, time, message, self FROM logs WHERE id = $1`, id)
+		e.exec(`INSERT INTO highlights (channel_id, id, connection_id, user_id, channel, time, message, self)
+			SELECT test_channel_id(connection_id, channel), id, connection_id, user_id, channel, time, message, self FROM logs WHERE id = $1`, id)
 	}
 }
 
@@ -73,8 +73,8 @@ func TestLogRoute(t *testing.T) {
 	e := setup(t)
 	a := testenv.AddUser(t, e.db, "alice")
 	testenv.AddConnection(t, e.db, "c1", a, "{}")
-	e.exec(`INSERT INTO logs (id, connection_id, user_id, channel, command, time, message)
-		SELECT g, 'c1', $1, '#a', 'PRIVMSG', now(), '{}' FROM generate_series(1, 251) g`, a)
+	e.exec(`INSERT INTO logs (channel_id, id, connection_id, user_id, channel, command, time, message)
+		SELECT test_channel_id('c1', '#a'), g, 'c1', $1, '#a', 'PRIVMSG', now(), '{}' FROM generate_series(1, 251) g`, a)
 	c, b := e.getJSON("/log/1", a)
 	if ids := msgIDs(t, b); c != 200 || len(ids) != 250 || ids[0] != 2 || ids[249] != 251 {
 		t.Errorf("250 newer: %d, %d rows", c, len(msgIDs(t, b)))
@@ -88,7 +88,7 @@ func TestLogRouteBody(t *testing.T) {
 	e := setup(t)
 	a := testenv.AddUser(t, e.db, "alice")
 	testenv.AddConnection(t, e.db, "c1", a, "{}")
-	e.exec(`INSERT INTO logs (id, connection_id, user_id, channel, command, self, highlight, time, message) VALUES (7,'c1',$1,'#a','PRIVMSG',true,false,now(),'{"Command":"PRIVMSG"}')`, a)
+	e.exec(`INSERT INTO logs (channel_id, id, connection_id, user_id, channel, command, self, highlight, time, message) VALUES (test_channel_id('c1', '#a'), 7,'c1',$1,'#a','PRIVMSG',true,false,now(),'{"Command":"PRIVMSG"}')`, a)
 	c, b := e.getJSON("/log/1", a)
 	var got bytes.Buffer
 	json.Compact(&got, []byte(b))
@@ -133,7 +133,7 @@ func TestLastRoute(t *testing.T) {
 	e := setup(t)
 	a := testenv.AddUser(t, e.db, "alice")
 	testenv.AddConnection(t, e.db, "c1", a, "{}")
-	e.exec(`INSERT INTO logs (connection_id, user_id, channel, command, time, message) VALUES ('c1',$1,'#a','PRIVMSG',now(),'{"Params":["#a","running late again"]}')`, a)
+	e.exec(`INSERT INTO logs (channel_id, connection_id, user_id, channel, command, time, message) VALUES (test_channel_id('c1', '#a'), 'c1',$1,'#a','PRIVMSG',now(),'{"Params":["#a","running late again"]}')`, a)
 	if c, b := e.getJSON("/connection/c1/channel/%23a/last?query=running%20late", a); c != 200 || len(msgIDs(t, b)) != 1 {
 		t.Errorf("running late: %d %s", c, b)
 	}

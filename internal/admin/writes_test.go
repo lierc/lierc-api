@@ -72,10 +72,10 @@ func (e *env) seedUser(name string, conns ...string) string {
 	u := testenv.AddUser(e.t, e.d, name)
 	for _, c := range conns {
 		testenv.AddConnection(e.t, e.d, c, u, `{}`)
-		e.exec(`INSERT INTO seen_markers (user_id, connection_id, channel, message_id) VALUES ('` + u + `', '` + c + `', '#a', 1)`)
+		e.exec(`INSERT INTO seen_markers (channel_id, user_id, connection_id, channel, message_id) VALUES (test_channel_id('` + c + `', '#a'), '` + u + `', '` + c + `', '#a', 1)`)
 		e.exec(`INSERT INTO private_chats (connection_id, nick, time) VALUES ('` + c + `', 'n', now())`)
-		e.exec(`INSERT INTO log_archives (connection_id, user_id, channel, first_id, last_id, min_time, max_time, count, messages)
-			VALUES ('` + c + `', '` + u + `', '#a', 1, 2, now(), now(), 2, '[]')`)
+		e.exec(`INSERT INTO log_archives (channel_id, connection_id, user_id, channel, first_id, last_id, min_time, max_time, count, messages)
+			VALUES (test_channel_id('` + c + `', '#a'), '` + c + `', '` + u + `', '#a', 1, 2, now(), now(), 2, '[]')`)
 	}
 	e.exec(`INSERT INTO prefs (user_id, name, value) VALUES ('` + u + `', 'p', 'v')`)
 	e.exec(`INSERT INTO web_push_subscriptions (user_id, endpoint, key, auth) VALUES ('` + u + `', 'https://e/` + name + `', 'k', 'a')`)
@@ -372,8 +372,8 @@ func TestPruneSeen(t *testing.T) {
 	e, _ := newWriteEnv(t)
 	u := testenv.AddUser(t, e.d, "u")
 	testenv.AddConnection(t, e.d, "c", u, `{}`)
-	e.exec(`INSERT INTO seen_markers (user_id, connection_id, channel, message_id) VALUES ('` + u + `', 'c', '#fresh', 1)`)
-	e.exec(`INSERT INTO seen_markers (user_id, connection_id, channel, message_id, updated) VALUES ('` + u + `', 'c', '#old', 1, now() - interval '2 months')`)
+	e.exec(`INSERT INTO seen_markers (channel_id, user_id, connection_id, channel, message_id) VALUES (test_channel_id('c', '#fresh'), '` + u + `', 'c', '#fresh', 1)`)
+	e.exec(`INSERT INTO seen_markers (channel_id, user_id, connection_id, channel, message_id, updated) VALUES (test_channel_id('c', '#old'), '` + u + `', 'c', '#old', 1, now() - interval '2 months')`)
 	code, body := e.send("POST", "/admin/seen/prune")
 	if code != 200 || body != `{"status":"ok","pruned":1}` {
 		t.Errorf("%d %s", code, body)

@@ -322,8 +322,8 @@ func TestStaleSeen(t *testing.T) {
 	e := newEnv(t)
 	a := testenv.AddUser(t, e.d, "alice")
 	testenv.AddConnection(t, e.d, "c1", a, `{}`)
-	e.exec(`INSERT INTO seen_markers (user_id, connection_id, channel, message_id) VALUES ('` + a + `', 'c1', '#a', 1)`)
-	e.exec(`INSERT INTO seen_markers (user_id, connection_id, channel, message_id, updated) VALUES ('` + a + `', 'c1', '#b', 1, now() - interval '2 months')`)
+	e.exec(`INSERT INTO seen_markers (channel_id, user_id, connection_id, channel, message_id) VALUES (test_channel_id('c1', '#a'), '` + a + `', 'c1', '#a', 1)`)
+	e.exec(`INSERT INTO seen_markers (channel_id, user_id, connection_id, channel, message_id, updated) VALUES (test_channel_id('c1', '#b'), '` + a + `', 'c1', '#b', 1, now() - interval '2 months')`)
 	if _, body := e.get("/admin/seen/stale"); body != `{"count":1}` {
 		t.Errorf("got %s", body)
 	}

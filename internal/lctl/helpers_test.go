@@ -101,8 +101,8 @@ func (h *harness) user(name string) string { return testenv.AddUser(h.t, h.db, n
 // conn adds a connection with a log, seen and private row.
 func (h *harness) conn(id, user, config string) {
 	testenv.AddConnection(h.t, h.db, id, user, config)
-	h.exec(`INSERT INTO logs (connection_id, user_id, channel, time, message) VALUES ($1, $2, 'status', now(), '{}')`, id, user)
-	h.exec(`INSERT INTO seen_markers (user_id, connection_id, channel, message_id) VALUES ($1, $2, 'status', 1)`, user, id)
+	h.exec(`INSERT INTO logs (channel_id, connection_id, user_id, channel, time, message) VALUES (test_channel_id($1, 'status'), $1, $2, 'status', now(), '{}')`, id, user)
+	h.exec(`INSERT INTO seen_markers (channel_id, user_id, connection_id, channel, message_id) VALUES (test_channel_id($2, 'status'), $1, $2, 'status', 1)`, user, id)
 	h.exec(`INSERT INTO private_chats (connection_id, nick, time) VALUES ($1, 'someone', now())`, id)
 }
 

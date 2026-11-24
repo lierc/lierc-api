@@ -19,6 +19,14 @@ import (
 func msgRow(t *testing.T, d *db.DB, id int64, conn, user, channel, text string, self, highlight bool, when string) {
 	t.Helper()
 	msg := fmt.Sprintf(`{"Command":"PRIVMSG","Params":[%q,%q],"Prefix":{"Name":"bob"}}`, channel, text)
+	exec(t, d, `INSERT INTO logs (channel_id, id, connection_id, user_id, channel, command, self, highlight, time, message) VALUES (test_channel_id($2, $4), $1,$2,$3,$4,'PRIVMSG',$5,$6,$7::timestamp,$8)`,
+		id, conn, user, channel, self, highlight, when, msg)
+}
+
+// oldMsgRow is msgRow on a database from before 0010 (no channel_id).
+func oldMsgRow(t *testing.T, d *db.DB, id int64, conn, user, channel, text string, self, highlight bool, when string) {
+	t.Helper()
+	msg := fmt.Sprintf(`{"Command":"PRIVMSG","Params":[%q,%q],"Prefix":{"Name":"bob"}}`, channel, text)
 	exec(t, d, `INSERT INTO logs (id, connection_id, user_id, channel, command, self, highlight, time, message) VALUES ($1,$2,$3,$4,'PRIVMSG',$5,$6,$7::timestamp,$8)`,
 		id, conn, user, channel, self, highlight, when, msg)
 }
@@ -134,7 +142,7 @@ func TestChannelLast(t *testing.T) {
 	ctx := context.Background()
 	a := testenv.AddUser(t, d, "alice")
 	testenv.AddConnection(t, d, "c1", a, "{}")
-	exec(t, d, `INSERT INTO logs (connection_id, user_id, channel, command, time, message) VALUES ('c1',$1,'#a','PRIVMSG',now(),'{"Params":["#a","foo and bar"]}')`, a)
+	exec(t, d, `INSERT INTO logs (channel_id, connection_id, user_id, channel, command, time, message) VALUES (test_channel_id('c1', '#a'), 'c1',$1,'#a','PRIVMSG',now(),'{"Params":["#a","foo and bar"]}')`, a)
 	if got, err := d.ChannelLast(ctx, "c1", "#a", nil, 5); err != nil || got == nil || len(got) != 0 {
 		t.Errorf("nil query = %v, %v", got, err)
 	}
@@ -210,7 +218,7 @@ func backfill(t *testing.T, d *db.DB) {
 func msgidRow(t *testing.T, d *db.DB, id int64, conn, user, channel, command, msgid string) {
 	t.Helper()
 	msg := fmt.Sprintf(`{"Command":%q,"Params":[%q,"text %d"],"Prefix":{"Name":"bob"},"Tags":{"msgid":%q}}`, command, channel, id, msgid)
-	exec(t, d, `INSERT INTO logs (id, connection_id, user_id, channel, command, time, message) VALUES ($1,$2,$3,$4,$5,now(),$6)`,
+	exec(t, d, `INSERT INTO logs (channel_id, id, connection_id, user_id, channel, command, time, message) VALUES (test_channel_id($2, $4), $1,$2,$3,$4,$5,now(),$6)`,
 		id, conn, user, channel, command, msg)
 }
 
@@ -379,7 +387,7 @@ func TestBackfillMessageIDs(t *testing.T) {
 	msgidRow(t, d, 1002, "c1", a, "#a", "NICK", "k1")
 	msgidRow(t, d, 1003, "c1", a, "#b", "NOTICE", "n1")
 	msgidRow(t, d, 1004, "c2", b, "#a", "PRIVMSG", "p1") // bob's copy
-	exec(t, d, `INSERT INTO logs (id, connection_id, user_id, channel, command, time, message) VALUES (1005, 'c1', $1, '#a', 'PRIVMSG', now(), '{"Command":"PRIVMSG","Params":["#a","no tags"]}')`, a)
+	exec(t, d, `INSERT INTO logs (channel_id, id, connection_id, user_id, channel, command, time, message) VALUES (test_channel_id('c1', '#a'), 1005, 'c1', $1, '#a', 'PRIVMSG', now(), '{"Command":"PRIVMSG","Params":["#a","no tags"]}')`, a)
 	id6 := logged(t, d, "c1", "#a", "p6") // logged after 0007: mapped already
 	backfill(t, d)
 	backfill(t, d) // again: nothing twice
@@ -406,8 +414,8 @@ func TestMessageByLogIDOneBlock(t *testing.T) {
 	testenv.AddConnection(t, d, "c1", a, "{}")
 	// 300 blocks of 500 ids in #a (and as many in #b), as lctl archive makes
 	for _, ch := range []string{"#a", "#b"} {
-		exec(t, d, `INSERT INTO log_archives (connection_id, user_id, channel, first_id, last_id, min_time, max_time, count, messages)
-			SELECT 'c1', $1, $2, g * 1000 + o + 1, g * 1000 + o + 500, now(), now(), 500,
+		exec(t, d, `INSERT INTO log_archives (channel_id, connection_id, user_id, channel, first_id, last_id, min_time, max_time, count, messages)
+			SELECT test_channel_id('c1', $2), 'c1', $1, $2, g * 1000 + o + 1, g * 1000 + o + 500, now(), now(), 500,
 			  json_build_array(json_build_object('id', g * 1000 + o + 250, 'time', 0, 'highlight', false,
 			    'message', json_build_object('Command', 'PRIVMSG', 'Params', json_build_array($2::text, 'x'))))
 			FROM generate_series(0, 299) g, (SELECT CASE WHEN $2 = '#a' THEN 0 ELSE 500 END AS o) off`, a, ch)
@@ -587,8 +595,8 @@ func TestBackfillArchivedMessageIDs(t *testing.T) {
 	testenv.AddConnection(t, d, "c1", a, "{}")
 	block := func(first, last int, age string, messages string) {
 		t.Helper()
-		exec(t, d, `INSERT INTO log_archives (connection_id, user_id, channel, first_id, last_id, min_time, max_time, count, messages)
-			VALUES ('c1', $1, '#a', $2::int, $3::int, now() - $4::interval, now() - $4::interval, $3::int - $2::int + 1, $5::json)`, a, first, last, age, messages)
+		exec(t, d, `INSERT INTO log_archives (channel_id, connection_id, user_id, channel, first_id, last_id, min_time, max_time, count, messages)
+			VALUES (test_channel_id('c1', '#a'), 'c1', $1, '#a', $2::int, $3::int, now() - $4::interval, now() - $4::interval, $3::int - $2::int + 1, $5::json)`, a, first, last, age, messages)
 	}
 	el := func(id int, command, tags string) string {
 		return fmt.Sprintf(`{"id":%d,"time":0,"highlight":false,"message":{"Command":%q,"Params":["#a","x %d"],"Tags":{%s}}}`, id, command, id, tags)
@@ -597,7 +605,6 @@ func TestBackfillArchivedMessageIDs(t *testing.T) {
 	block(3, 7, "10 days", "["+el(3, "PRIVMSG", `"msgid":"r1"`)+","+el(4, "NOTICE", `"msgid":"r2"`)+","+
 		el(5, "JOIN", `"msgid":"j1"`)+","+el(6, "PRIVMSG", "")+","+el(7, "PRIVMSG", `"msgid":"pre"`)+"]")
 	// "pre" is mapped already (as if logged after 0007, then archived)
-	exec(t, d, `INSERT INTO channels (connection_id, channel) VALUES ('c1', '#a')`)
 	exec(t, d, `INSERT INTO message_ids (channel_id, msgid, log_id) SELECT id, 'pre', 7 FROM channels`)
 
 	sql, err := os.ReadFile("../../scripts/backfill-archived-message-ids.sql")

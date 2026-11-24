@@ -5,8 +5,8 @@ import "testing"
 func seedSeen(h *harness) {
 	u := h.user("ann")
 	insertConn(h, "live", u, cfg)
-	h.exec(`INSERT INTO seen_markers (user_id, connection_id, channel, message_id) VALUES ($1, 'live', '#now', 1)`, u)
-	h.exec(`INSERT INTO seen_markers (user_id, connection_id, channel, message_id, updated) VALUES ($1, 'live', '#old', 1, now() - interval '2 months')`, u)
+	h.exec(`INSERT INTO seen_markers (channel_id, user_id, connection_id, channel, message_id) VALUES (test_channel_id('live', '#now'), $1, 'live', '#now', 1)`, u)
+	h.exec(`INSERT INTO seen_markers (channel_id, user_id, connection_id, channel, message_id, updated) VALUES (test_channel_id('live', '#old'), $1, 'live', '#old', 1, now() - interval '2 months')`, u)
 }
 
 func TestPruneSeenDryRun(t *testing.T) {

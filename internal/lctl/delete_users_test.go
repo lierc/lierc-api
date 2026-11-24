@@ -12,8 +12,8 @@ import (
 
 // addArchive adds an archive row for a connection.
 func addArchive(h *harness, user, conn string) {
-	h.exec(`INSERT INTO log_archives (connection_id, user_id, channel, first_id, last_id, min_time, max_time, count, messages)
-	  VALUES ($1, $2, '#a', 1, 2, now(), now(), 2, '[]')`, conn, user)
+	h.exec(`INSERT INTO log_archives (channel_id, connection_id, user_id, channel, first_id, last_id, min_time, max_time, count, messages)
+	  VALUES (test_channel_id($1, '#a'), $1, $2, '#a', 1, 2, now(), now(), 2, '[]')`, conn, user)
 }
 
 // seedUser adds a user with two connections and a row in every table.
@@ -21,7 +21,7 @@ func seedUser(h *harness, name string) string {
 	u := h.user(name)
 	h.conn(name+"1", u, `{"Host":"ergo","Port":6667,"Nick":"x"}`)
 	h.conn(name+"2", u, `{"Host":"ergo","Port":6667,"Nick":"y"}`)
-	h.exec(`INSERT INTO seen_markers (user_id, connection_id, channel, message_id) VALUES ($1, $2, '#x', 1)`, u, name+"1")
+	h.exec(`INSERT INTO seen_markers (channel_id, user_id, connection_id, channel, message_id) VALUES (test_channel_id($2, '#x'), $1, $2, '#x', 1)`, u, name+"1")
 	h.exec(`INSERT INTO prefs (user_id, name, value) VALUES ($1, 'theme', 'dark')`, u)
 	h.exec(`INSERT INTO web_push_subscriptions (endpoint, key, auth, user_id) VALUES ('https://push/x', 'k', 'a', $1)`, u)
 	return u

@@ -18,8 +18,8 @@ func seedArchive(h *harness) string {
 }
 
 func addOld(h *harness, user, conn, channel string, n int) {
-	h.exec(`INSERT INTO logs (connection_id, user_id, channel, time, message)
-	  SELECT $1, $2, $3, now() - interval '60 days' + g * interval '1 second', '{}' FROM generate_series(1, $4::int) g`,
+	h.exec(`INSERT INTO logs (channel_id, connection_id, user_id, channel, time, message)
+	  SELECT test_channel_id($1, $3), $1, $2, $3, now() - interval '60 days' + g * interval '1 second', '{}' FROM generate_series(1, $4::int) g`,
 		conn, user, channel, n)
 }
 
@@ -224,8 +224,8 @@ func TestArchiveIgnoresAge(t *testing.T) {
 		name string
 		age  string
 	}{{"#old", "10 days"}, {"#new", "1 hour"}} {
-		h.exec(`INSERT INTO logs (connection_id, user_id, channel, time, message)
-		  SELECT 'c1', $1, $2, now() - $3::interval + g * interval '1 second', '{}' FROM generate_series(1, 10) g`,
+		h.exec(`INSERT INTO logs (channel_id, connection_id, user_id, channel, time, message)
+		  SELECT test_channel_id('c1', $2), 'c1', $1, $2, now() - $3::interval + g * interval '1 second', '{}' FROM generate_series(1, 10) g`,
 			u, ch.name, ch.age)
 	}
 	if err := h.run("archive", "--move", "--keep", "3", "--block", "2", "--connection", "c1"); err != nil {

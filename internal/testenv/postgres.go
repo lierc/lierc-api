@@ -251,6 +251,9 @@ func createTemplate(ctx context.Context) error {
 		return err
 	}
 	err = d.Migrate(ctx, db.MigrateOptions{})
+	if err == nil {
+		_, err = d.Pool.Exec(ctx, fixtureSQL)
+	}
 	// Closed before the rename and any clone: both need the database to
 	// have no connections.
 	d.Close()
@@ -260,6 +263,22 @@ func createTemplate(ctx context.Context) error {
 	_, err = c.Exec(ctx, "ALTER DATABASE "+building+" RENAME TO "+templateDB)
 	return err
 }
+
+// fixtureSQL is added to the template after the migrations: what test
+// fixtures use and the app doesn't. test_channel_id(conn, channel) is the
+// channels row of a conversation, made if missing, so a fixture inserting
+// into logs, log_archives, highlights or seen_markers by hand can give its
+// rows their channel_id in the same statement (set-based ones too).
+const fixtureSQL = `CREATE FUNCTION test_channel_id(conn text, chan text) RETURNS integer
+LANGUAGE plpgsql AS $$
+DECLARE r integer;
+BEGIN
+  SELECT id INTO r FROM channels WHERE connection_id = conn AND channel = chan;
+  IF r IS NULL THEN
+    INSERT INTO channels (connection_id, channel) VALUES (conn, chan) RETURNING id INTO r;
+  END IF;
+  RETURN r;
+END $$`
 
 // migrationsHash is the first 12 hex digits of a hash of the embedded
 // migrations' names and contents.
@@ -284,6 +303,7 @@ func migrationsHash() (string, error) {
 		fmt.Fprintf(h, "%s\x00%d\x00", name, len(b))
 		h.Write(b)
 	}
+	h.Write([]byte(fixtureSQL))
 	return hex.EncodeToString(h.Sum(nil))[:12], nil
 }
 
@@ -405,13 +425,23 @@ func ensureUser(t testing.TB, d *db.DB, id string) {
 	}
 }
 
+// ChannelID is the channels row of channel on conn, made if missing.
+func ChannelID(t testing.TB, d *db.DB, conn, channel string) int32 {
+	t.Helper()
+	var id int32
+	if err := d.Pool.QueryRow(context.Background(), `SELECT test_channel_id($1, $2)`, conn, channel).Scan(&id); err != nil {
+		t.Fatal(err)
+	}
+	return id
+}
+
 // AddLog inserts a log row with the given id for user's connection conn
 // (both added if missing).
 func AddLog(t testing.TB, d *db.DB, id int64, conn, user string) {
 	t.Helper()
 	EnsureConnection(t, d, conn, user)
 	if _, err := d.Pool.Exec(context.Background(),
-		`INSERT INTO logs (id, connection_id, user_id, channel, time, message) VALUES ($1, $2, $3, '#a', now(), '{}')`,
+		`INSERT INTO logs (id, channel_id, connection_id, user_id, channel, time, message) VALUES ($1, test_channel_id($2, '#a'), $2, $3, '#a', now(), '{}')`,
 		id, conn, user); err != nil {
 		t.Fatal(err)
 	}

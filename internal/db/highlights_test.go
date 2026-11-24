@@ -15,8 +15,8 @@ import (
 func hlRow(t *testing.T, d *db.DB, id int64, conn, user, channel, text string) {
 	t.Helper()
 	msgRow(t, d, id, conn, user, channel, text, false, true, "2026-01-01")
-	exec(t, d, `INSERT INTO highlights (id, connection_id, user_id, channel, time, message, self)
-		SELECT id, connection_id, user_id, channel, time, message, self FROM logs WHERE id = $1`, id)
+	exec(t, d, `INSERT INTO highlights (channel_id, id, connection_id, user_id, channel, time, message, self)
+		SELECT test_channel_id(connection_id, channel), id, connection_id, user_id, channel, time, message, self FROM logs WHERE id = $1`, id)
 }
 
 // Migration 5 copies the highlighted rows of logs, with their columns.
@@ -26,9 +26,9 @@ func TestMigration5CopiesHighlights(t *testing.T) {
 		t.Fatal(err)
 	}
 	testenv.EnsureConnection(t, d, "c1", "u1")
-	msgRow(t, d, 1, "c1", "u1", "#a", "one", false, false, "2026-01-01")
-	msgRow(t, d, 2, "c1", "u1", "#a", "two", false, true, "2026-01-02")
-	msgRow(t, d, 3, "c1", "u1", "#b", "three", true, true, "2026-01-03")
+	oldMsgRow(t, d, 1, "c1", "u1", "#a", "one", false, false, "2026-01-01")
+	oldMsgRow(t, d, 2, "c1", "u1", "#a", "two", false, true, "2026-01-02")
+	oldMsgRow(t, d, 3, "c1", "u1", "#b", "three", true, true, "2026-01-03")
 	if err := d.Migrate(ctx, db.MigrateOptions{}); err != nil {
 		t.Fatal(err)
 	}
@@ -97,8 +97,8 @@ func TestBackfillArchivedHighlights(t *testing.T) {
 	testenv.AddConnection(t, d, "c1", a, "{}")
 	hlRow(t, d, 9, "c1", a, "#a", "in logs")
 	msgRow(t, d, 10, "c1", a, "#a", "after the migration", false, true, "2026-01-02")
-	exec(t, d, `INSERT INTO log_archives (connection_id, user_id, channel, first_id, last_id, min_time, max_time, count, messages)
-		VALUES ('c1', $1, '#a', 1, 3, '2026-01-01', '2026-01-01', 3, $2::json)`, a,
+	exec(t, d, `INSERT INTO log_archives (channel_id, connection_id, user_id, channel, first_id, last_id, min_time, max_time, count, messages)
+		VALUES (test_channel_id('c1', '#a'), 'c1', $1, '#a', 1, 3, '2026-01-01', '2026-01-01', 3, $2::json)`, a,
 		`[{"id":1,"time":1767225600,"message":{"Command":"PRIVMSG","Params":["#a","plain"],"Prefix":{"Name":"bob"}},"highlight":false},
 		  {"id":2,"time":1767225601,"message":{"Command":"PRIVMSG","Params":["#a","hey alice"],"Prefix":{"Name":"bob"}},"highlight":true},
 		  {"id":3,"time":1767225602,"message":{"Command":"PRIVMSG","Params":["#a","me"],"Prefix":{"Name":"alice","Self":true}},"highlight":true}]`)
