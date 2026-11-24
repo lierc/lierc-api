@@ -56,15 +56,15 @@ func (d *tdb) insert(id int, conn, channel string, at time.Time) {
 	d.t.Helper()
 	msg := fmt.Sprintf(`{"Command":"PRIVMSG","Params":[%q,"message %d"],"Prefix":{"Name":"nick"}}`, channel, id)
 	testenv.EnsureConnection(d.t, d.db, conn, "u-"+conn)
-	d.exec(`INSERT INTO logs (channel_id, id, connection_id, user_id, channel, command, highlight, time, message)
-		VALUES (test_channel_id($2, $4), $1, $2, $3, $4, 'PRIVMSG', $5, $6::timestamp, $7)`,
-		id, conn, "u-"+conn, channel, id%3 == 0, at.Format("2006-01-02 15:04:05.999999"), msg)
+	d.exec(`INSERT INTO logs (channel_id, id, command, highlight, time, message)
+		VALUES (test_channel_id($2, $3), $1, 'PRIVMSG', $4, $5::timestamp, $6)`,
+		id, conn, channel, id%3 == 0, at.Format("2006-01-02 15:04:05.999999"), msg)
 }
 
 func (d *tdb) logIDs(conn, channel string) []int {
 	d.t.Helper()
 	rows, err := d.pool.Query(context.Background(),
-		`SELECT id FROM logs WHERE connection_id = $1 AND channel = $2 ORDER BY id`, conn, channel)
+		`SELECT id FROM logs_v WHERE connection_id = $1 AND channel = $2 ORDER BY id`, conn, channel)
 	if err != nil {
 		d.t.Fatal(err)
 	}
@@ -88,7 +88,7 @@ type blk struct{ first, last, count int }
 func (d *tdb) archiveBlocks(conn, channel string) []blk {
 	d.t.Helper()
 	rows, err := d.pool.Query(context.Background(),
-		`SELECT first_id, last_id, count FROM log_archives WHERE connection_id = $1 AND channel = $2 ORDER BY first_id`, conn, channel)
+		`SELECT first_id, last_id, count FROM log_archives_v WHERE connection_id = $1 AND channel = $2 ORDER BY first_id`, conn, channel)
 	if err != nil {
 		d.t.Fatal(err)
 	}
@@ -236,7 +236,7 @@ func TestMovePerConnection(t *testing.T) {
 	if got := d.logIDs("c1", "#chan"); !reflect.DeepEqual(got, c1[2:]) {
 		t.Fatalf("c1 log ids %v, want %v", got, c1[2:])
 	}
-	if n := d.count(`SELECT count(*) FROM log_archives WHERE connection_id = 'c2'`); n != 0 {
+	if n := d.count(`SELECT count(*) FROM log_archives_v WHERE connection_id = 'c2'`); n != 0 {
 		t.Fatalf("c2 has %d archive rows", n)
 	}
 
@@ -262,8 +262,8 @@ func TestMoveElements(t *testing.T) {
 	}
 	testenv.EnsureConnection(t, d.db, "c1", "u-c1") // the owner d.insert uses
 	for i, ts := range times {
-		d.exec(`INSERT INTO logs (channel_id, id, connection_id, user_id, channel, command, highlight, time, message)
-			VALUES (test_channel_id('c1', '#chan'), $1, 'c1', 'u-c1', '#chan', 'PRIVMSG', $2, $3::timestamp, $4)`,
+		d.exec(`INSERT INTO logs (channel_id, id, command, highlight, time, message)
+			VALUES (test_channel_id('c1', '#chan'), $1, 'PRIVMSG', $2, $3::timestamp, $4)`,
 			i+1, i%2 == 0, ts,
 			fmt.Sprintf(`{"Command":"PRIVMSG","Params":["#chan","héllo \"%d\" ☃"],"Prefix":{"Name":"nick","Self":true},"Tags":{"msgid":"m%d"}}`, i, i))
 	}
@@ -317,7 +317,7 @@ func TestMoveElements(t *testing.T) {
 		WHERE (e->>'time')::bigint = floor(extract(epoch from b.time))::bigint`); n != 4 {
 		t.Fatalf("%d of 4 element times equal the epoch seconds", n)
 	}
-	if n := d.count(`SELECT count(*) FROM log_archives a
+	if n := d.count(`SELECT count(*) FROM log_archives_v a
 		WHERE a.user_id = 'u-c1'
 		  AND a.min_time = (SELECT min(time) FROM before)
 		  AND a.max_time = (SELECT max(time) FROM before)

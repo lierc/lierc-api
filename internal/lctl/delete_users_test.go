@@ -12,8 +12,8 @@ import (
 
 // addArchive adds an archive row for a connection.
 func addArchive(h *harness, user, conn string) {
-	h.exec(`INSERT INTO log_archives (channel_id, connection_id, user_id, channel, first_id, last_id, min_time, max_time, count, messages)
-	  VALUES (test_channel_id($1, '#a'), $1, $2, '#a', 1, 2, now(), now(), 2, '[]')`, conn, user)
+	h.exec(`INSERT INTO log_archives (channel_id, first_id, last_id, min_time, max_time, count, messages)
+	  VALUES (test_channel_id($1, '#a'), 1, 2, now(), now(), 2, '[]')`, conn)
 }
 
 // seedUser adds a user with two connections and a row in every table.
@@ -21,15 +21,15 @@ func seedUser(h *harness, name string) string {
 	u := h.user(name)
 	h.conn(name+"1", u, `{"Host":"ergo","Port":6667,"Nick":"x"}`)
 	h.conn(name+"2", u, `{"Host":"ergo","Port":6667,"Nick":"y"}`)
-	h.exec(`INSERT INTO seen_markers (channel_id, user_id, connection_id, channel, message_id) VALUES (test_channel_id($2, '#x'), $1, $2, '#x', 1)`, u, name+"1")
+	h.exec(`INSERT INTO seen_markers (channel_id, message_id) VALUES (test_channel_id($1, '#x'), 1)`, name+"1")
 	h.exec(`INSERT INTO prefs (user_id, name, value) VALUES ($1, 'theme', 'dark')`, u)
 	h.exec(`INSERT INTO web_push_subscriptions (endpoint, key, auth, user_id) VALUES ('https://push/x', 'k', 'a', $1)`, u)
 	return u
 }
 
 func (h *harness) userRows(u, c1, c2 string) int {
-	return h.count(`SELECT (SELECT count(*) FROM logs WHERE connection_id IN ($2, $3))
-	  + (SELECT count(*) FROM seen_markers WHERE user_id = $1 OR connection_id IN ($2, $3))
+	return h.count(`SELECT (SELECT count(*) FROM logs_v WHERE connection_id IN ($2, $3))
+	  + (SELECT count(*) FROM seen_markers_v WHERE user_id = $1 OR connection_id IN ($2, $3))
 	  + (SELECT count(*) FROM private_chats WHERE connection_id IN ($2, $3))
 	  + (SELECT count(*) FROM prefs WHERE user_id = $1)
 	  + (SELECT count(*) FROM web_push_subscriptions WHERE user_id = $1)
@@ -62,10 +62,10 @@ func TestDeleteUsersDelete(t *testing.T) {
 	if err := h.run("delete-users", "--delete", "--settle", "2", u); err != nil {
 		t.Fatal(err)
 	}
-	if n := h.count(`SELECT count(*) FROM log_archives WHERE connection_id IN ('ann1', 'ann2')`); n != 0 {
+	if n := h.count(`SELECT count(*) FROM log_archives_v WHERE connection_id IN ('ann1', 'ann2')`); n != 0 {
 		t.Errorf("%d archive rows left for the deleted user", n)
 	}
-	if n := h.count(`SELECT count(*) FROM log_archives WHERE connection_id = 'bob1'`); n != 1 {
+	if n := h.count(`SELECT count(*) FROM log_archives_v WHERE connection_id = 'bob1'`); n != 1 {
 		t.Errorf("other user has %d archive rows, want 1", n)
 	}
 	h.has(u+": deleted\n", "deleted 1 user(s), skipped 0\n")

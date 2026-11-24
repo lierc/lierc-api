@@ -104,8 +104,8 @@ func readFixture(d *tdb) []int {
 			d.t.Fatal(err)
 		}
 		testenv.EnsureConnection(d.t, d.db, m.conn, "u-"+m.conn)
-		d.exec(`INSERT INTO logs (channel_id, id, connection_id, user_id, channel, command, highlight, self, time, message)
-			VALUES (test_channel_id($2::text, $3), $1, $2::text, 'u-' || $2::text, $3, 'PRIVMSG', $4, $5, $6::timestamp, $7)`,
+		d.exec(`INSERT INTO logs (channel_id, id, command, highlight, self, time, message)
+			VALUES (test_channel_id($2::text, $3), $1, 'PRIVMSG', $4, $5, $6::timestamp, $7)`,
 			id, m.conn, m.channel, id%3 == 0, i%5 == 0, m.at.Format("2006-01-02 15:04:05.999999"), string(msg))
 		idList = append(idList, id)
 	}
@@ -339,7 +339,7 @@ func TestReadsSameAfterArchiving(t *testing.T) {
 	if got := d.archiveBlocks("c1", "#b"); len(got) != 4 {
 		t.Fatalf("c1 #b blocks %v", got)
 	}
-	if n := d.count(`SELECT count(*) FROM logs WHERE connection_id = 'c1'`); n != 7 {
+	if n := d.count(`SELECT count(*) FROM logs_v WHERE connection_id = 'c1'`); n != 7 {
 		t.Fatalf("%d c1 rows left in log", n)
 	}
 	// Blocks that span midnight, so day ranges end inside them.

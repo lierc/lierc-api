@@ -18,9 +18,9 @@ func seedArchive(h *harness) string {
 }
 
 func addOld(h *harness, user, conn, channel string, n int) {
-	h.exec(`INSERT INTO logs (channel_id, connection_id, user_id, channel, time, message)
-	  SELECT test_channel_id($1, $3), $1, $2, $3, now() - interval '60 days' + g * interval '1 second', '{}' FROM generate_series(1, $4::int) g`,
-		conn, user, channel, n)
+	h.exec(`INSERT INTO logs (channel_id, time, message)
+	  SELECT test_channel_id($1, $2), now() - interval '60 days' + g * interval '1 second', '{}' FROM generate_series(1, $3::int) g`,
+		conn, channel, n)
 }
 
 func TestArchiveDryRun(t *testing.T) {
@@ -52,7 +52,7 @@ func TestArchiveMove(t *testing.T) {
 	}
 	t.Log("\n" + h.out())
 	var first int
-	if err := h.db.Pool.QueryRow(t.Context(), `SELECT min(id) FROM logs WHERE connection_id = 'c1'`).Scan(&first); err != nil {
+	if err := h.db.Pool.QueryRow(t.Context(), `SELECT min(id) FROM logs_v WHERE connection_id = 'c1'`).Scan(&first); err != nil {
 		t.Fatal(err)
 	}
 	h.has("c1 #a 1-2 2\n", "c1 #a 3-4 2\n", "c1 #a 5-6 2\n", "moved 3 block(s), 6 message(s); deleted 0 status message(s)\n")
@@ -156,10 +156,10 @@ func TestArchiveConnection(t *testing.T) {
 	if err := h.run("archive", "--move", "--keep", "3", "--block", "2", "--connection", "c1"); err != nil {
 		t.Fatal(err)
 	}
-	if n := h.count(`SELECT count(*) FROM logs WHERE connection_id = 'c2'`); n != 10 {
+	if n := h.count(`SELECT count(*) FROM logs_v WHERE connection_id = 'c2'`); n != 10 {
 		t.Errorf("c2 has %d log rows, want 10", n)
 	}
-	if n := h.count(`SELECT count(*) FROM log_archives WHERE connection_id = 'c1'`); n != 3 {
+	if n := h.count(`SELECT count(*) FROM log_archives_v WHERE connection_id = 'c1'`); n != 3 {
 		t.Errorf("c1 has %d blocks, want 3", n)
 	}
 	// both, with a repeated id listed once
@@ -167,7 +167,7 @@ func TestArchiveConnection(t *testing.T) {
 		t.Fatal(err)
 	}
 	h.has("c2 #a 11-12 2\n", "moved 3 block(s), 6 message(s)")
-	if n := h.count(`SELECT count(*) FROM log_archives WHERE connection_id = 'c2'`); n != 3 {
+	if n := h.count(`SELECT count(*) FROM log_archives_v WHERE connection_id = 'c2'`); n != 3 {
 		t.Errorf("c2 has %d blocks, want 3", n)
 	}
 }
@@ -224,17 +224,17 @@ func TestArchiveIgnoresAge(t *testing.T) {
 		name string
 		age  string
 	}{{"#old", "10 days"}, {"#new", "1 hour"}} {
-		h.exec(`INSERT INTO logs (channel_id, connection_id, user_id, channel, time, message)
-		  SELECT test_channel_id('c1', $2), 'c1', $1, $2, now() - $3::interval + g * interval '1 second', '{}' FROM generate_series(1, 10) g`,
-			u, ch.name, ch.age)
+		h.exec(`INSERT INTO logs (channel_id, time, message)
+		  SELECT test_channel_id('c1', $1), now() - $2::interval + g * interval '1 second', '{}' FROM generate_series(1, 10) g`,
+			ch.name, ch.age)
 	}
 	if err := h.run("archive", "--move", "--keep", "3", "--block", "2", "--connection", "c1"); err != nil {
 		t.Fatal(err)
 	}
-	if n := h.count(`SELECT count(*) FROM log_archives WHERE channel = '#old'`); n != 3 {
+	if n := h.count(`SELECT count(*) FROM log_archives_v WHERE channel = '#old'`); n != 3 {
 		t.Errorf("%d #old blocks archived, want 3", n)
 	}
-	if n := h.count(`SELECT count(*) FROM log_archives WHERE channel = '#new'`); n != 3 {
+	if n := h.count(`SELECT count(*) FROM log_archives_v WHERE channel = '#new'`); n != 3 {
 		t.Errorf("%d #new blocks archived, want 3 (messages from the last hour move too)", n)
 	}
 }
@@ -249,10 +249,10 @@ func TestArchiveDefaultKeep(t *testing.T) {
 	if err := h.run("archive", "--move", "--connection", "c1", "--pause", "0"); err != nil {
 		t.Fatal(err)
 	}
-	if n := h.count(`SELECT coalesce(sum(count), 0) FROM log_archives WHERE connection_id = 'c1'`); n != 500 {
+	if n := h.count(`SELECT coalesce(sum(count), 0) FROM log_archives_v WHERE connection_id = 'c1'`); n != 500 {
 		t.Errorf("%d messages archived, want 500", n)
 	}
-	if n := h.count(`SELECT count(*) FROM logs WHERE connection_id = 'c1'`); n != 1100 {
+	if n := h.count(`SELECT count(*) FROM logs_v WHERE connection_id = 'c1'`); n != 1100 {
 		t.Errorf("%d messages left in log, want 1100", n)
 	}
 }
@@ -285,7 +285,7 @@ func TestArchiveSkipsDeletedConnection(t *testing.T) {
 	// stands in for c1's delete committing between the candidates and its block
 	h.exec(`CREATE FUNCTION deleted_meanwhile() RETURNS trigger AS $$
 	  BEGIN
-	    IF NEW.connection_id = 'c1' THEN
+	    IF (SELECT connection_id FROM channels WHERE id = NEW.channel_id) = 'c1' THEN
 	      RAISE foreign_key_violation USING MESSAGE = 'c1 was deleted';
 	    END IF;
 	    RETURN NEW;
@@ -295,7 +295,7 @@ func TestArchiveSkipsDeletedConnection(t *testing.T) {
 		t.Fatal(err)
 	}
 	h.has("skipped c1 #a: deleted meanwhile\n", "c2 #a 11-12 2\n")
-	if n := h.count(`SELECT count(*) FROM log_archives WHERE connection_id = 'c2'`); n != 3 {
+	if n := h.count(`SELECT count(*) FROM log_archives_v WHERE connection_id = 'c2'`); n != 3 {
 		t.Errorf("c2 has %d blocks, want 3", n)
 	}
 }

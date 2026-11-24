@@ -6,7 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
-	"os"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -19,8 +19,8 @@ import (
 func msgRow(t *testing.T, d *db.DB, id int64, conn, user, channel, text string, self, highlight bool, when string) {
 	t.Helper()
 	msg := fmt.Sprintf(`{"Command":"PRIVMSG","Params":[%q,%q],"Prefix":{"Name":"bob"}}`, channel, text)
-	exec(t, d, `INSERT INTO logs (channel_id, id, connection_id, user_id, channel, command, self, highlight, time, message) VALUES (test_channel_id($2, $4), $1,$2,$3,$4,'PRIVMSG',$5,$6,$7::timestamp,$8)`,
-		id, conn, user, channel, self, highlight, when, msg)
+	exec(t, d, `INSERT INTO logs (channel_id, id, command, self, highlight, time, message) VALUES (test_channel_id($2, $3), $1,'PRIVMSG',$4,$5,$6::timestamp,$7)`,
+		id, conn, channel, self, highlight, when, msg)
 }
 
 // oldMsgRow is msgRow on a database from before 0010 (no channel_id).
@@ -142,7 +142,7 @@ func TestChannelLast(t *testing.T) {
 	ctx := context.Background()
 	a := testenv.AddUser(t, d, "alice")
 	testenv.AddConnection(t, d, "c1", a, "{}")
-	exec(t, d, `INSERT INTO logs (channel_id, connection_id, user_id, channel, command, time, message) VALUES (test_channel_id('c1', '#a'), 'c1',$1,'#a','PRIVMSG',now(),'{"Params":["#a","foo and bar"]}')`, a)
+	exec(t, d, `INSERT INTO logs (channel_id, command, time, message) VALUES (test_channel_id('c1', '#a'),'PRIVMSG',now(),'{"Params":["#a","foo and bar"]}')`)
 	if got, err := d.ChannelLast(ctx, "c1", "#a", nil, 5); err != nil || got == nil || len(got) != 0 {
 		t.Errorf("nil query = %v, %v", got, err)
 	}
@@ -203,14 +203,16 @@ func TestChannelDateLimit(t *testing.T) {
 
 // msgidRow inserts log row id on conn in channel: command with IRC msgid.
 // backfill runs migration 0008's SQL, which maps the logs rows that have no
-// message_ids row (logged before 0007); it may run again, as here.
+// message_ids row (logged before 0007); it may run again, as here. It
+// reads logs' connection_id and channel, gone since 0011, so logs is read
+// through the test view logs_v that gives them back.
 func backfill(t *testing.T, d *db.DB) {
 	t.Helper()
 	sql, err := fs.ReadFile(db.Migrations(), "migrations/0008_message_ids_from_logs.sql")
 	if err != nil {
 		t.Fatal(err)
 	}
-	exec(t, d, string(sql))
+	exec(t, d, regexp.MustCompile(`\bFROM logs\b`).ReplaceAllString(string(sql), "FROM logs_v"))
 }
 
 // msgidRow inserts a logs row as before message_ids (0007): not mapped
@@ -218,8 +220,8 @@ func backfill(t *testing.T, d *db.DB) {
 func msgidRow(t *testing.T, d *db.DB, id int64, conn, user, channel, command, msgid string) {
 	t.Helper()
 	msg := fmt.Sprintf(`{"Command":%q,"Params":[%q,"text %d"],"Prefix":{"Name":"bob"},"Tags":{"msgid":%q}}`, command, channel, id, msgid)
-	exec(t, d, `INSERT INTO logs (channel_id, id, connection_id, user_id, channel, command, time, message) VALUES (test_channel_id($2, $4), $1,$2,$3,$4,$5,now(),$6)`,
-		id, conn, user, channel, command, msg)
+	exec(t, d, `INSERT INTO logs (channel_id, id, command, time, message) VALUES (test_channel_id($2, $3), $1,$4,now(),$5)`,
+		id, conn, channel, command, msg)
 }
 
 // A reply's original is found by its connection and IRC msgid: the
@@ -387,7 +389,7 @@ func TestBackfillMessageIDs(t *testing.T) {
 	msgidRow(t, d, 1002, "c1", a, "#a", "NICK", "k1")
 	msgidRow(t, d, 1003, "c1", a, "#b", "NOTICE", "n1")
 	msgidRow(t, d, 1004, "c2", b, "#a", "PRIVMSG", "p1") // bob's copy
-	exec(t, d, `INSERT INTO logs (channel_id, id, connection_id, user_id, channel, command, time, message) VALUES (test_channel_id('c1', '#a'), 1005, 'c1', $1, '#a', 'PRIVMSG', now(), '{"Command":"PRIVMSG","Params":["#a","no tags"]}')`, a)
+	exec(t, d, `INSERT INTO logs (channel_id, id, command, time, message) VALUES (test_channel_id('c1', '#a'), 1005, 'PRIVMSG', now(), '{"Command":"PRIVMSG","Params":["#a","no tags"]}')`)
 	id6 := logged(t, d, "c1", "#a", "p6") // logged after 0007: mapped already
 	backfill(t, d)
 	backfill(t, d) // again: nothing twice
@@ -414,11 +416,11 @@ func TestMessageByLogIDOneBlock(t *testing.T) {
 	testenv.AddConnection(t, d, "c1", a, "{}")
 	// 300 blocks of 500 ids in #a (and as many in #b), as lctl archive makes
 	for _, ch := range []string{"#a", "#b"} {
-		exec(t, d, `INSERT INTO log_archives (channel_id, connection_id, user_id, channel, first_id, last_id, min_time, max_time, count, messages)
-			SELECT test_channel_id('c1', $2), 'c1', $1, $2, g * 1000 + o + 1, g * 1000 + o + 500, now(), now(), 500,
+		exec(t, d, `INSERT INTO log_archives (channel_id, first_id, last_id, min_time, max_time, count, messages)
+			SELECT test_channel_id('c1', $1), g * 1000 + o + 1, g * 1000 + o + 500, now(), now(), 500,
 			  json_build_array(json_build_object('id', g * 1000 + o + 250, 'time', 0, 'highlight', false,
-			    'message', json_build_object('Command', 'PRIVMSG', 'Params', json_build_array($2::text, 'x'))))
-			FROM generate_series(0, 299) g, (SELECT CASE WHEN $2 = '#a' THEN 0 ELSE 500 END AS o) off`, a, ch)
+			    'message', json_build_object('Command', 'PRIVMSG', 'Params', json_build_array($1::text, 'x'))))
+			FROM generate_series(0, 299) g, (SELECT CASE WHEN $1 = '#a' THEN 0 ELSE 500 END AS o) off`, ch)
 	}
 	exec(t, d, `ANALYZE log_archives`)
 	var idx string
@@ -580,51 +582,5 @@ func TestChannelLogsPaging(t *testing.T) {
 			got, err := d.ChannelLogsBefore(ctx, "c1", "#a", int32(before), limit)
 			check(fmt.Sprintf("before %d, %d", before, limit), got, err, want(before, limit))
 		}
-	}
-}
-
-// scripts/backfill-archived-message-ids.sql maps the PRIVMSGs and NOTICEs
-// with a msgid in archive blocks from the last 90 days, so a reply to an
-// archived message from before message_ids (0007) finds it; older blocks,
-// other commands and lines without a msgid are left out, and nothing is
-// mapped twice (it runs twice here).
-func TestBackfillArchivedMessageIDs(t *testing.T) {
-	d := testenv.Postgres(t)
-	ctx := context.Background()
-	a := testenv.AddUser(t, d, "alice")
-	testenv.AddConnection(t, d, "c1", a, "{}")
-	block := func(first, last int, age string, messages string) {
-		t.Helper()
-		exec(t, d, `INSERT INTO log_archives (channel_id, connection_id, user_id, channel, first_id, last_id, min_time, max_time, count, messages)
-			VALUES (test_channel_id('c1', '#a'), 'c1', $1, '#a', $2::int, $3::int, now() - $4::interval, now() - $4::interval, $3::int - $2::int + 1, $5::json)`, a, first, last, age, messages)
-	}
-	el := func(id int, command, tags string) string {
-		return fmt.Sprintf(`{"id":%d,"time":0,"highlight":false,"message":{"Command":%q,"Params":["#a","x %d"],"Tags":{%s}}}`, id, command, id, tags)
-	}
-	block(1, 2, "200 days", "["+el(1, "PRIVMSG", `"msgid":"old"`)+","+el(2, "PRIVMSG", `"msgid":"old2"`)+"]")
-	block(3, 7, "10 days", "["+el(3, "PRIVMSG", `"msgid":"r1"`)+","+el(4, "NOTICE", `"msgid":"r2"`)+","+
-		el(5, "JOIN", `"msgid":"j1"`)+","+el(6, "PRIVMSG", "")+","+el(7, "PRIVMSG", `"msgid":"pre"`)+"]")
-	// "pre" is mapped already (as if logged after 0007, then archived)
-	exec(t, d, `INSERT INTO message_ids (channel_id, msgid, log_id) SELECT id, 'pre', 7 FROM channels`)
-
-	sql, err := os.ReadFile("../../scripts/backfill-archived-message-ids.sql")
-	if err != nil {
-		t.Fatal(err)
-	}
-	for range 2 {
-		if _, err := d.Pool.Exec(ctx, string(sql)); err != nil {
-			t.Fatal(err)
-		}
-	}
-	want := []string{"c1 #a r1 3", "c1 #a r2 4", "c1 #a pre 7"}
-	if got := msgidRows(t, d); fmt.Sprint(got) != fmt.Sprint(want) {
-		t.Errorf("message_ids:\n%v\nwant:\n%v", got, want)
-	}
-	m, ok, err := d.MessageByMsgid(ctx, "c1", "r1")
-	if !ok || err != nil || m.MessageId != 3 {
-		t.Errorf("r1: %v %v %v", m.MessageId, ok, err)
-	}
-	if _, ok, err := d.MessageByMsgid(ctx, "c1", "old"); ok || err != nil {
-		t.Errorf("old (outside 90 days): %v %v, want not found", ok, err)
 	}
 }

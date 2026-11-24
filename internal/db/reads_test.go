@@ -19,8 +19,8 @@ func exec(t *testing.T, d *db.DB, sql string, args ...any) {
 // logRow inserts a log row on conn (owned by user) in channel.
 func logRow(t *testing.T, d *db.DB, id int64, conn, user, channel string, command any, highlight bool) {
 	t.Helper()
-	exec(t, d, `INSERT INTO logs (channel_id, id, connection_id, user_id, channel, command, highlight, time, message) VALUES (test_channel_id($2, $4), $1,$2,$3,$4,$5,$6,now(),'{}')`,
-		id, conn, user, channel, command, highlight)
+	exec(t, d, `INSERT INTO logs (channel_id, id, command, highlight, time, message) VALUES (test_channel_id($2, $3), $1,$4,$5,now(),'{}')`,
+		id, conn, channel, command, highlight)
 }
 
 func TestPrefs(t *testing.T) {
@@ -64,7 +64,7 @@ func TestSeen(t *testing.T) {
 	ctx := context.Background()
 	a, c := testenv.AddUser(t, d, "alice"), testenv.AddUser(t, d, "carol")
 	testenv.AddConnection(t, d, "c1", a, "{}")
-	exec(t, d, `INSERT INTO seen_markers (channel_id, user_id, connection_id, channel, message_id) VALUES (test_channel_id('c1', '#a'), $1,'c1','#a',7)`, a)
+	exec(t, d, `INSERT INTO seen_markers (channel_id, message_id) VALUES (test_channel_id('c1', '#a'),7)`)
 	got, err := d.Seen(ctx, a)
 	if err != nil || !reflect.DeepEqual(got, []db.SeenRow{{Connection: "c1", Channel: "#a", MessageID: 7}}) {
 		t.Errorf("alice seen = %v, %v", got, err)

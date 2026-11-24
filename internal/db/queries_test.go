@@ -35,8 +35,8 @@ func TestSearchQueriesTakePlainText(t *testing.T) {
 	ctx := context.Background()
 	a := testenv.AddUser(t, d, "alice")
 	testenv.AddConnection(t, d, "c1", a, "{}")
-	exec(t, d, `INSERT INTO logs (channel_id, connection_id, user_id, channel, command, time, message) VALUES
-		(test_channel_id('c1', '#a'), 'c1', $1, '#a', 'PRIVMSG', now(), '{"Command":"PRIVMSG","Params":["#a","running late again"],"Prefix":{"Name":"bob"}}')`, a)
+	exec(t, d, `INSERT INTO logs (channel_id, command, time, message) VALUES
+		(test_channel_id('c1', '#a'), 'PRIVMSG', now(), '{"Command":"PRIVMSG","Params":["#a","running late again"],"Prefix":{"Name":"bob"}}')`)
 	// the database's own date: log.time is a timestamp in its time zone
 	var today string
 	if err := d.Pool.QueryRow(ctx, `SELECT current_date::text`).Scan(&today); err != nil {

@@ -54,7 +54,19 @@ func seedConn(t *testing.T, d *db.DB, u, c string) {
 	execAll(t, d, connRows(u, c)...)
 }
 
-// connRows are a connection's history rows, for owners that may not exist.
+// seedConnNow is seedConn on today's schema (channel_id, since 0011).
+func seedConnNow(t *testing.T, d *db.DB, u, c string) {
+	t.Helper()
+	execAll(t, d, fmt.Sprintf(`INSERT INTO connections (id, user_id, config) VALUES ('%s', '%s', '{}')`, c, u),
+		fmt.Sprintf(`INSERT INTO logs (channel_id, time, message) VALUES (test_channel_id('%s', '#a'), now(), '{}')`, c),
+		fmt.Sprintf(`INSERT INTO log_archives (channel_id, first_id, last_id, min_time, max_time, count, messages)
+			VALUES (test_channel_id('%s', '#a'), 1, 2, now(), now(), 2, '[]')`, c),
+		fmt.Sprintf(`INSERT INTO seen_markers (channel_id, message_id) VALUES (test_channel_id('%s', '#a'), 1)`, c),
+		fmt.Sprintf(`INSERT INTO private_chats (connection_id, nick, time) VALUES ('%s', 'bob', now())`, c))
+}
+
+// connRows are a connection's history rows, for owners that may not exist,
+// on a schema from before 0011 (connection_id and user_id on each).
 func connRows(u, c string) []string {
 	return []string{
 		fmt.Sprintf(`INSERT INTO logs (connection_id, user_id, channel, time, message) VALUES ('%s', '%s', '#a', now(), '{}')`, c, u),
@@ -67,8 +79,21 @@ func connRows(u, c string) []string {
 
 var ownedTables = []string{"connections", "logs", "log_archives", "seen_markers", "private_chats", "prefs", "web_push_subscriptions", "logins"}
 
-// rowsOf counts, per table, the rows belonging to user u or connection c.
+// rowsOf counts, per table, the rows belonging to user u or connection c,
+// on a schema from before 0011; rowsNow on today's.
 func rowsOf(t *testing.T, d *db.DB, u, c string) map[string]int {
+	t.Helper()
+	return countOwned(t, d, u, c, "")
+}
+
+// rowsNow reads logs, log_archives and seen_markers through the test
+// views that give them back their connection and owner.
+func rowsNow(t *testing.T, d *db.DB, u, c string) map[string]int {
+	t.Helper()
+	return countOwned(t, d, u, c, "_v")
+}
+
+func countOwned(t *testing.T, d *db.DB, u, c, view string) map[string]int {
 	t.Helper()
 	out := map[string]int{}
 	for _, table := range ownedTables {
@@ -83,8 +108,12 @@ func rowsOf(t *testing.T, d *db.DB, u, c string) map[string]int {
 		default:
 			where = fmt.Sprintf("user_id = '%s' OR connection_id = '%s'", u, c)
 		}
+		from := table
+		if table == "logs" || table == "log_archives" || table == "seen_markers" {
+			from += view
+		}
 		var n int
-		if err := d.Pool.QueryRow(ctx, "SELECT count(*) FROM "+table+" WHERE "+where).Scan(&n); err != nil {
+		if err := d.Pool.QueryRow(ctx, "SELECT count(*) FROM "+from+" WHERE "+where).Scan(&n); err != nil {
 			t.Fatal(err)
 		}
 		out[table] = n
@@ -120,7 +149,7 @@ func TestMigration3RemovesOrphans(t *testing.T) {
 	)
 	live := rowsOf(t, d, "u1", "c1")
 
-	if err := d.Migrate(ctx, db.MigrateOptions{}); err != nil {
+	if err := d.Migrate(ctx, db.MigrateOptions{FS: migrationsUpTo(t, 10)}); err != nil {
 		t.Fatal(err)
 	}
 	for _, o := range [][2]string{{"gone_user", "cx"}, {"gone_user2", "gone_conn2"}, {"nobody", "gone_conn"}} {
@@ -143,25 +172,28 @@ func TestMigration3RemovesOrphans(t *testing.T) {
 func TestForeignKeysCascade(t *testing.T) {
 	d := testenv.Postgres(t)
 	seedUser(t, d, "u1")
-	seedConn(t, d, "u1", "c1")
-	seedConn(t, d, "u1", "c2")
+	seedConnNow(t, d, "u1", "c1")
+	seedConnNow(t, d, "u1", "c2")
 	seedUser(t, d, "u2")
-	seedConn(t, d, "u2", "c3")
+	seedConnNow(t, d, "u2", "c3")
+	all := func() int {
+		return one[int](t, d, `SELECT (SELECT count(*) FROM logs) + (SELECT count(*) FROM log_archives) + (SELECT count(*) FROM seen_markers)`)
+	}
 
 	execAll(t, d, `DELETE FROM connections WHERE id = 'c1'`)
-	if left := rowsOf(t, d, "nobody", "c1"); total(left) != 0 {
-		t.Errorf("c1's rows left: %v", left)
+	if left := rowsNow(t, d, "nobody", "c1"); total(left) != 0 || all() != 6 {
+		t.Errorf("c1's rows left: %v (%d in all, want 6)", left, all())
 	}
-	if got := rowsOf(t, d, "nobody", "c2"); got["logs"] != 1 || got["private_chats"] != 1 {
+	if got := rowsNow(t, d, "nobody", "c2"); got["logs"] != 1 || got["private_chats"] != 1 {
 		t.Errorf("c2's rows: %v", got)
 	}
 
 	execAll(t, d, `DELETE FROM users WHERE id = 'u1'`)
-	if left := rowsOf(t, d, "u1", "c2"); total(left) != 0 {
+	if left := rowsNow(t, d, "u1", "c2"); total(left) != 0 || all() != 3 {
 		t.Errorf("u1's rows left: %v", left)
 	}
 	want := map[string]int{"connections": 1, "logs": 1, "log_archives": 1, "seen_markers": 1, "private_chats": 1, "prefs": 1, "web_push_subscriptions": 1, "logins": 1}
-	got := rowsOf(t, d, "u2", "c3")
+	got := rowsNow(t, d, "u2", "c3")
 	for table, n := range want {
 		if got[table] != n {
 			t.Errorf("u2 %s: %d, want %d", table, got[table], n)
@@ -175,9 +207,9 @@ func TestOwnerColumnsHaveKeysAndIndexes(t *testing.T) {
 	d := testenv.Postgres(t)
 	for _, k := range []struct{ table, column, owner string }{
 		{"connections", "user_id", "users"},
-		{"logs", "connection_id", "connections"}, {"logs", "user_id", "users"},
-		{"log_archives", "connection_id", "connections"}, {"log_archives", "user_id", "users"},
-		{"seen_markers", "connection_id", "connections"}, {"seen_markers", "user_id", "users"},
+		{"channels", "connection_id", "connections"},
+		{"logs", "channel_id", "channels"}, {"log_archives", "channel_id", "channels"},
+		{"highlights", "channel_id", "channels"}, {"seen_markers", "channel_id", "channels"},
 		{"private_chats", "connection_id", "connections"},
 		{"prefs", "user_id", "users"},
 		{"web_push_subscriptions", "user_id", "users"},

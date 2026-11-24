@@ -40,7 +40,7 @@ func TestMigration4NoRewrite(t *testing.T) {
 		return out
 	}
 	before := filenodes()
-	if err := d.Migrate(ctx, db.MigrateOptions{}); err != nil {
+	if err := d.Migrate(ctx, db.MigrateOptions{FS: migrationsUpTo(t, 4)}); err != nil {
 		t.Fatal(err)
 	}
 	after := filenodes()
@@ -56,8 +56,13 @@ func TestMigration4NoRewrite(t *testing.T) {
 	}
 }
 
+// (on the schema before 0011, which dropped the channel columns and the
+// (connection_id, user_id) keys)
 func TestStricterColumns(t *testing.T) {
-	d := testenv.Postgres(t)
+	d := testenv.EmptyPostgres(t)
+	if err := d.Migrate(ctx, db.MigrateOptions{FS: migrationsUpTo(t, 10)}); err != nil {
+		t.Fatal(err)
+	}
 	for _, c := range []string{"users.last_login", "users.registered", "users.verify_sent", "connections.created",
 		"connections.updated", "logs.time", "log_archives.min_time", "log_archives.max_time", "private_chats.time",
 		"seen_markers.updated"} {
@@ -93,9 +98,13 @@ func columnType(t *testing.T, d *db.DB, col string) string {
 		WHERE table_schema = 'public' AND table_name || '.' || column_name = '%s'`, col))
 }
 
-// The constraints refuse what the code never writes, and only that.
+// The constraints refuse what the code never writes, and only that (on the
+// schema before 0011; channels has the same lowercase CHECK).
 func TestStricterColumnsBite(t *testing.T) {
-	d := testenv.Postgres(t)
+	d := testenv.EmptyPostgres(t)
+	if err := d.Migrate(ctx, db.MigrateOptions{FS: migrationsUpTo(t, 10)}); err != nil {
+		t.Fatal(err)
+	}
 	u := testenv.AddUser(t, d, "u")
 	other := testenv.AddUser(t, d, "other")
 	testenv.AddConnection(t, d, "c1", u, `{}`)

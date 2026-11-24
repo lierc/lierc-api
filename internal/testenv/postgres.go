@@ -268,8 +268,19 @@ func createTemplate(ctx context.Context) error {
 // fixtures use and the app doesn't. test_channel_id(conn, channel) is the
 // channels row of a conversation, made if missing, so a fixture inserting
 // into logs, log_archives, highlights or seen_markers by hand can give its
-// rows their channel_id in the same statement (set-based ones too).
-const fixtureSQL = `CREATE FUNCTION test_channel_id(conn text, chan text) RETURNS integer
+// rows their channel_id in the same statement (set-based ones too). The
+// views logs_v, log_archives_v, highlights_v and seen_markers_v are those
+// tables with their conversation's connection_id, channel and owner's
+// user_id, for tests checking where rows are.
+const fixtureSQL = `CREATE VIEW logs_v AS SELECT x.*, c.connection_id, c.channel, o.user_id
+  FROM logs x JOIN channels c ON c.id = x.channel_id JOIN connections o ON o.id = c.connection_id;
+CREATE VIEW log_archives_v AS SELECT x.*, c.connection_id, c.channel, o.user_id
+  FROM log_archives x JOIN channels c ON c.id = x.channel_id JOIN connections o ON o.id = c.connection_id;
+CREATE VIEW highlights_v AS SELECT x.*, c.connection_id, c.channel, o.user_id
+  FROM highlights x JOIN channels c ON c.id = x.channel_id JOIN connections o ON o.id = c.connection_id;
+CREATE VIEW seen_markers_v AS SELECT x.*, c.connection_id, c.channel, o.user_id
+  FROM seen_markers x JOIN channels c ON c.id = x.channel_id JOIN connections o ON o.id = c.connection_id;
+CREATE FUNCTION test_channel_id(conn text, chan text) RETURNS integer
 LANGUAGE plpgsql AS $$
 DECLARE r integer;
 BEGIN
@@ -441,8 +452,8 @@ func AddLog(t testing.TB, d *db.DB, id int64, conn, user string) {
 	t.Helper()
 	EnsureConnection(t, d, conn, user)
 	if _, err := d.Pool.Exec(context.Background(),
-		`INSERT INTO logs (id, channel_id, connection_id, user_id, channel, time, message) VALUES ($1, test_channel_id($2, '#a'), $2, $3, '#a', now(), '{}')`,
-		id, conn, user); err != nil {
+		`INSERT INTO logs (id, channel_id, time, message) VALUES ($1, test_channel_id($2, '#a'), now(), '{}')`,
+		id, conn); err != nil {
 		t.Fatal(err)
 	}
 }

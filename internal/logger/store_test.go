@@ -39,7 +39,7 @@ func TestStoreInsertMessage(t *testing.T) {
 	var user, channel, command, text string
 	var highlight bool
 	var at time.Time
-	err = db.QueryRow(context.Background(), `SELECT user_id, channel, command, highlight, time, message->'Params'->>1 FROM logs WHERE id = $1`, id).
+	err = db.QueryRow(context.Background(), `SELECT user_id, channel, command, highlight, time, message->'Params'->>1 FROM logs_v WHERE id = $1`, id).
 		Scan(&user, &channel, &command, &highlight, &at, &text)
 	if err != nil {
 		t.Fatal(err)
@@ -51,7 +51,7 @@ func TestStoreInsertMessage(t *testing.T) {
 	// a highlight gets its highlights row too, with the same id and columns
 	var n int
 	err = db.QueryRow(context.Background(), `SELECT count(*) FROM highlights h JOIN logs l USING (id)
-		WHERE id = $1 AND h.user_id = l.user_id AND h.connection_id = l.connection_id AND h.channel = l.channel
+		WHERE id = $1 AND h.channel_id = l.channel_id
 		  AND h.time = l.time AND h.message = l.message AND h.self = l.self`, id).Scan(&n)
 	if err != nil || n != 1 {
 		t.Errorf("highlights row for %d: %d, %v", id, n, err)
@@ -80,7 +80,7 @@ func TestStoreInsertMessageChannels(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	rows, err := db.Query(context.Background(), `SELECT id, channel FROM logs ORDER BY id`)
+	rows, err := db.Query(context.Background(), `SELECT id, channel FROM logs_v ORDER BY id`)
 	if err != nil {
 		t.Fatal(err)
 	}

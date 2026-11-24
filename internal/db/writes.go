@@ -32,12 +32,11 @@ func (d *DB) SetPref(ctx context.Context, user, name, value string) error {
 // writes only on the conversation's channels row, of a connection user
 // owns: a seen marker names a logged message, whose line made the row, so
 // one for a conversation with none is ignored. ErrGone, as before, when
-// conn is gone or isn't user's (deleted after the caller checked it). The
-// old columns are written too until 0011, for the image before 0010.
+// conn is gone or isn't user's (deleted after the caller checked it).
 func (d *DB) SetSeen(ctx context.Context, user, conn, channel string, id int32) error {
 	n, err := exec(ctx, d.Pool, psql.Insert("seen_markers").
-		Columns("channel_id", "user_id", "connection_id", "channel", "message_id").
-		Select(sub.Select("ch.id", "c.user_id", "ch.connection_id", "ch.channel").Column("?::integer", id).
+		Columns("channel_id", "message_id").
+		Select(sub.Select("ch.id").Column("?::integer", id).
 			From("channels AS ch").Join("connections AS c ON c.id = ch.connection_id").
 			Where(sq.Eq{"ch.connection_id": conn, "ch.channel": channel, "c.user_id": user})).
 		Suffix(`ON CONFLICT (channel_id) DO UPDATE SET message_id=EXCLUDED.message_id, updated=now()`))

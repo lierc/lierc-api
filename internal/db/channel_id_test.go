@@ -88,7 +88,7 @@ func TestMigration10FillsChannelID(t *testing.T) {
 	oldShapeRows(t, d)
 	counts := rowCounts(t, d)
 
-	if err := d.Migrate(ctx, db.MigrateOptions{}); err != nil {
+	if err := d.Migrate(ctx, db.MigrateOptions{FS: migrationsUpTo(t, 10)}); err != nil {
 		t.Fatal(err)
 	}
 	if got := rowCounts(t, d); fmt.Sprint(got) != fmt.Sprint(counts) {
@@ -111,10 +111,99 @@ func TestMigration10FillsChannelID(t *testing.T) {
 	}
 }
 
+// conversationsOf is each row of the four tables as "table connection
+// channel", sorted: through the old columns before 0011 (old), through
+// channel_id after it.
+func conversationsOf(t *testing.T, d *db.DB, old bool) []string {
+	t.Helper()
+	var out []string
+	for _, tbl := range channelIDTables {
+		q := `SELECT c.connection_id || ' ' || c.channel FROM ` + tbl + ` x JOIN channels c ON c.id = x.channel_id`
+		if old {
+			q = `SELECT connection_id || ' ' || channel FROM ` + tbl
+		}
+		rows, err := d.Pool.Query(ctx, q)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for rows.Next() {
+			var v string
+			rows.Scan(&v)
+			out = append(out, tbl+" "+v)
+		}
+		rows.Close()
+	}
+	slices.Sort(out)
+	return out
+}
+
+// Migration 0011 fills the channel_id the image before 0010 left empty
+// (after a rollback), making the channels rows missing, then makes
+// channel_id NOT NULL and drops the old columns, their indexes and
+// seen_markers' old key.
+func TestMigration11(t *testing.T) {
+	d := testenv.EmptyPostgres(t)
+	if err := d.Migrate(ctx, db.MigrateOptions{FS: migrationsUpTo(t, 9)}); err != nil {
+		t.Fatal(err)
+	}
+	testenv.EnsureConnection(t, d, "c1", "u1")
+	testenv.EnsureConnection(t, d, "c2", "u1")
+	oldShapeRows(t, d)
+	if err := d.Migrate(ctx, db.MigrateOptions{FS: migrationsUpTo(t, 10)}); err != nil {
+		t.Fatal(err)
+	}
+	// the old image again, after 0010: no channel_id, one conversation new
+	exec(t, d, `INSERT INTO logs (id, connection_id, user_id, channel, time, message) VALUES
+		(10, 'c1', 'u1', '#a', now(), '{}'), (11, 'c2', 'u1', '#new', now(), '{}')`)
+	exec(t, d, `INSERT INTO highlights (id, connection_id, user_id, channel, time, message) VALUES (11, 'c2', 'u1', '#new', now(), '{}')`)
+	exec(t, d, `INSERT INTO log_archives (connection_id, user_id, channel, first_id, last_id, min_time, max_time, count, messages)
+		VALUES ('c2', 'u1', '#new', 2, 2, now(), now(), 1, '[]')`)
+	exec(t, d, `INSERT INTO seen_markers (user_id, connection_id, channel, message_id) VALUES ('u1', 'c2', '#new', 11)`)
+	want := conversationsOf(t, d, true)
+
+	if err := d.Migrate(ctx, db.MigrateOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	if got := conversationsOf(t, d, false); fmt.Sprint(got) != fmt.Sprint(want) {
+		t.Errorf("conversations after 0011:\n%v\nwant\n%v", got, want)
+	}
+	var cols []string
+	rows, _ := d.Pool.Query(ctx, `SELECT table_name || '.' || column_name || ' ' || is_nullable FROM information_schema.columns
+		WHERE table_name = ANY($1) AND column_name IN ('user_id', 'connection_id', 'channel', 'channel_id') ORDER BY 1`, channelIDTables)
+	for rows.Next() {
+		var c string
+		rows.Scan(&c)
+		cols = append(cols, c)
+	}
+	rows.Close()
+	if want := "[highlights.channel_id NO log_archives.channel_id NO logs.channel_id NO seen_markers.channel_id NO]"; fmt.Sprint(cols) != want {
+		t.Errorf("columns %v, want %s", cols, want)
+	}
+	var pkey string
+	d.Pool.QueryRow(ctx, `SELECT pg_get_constraintdef(oid) FROM pg_constraint WHERE conname = 'seen_markers_pkey'`).Scan(&pkey)
+	if pkey != "PRIMARY KEY (channel_id)" {
+		t.Errorf("seen_markers_pkey %q", pkey)
+	}
+	for _, idx := range newIndexes[:4] {
+		if !indexExists(t, d, idx) {
+			t.Errorf("index %s missing", idx)
+		}
+	}
+	for _, idx := range []string{"logs_connection_id_channel_id_idx", "logs_user_id_highlight_idx", "logs_connection_id_msgid_idx",
+		"log_archives_connection_id_channel_last_id_idx", "log_archives_user_id_idx", "highlights_user_id_id_idx", "seen_markers_connection_id_idx"} {
+		if indexExists(t, d, idx) {
+			t.Errorf("old index %s still there", idx)
+		}
+	}
+}
+
 // After 0010 the code before it can still insert (it leaves channel_id
 // empty), so re-pinning the old image is a rollback.
 func TestMigration10OldShapeInsert(t *testing.T) {
-	d := testenv.Postgres(t)
+	d := testenv.EmptyPostgres(t)
+	if err := d.Migrate(ctx, db.MigrateOptions{FS: migrationsUpTo(t, 10)}); err != nil {
+		t.Fatal(err)
+	}
 	testenv.EnsureConnection(t, d, "c1", "u1")
 	testenv.EnsureConnection(t, d, "c2", "u1")
 	oldShapeRows(t, d)
@@ -123,39 +212,6 @@ func TestMigration10OldShapeInsert(t *testing.T) {
 		d.Pool.QueryRow(ctx, `SELECT count(*) FROM `+tbl+` WHERE channel_id IS NULL`).Scan(&n)
 		if n == 0 {
 			t.Errorf("%s: no old-shape row with an empty channel_id", tbl)
-		}
-	}
-}
-
-// Step 1's writes fill channel_id, and the old columns with what the code
-// before 0010 wrote, so that code reads them right after a rollback.
-func TestStep1WritesOldColumns(t *testing.T) {
-	d := testenv.Postgres(t)
-	a := testenv.AddUser(t, d, "alice")
-	testenv.AddConnection(t, d, "c1", a, "{}")
-	e := db.LogEntry{Connection: "c1", Command: "PRIVMSG", Time: 1700000000,
-		Message: []byte(`{"Command":"PRIVMSG","Params":["#a","hi alice"],"Tags":{"msgid":"m1"}}`)}
-	for range 3 {
-		if _, err := d.InsertLog(ctx, e, []string{"#a", "nick"}, true); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if _, ok, err := d.ArchiveBlock(ctx, "c1", "#a", 1, 2); !ok || err != nil {
-		t.Fatalf("ArchiveBlock: %v %v", ok, err)
-	}
-	if err := d.SetSeen(ctx, a, "c1", "#a", 1); err != nil {
-		t.Fatal(err)
-	}
-	for _, tbl := range channelIDTables {
-		var rows, bad int
-		if err := d.Pool.QueryRow(ctx, `SELECT count(*), count(*) FILTER (WHERE c.id IS NULL
-			OR x.connection_id IS DISTINCT FROM c.connection_id OR x.channel IS DISTINCT FROM c.channel
-			OR x.user_id IS DISTINCT FROM o.user_id)
-			FROM `+tbl+` x LEFT JOIN channels c ON c.id = x.channel_id LEFT JOIN connections o ON o.id = c.connection_id`).Scan(&rows, &bad); err != nil {
-			t.Fatal(err)
-		}
-		if rows == 0 || bad != 0 {
-			t.Errorf("%s: %d rows, %d without channel_id or with old columns that disagree", tbl, rows, bad)
 		}
 	}
 }
@@ -313,25 +369,15 @@ func storeReads(t *testing.T, d *db.DB, user string) map[string]string {
 	return out
 }
 
-// The reads go through channel_id: with the old columns made to lie
-// (channel prefixed, c1 and c2 swapped), every read answers the same.
-func TestReadsIgnoreOldColumns(t *testing.T) {
+// Every Store read finds readsFixture's rows through channel_id. (Until
+// 0011 this also made the old columns lie and checked the reads didn't
+// change, which is how step 1 was shown to read no old column.)
+func TestReadsThroughChannelID(t *testing.T) {
 	d := testenv.Postgres(t)
 	user := readsFixture(t, d)
-	before := storeReads(t, d, user)
-	for name, v := range before {
-		if v == "[]" || strings.HasSuffix(v, "false") {
-			t.Errorf("%s found nothing: the fixture doesn't exercise it", name)
-		}
-	}
-	for _, tbl := range channelIDTables {
-		exec(t, d, `UPDATE `+tbl+` SET channel = 'x' || channel,
-			connection_id = CASE connection_id WHEN 'c1' THEN 'c2' ELSE 'c1' END`)
-	}
-	after := storeReads(t, d, user)
-	for name, v := range before {
-		if after[name] != v {
-			t.Errorf("%s reads the old columns:\nbefore %s\nafter  %s", name, v, after[name])
+	for name, v := range storeReads(t, d, user) {
+		if v == "[]" || strings.HasSuffix(v, "false") || v == "map[]" {
+			t.Errorf("%s found nothing", name)
 		}
 	}
 }
@@ -375,13 +421,13 @@ func perUserFixture(t *testing.T, d *db.DB) (alice string) {
 	testenv.AddConnection(t, d, "c1", a, "{}")
 	testenv.AddConnection(t, d, "c2", a, "{}")
 	testenv.AddConnection(t, d, "c3", b, "{}")
-	exec(t, d, `INSERT INTO logs (id, channel_id, connection_id, user_id, channel, command, highlight, time, message)
-		SELECT g * 4 + k, test_channel_id(conn, chan), conn, owner, chan, 'PRIVMSG', g % 3 = 0, now(), '{}'
+	exec(t, d, `INSERT INTO logs (id, channel_id, command, highlight, time, message)
+		SELECT g * 4 + k, test_channel_id(conn, chan), 'PRIVMSG', g % 3 = 0, now(), '{}'
 		FROM generate_series(1, 300) g,
 		(VALUES (0, 'c1', '#a'), (1, 'c2', '#a'), (2, 'c1', '#b'), (3, 'c3', '#a')) v(k, conn, chan)
 		JOIN connections o ON o.id = v.conn, LATERAL (SELECT o.user_id AS owner) w`)
-	exec(t, d, `INSERT INTO highlights (id, channel_id, connection_id, user_id, channel, time, message, self)
-		SELECT id, channel_id, connection_id, user_id, channel, time, message, self FROM logs WHERE highlight`)
+	exec(t, d, `INSERT INTO highlights (id, channel_id, time, message, self)
+		SELECT id, channel_id, time, message, self FROM logs WHERE highlight`)
 	return a
 }
 
@@ -457,13 +503,13 @@ func TestPerUserReadsPlans(t *testing.T) {
 	testenv.AddConnection(t, d, "c1", a, "{}")
 	testenv.AddConnection(t, d, "c2", b, "{}")
 	for _, conn := range []string{"c1", "c2"} {
-		exec(t, d, `INSERT INTO logs (channel_id, connection_id, user_id, channel, command, highlight, time, message)
-			SELECT test_channel_id($1, '#c' || ch), $1, (SELECT user_id FROM connections WHERE id = $1), '#c' || ch,
+		exec(t, d, `INSERT INTO logs (channel_id, command, highlight, time, message)
+			SELECT test_channel_id($1, '#c' || ch),
 				'PRIVMSG', n % 8 = 0, now(), '{}'
 			FROM generate_series(1, 40) n, generate_series(1, 500) ch`, conn)
 	}
-	exec(t, d, `INSERT INTO highlights (id, channel_id, connection_id, user_id, channel, time, message, self)
-		SELECT id, channel_id, connection_id, user_id, channel, time, message, self FROM logs WHERE highlight`)
+	exec(t, d, `INSERT INTO highlights (id, channel_id, time, message, self)
+		SELECT id, channel_id, time, message, self FROM logs WHERE highlight`)
 	exec(t, d, `ANALYZE`)
 	before := int32(30000)
 	for name, q := range map[string]func() (string, []any, error){

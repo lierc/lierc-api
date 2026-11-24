@@ -42,10 +42,8 @@ func (d *DB) InsertLog(ctx context.Context, e LogEntry, channels []string, highl
 	defer tx.Rollback(ctx)
 
 	// one row per channel, in order, under its channels row (made the
-	// first time; a gone connection fails its foreign key, ErrGone), for
-	// the connection's owner: none (no row from connections) when the
-	// connection doesn't exist. The old columns (user_id, connection_id,
-	// channel) are written too until 0011, for the image before 0010.
+	// first time; a missing or gone connection fails its foreign key,
+	// ErrGone)
 	logged := make([]loggedRow, 0, len(channels))
 	for _, channel := range channels {
 		chID, err := channelID(ctx, tx, e.Connection, channel)
@@ -54,15 +52,9 @@ func (d *DB) InsertLog(ctx context.Context, e LogEntry, channels []string, highl
 		}
 		var id int64
 		err = queryRow(ctx, tx, psql.Insert("logs").
-			Columns("channel_id", "user_id", "connection_id", "channel", "command", "message", "time", "self", "highlight").
-			Select(psql.Select().Column("?::integer", chID).Columns("user_id", "id").
-				Column("?::text", channel).Column("?::text", e.Command).Column("?::jsonb", e.Message).
-				Column("to_timestamp(?)", e.Time).Column("?::boolean", e.Self).Column("?::boolean", highlight).
-				From("connections").Where(sq.Eq{"id": e.Connection})).
+			Columns("channel_id", "command", "message", "time", "self", "highlight").
+			Values(chID, e.Command, sq.Expr("?::jsonb", e.Message), sq.Expr("to_timestamp(?)", e.Time), e.Self, highlight).
 			Suffix("RETURNING id")).Scan(&id)
-		if errors.Is(err, pgx.ErrNoRows) {
-			return 0, ErrGone
-		}
 		if err != nil {
 			return 0, gone(err)
 		}
@@ -74,7 +66,7 @@ func (d *DB) InsertLog(ctx context.Context, e LogEntry, channels []string, highl
 		for i, l := range logged {
 			ids[i] = l.ID
 		}
-		cols := []string{"id", "channel_id", "user_id", "connection_id", "channel", "time", "message", "self"}
+		cols := []string{"id", "channel_id", "time", "message", "self"}
 		if _, err := exec(ctx, tx, psql.Insert("highlights").Columns(cols...).
 			Select(psql.Select(cols...).From("logs").Where(sq.Eq{"id": ids}))); err != nil {
 			return 0, gone(err)

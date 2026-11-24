@@ -48,7 +48,7 @@ func TestDeleteConnectionsDelete(t *testing.T) {
 	if len(h.slept) != 1 || h.slept[0].Seconds() != 3 {
 		t.Errorf("slept %v", h.slept)
 	}
-	for _, table := range []string{"logs", "seen_markers", "private_chats", "log_archives"} {
+	for _, table := range []string{"logs_v", "seen_markers_v", "private_chats", "log_archives_v"} {
 		if n := h.count(`SELECT count(*) FROM ` + table + ` WHERE connection_id = 'c1'`); n != 0 {
 			t.Errorf("%s: %d rows left", table, n)
 		}

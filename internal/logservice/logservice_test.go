@@ -102,7 +102,7 @@ func TestServiceWithOptions(t *testing.T) {
 		t.Errorf("asked about %q, want u1", u)
 	}
 	var n int
-	if err := d.Pool.QueryRow(ctx, `SELECT count(*) FROM highlights WHERE connection_id = 'c1'`).Scan(&n); err != nil || n != 1 {
+	if err := d.Pool.QueryRow(ctx, `SELECT count(*) FROM highlights_v WHERE connection_id = 'c1'`).Scan(&n); err != nil || n != 1 {
 		t.Errorf("highlights stored: %d, %v", n, err)
 	}
 

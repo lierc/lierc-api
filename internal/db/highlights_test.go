@@ -12,8 +12,8 @@ import (
 func hlRow(t *testing.T, d *db.DB, id int64, conn, user, channel, text string) {
 	t.Helper()
 	msgRow(t, d, id, conn, user, channel, text, false, true, "2026-01-01")
-	exec(t, d, `INSERT INTO highlights (channel_id, id, connection_id, user_id, channel, time, message, self)
-		SELECT test_channel_id(connection_id, channel), id, connection_id, user_id, channel, time, message, self FROM logs WHERE id = $1`, id)
+	exec(t, d, `INSERT INTO highlights (channel_id, id, time, message, self)
+		SELECT channel_id, id, time, message, self FROM logs WHERE id = $1`, id)
 }
 
 // Migration 5 copies the highlighted rows of logs, with their columns.
@@ -26,7 +26,7 @@ func TestMigration5CopiesHighlights(t *testing.T) {
 	oldMsgRow(t, d, 1, "c1", "u1", "#a", "one", false, false, "2026-01-01")
 	oldMsgRow(t, d, 2, "c1", "u1", "#a", "two", false, true, "2026-01-02")
 	oldMsgRow(t, d, 3, "c1", "u1", "#b", "three", true, true, "2026-01-03")
-	if err := d.Migrate(ctx, db.MigrateOptions{}); err != nil {
+	if err := d.Migrate(ctx, db.MigrateOptions{FS: migrationsUpTo(t, 10)}); err != nil {
 		t.Fatal(err)
 	}
 

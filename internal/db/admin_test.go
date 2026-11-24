@@ -144,10 +144,10 @@ func seedCounts(t *testing.T, d *db.DB) (user, conn string) {
 	testenv.AddLog(t, d, 1, conn, user)
 	testenv.AddLog(t, d, 2, conn, user)
 	testenv.AddLog(t, d, 4, "otherc", other)
-	exec(t, d, `INSERT INTO highlights (channel_id, id, connection_id, user_id, channel, time, message) VALUES (test_channel_id('conn1', '#a'), 1, 'conn1', '`+user+`', '#a', now(), '{}'), (test_channel_id('otherc', '#a'), 4, 'otherc', '`+other+`', '#a', now(), '{}')`)
-	exec(t, d, `INSERT INTO log_archives (channel_id, connection_id, user_id, channel, first_id, last_id, min_time, max_time, count, messages)
-	  VALUES (test_channel_id('conn1', '#a'), 'conn1', '`+user+`', '#a', 1, 1, now(), now(), 1, '[]')`)
-	exec(t, d, `INSERT INTO seen_markers (channel_id, user_id, connection_id, channel, message_id) VALUES (test_channel_id('conn1', '#a'), '`+user+`', 'conn1', '#a', 1), (test_channel_id('conn2', '#a'), '`+user+`', 'conn2', '#a', 1), (test_channel_id('otherc', '#a'), '`+other+`', 'otherc', '#a', 1)`)
+	exec(t, d, `INSERT INTO highlights (channel_id, id, time, message) VALUES (test_channel_id('conn1', '#a'), 1, now(), '{}'), (test_channel_id('otherc', '#a'), 4, now(), '{}')`)
+	exec(t, d, `INSERT INTO log_archives (channel_id, first_id, last_id, min_time, max_time, count, messages)
+	  VALUES (test_channel_id('conn1', '#a'), 1, 1, now(), now(), 1, '[]')`)
+	exec(t, d, `INSERT INTO seen_markers (channel_id, message_id) VALUES (test_channel_id('conn1', '#a'), 1), (test_channel_id('conn2', '#a'), 1), (test_channel_id('otherc', '#a'), 1)`)
 	exec(t, d, `INSERT INTO private_chats (connection_id, nick, time) VALUES ('conn1', 'n', now()), ('otherc', 'n', now())`)
 	exec(t, d, `INSERT INTO prefs (user_id, name, value) VALUES ('`+user+`', 'p', 'v')`)
 	exec(t, d, `INSERT INTO web_push_subscriptions (endpoint, key, auth, user_id) VALUES ('e', 'k', 'a', '`+user+`')`)
@@ -257,8 +257,8 @@ func TestStaleSeenCount(t *testing.T) {
 	ctx := context.Background()
 	u := testenv.AddUser(t, d, "u")
 	testenv.AddConnection(t, d, "c", u, `{}`)
-	exec(t, d, `INSERT INTO seen_markers (channel_id, user_id, connection_id, channel, message_id) VALUES (test_channel_id('c', '#fresh'), '`+u+`', 'c', '#fresh', 1)`)
-	exec(t, d, `INSERT INTO seen_markers (channel_id, user_id, connection_id, channel, message_id, updated) VALUES (test_channel_id('c', '#old'), '`+u+`', 'c', '#old', 1, now() - interval '2 months')`)
+	exec(t, d, `INSERT INTO seen_markers (channel_id, message_id) VALUES (test_channel_id('c', '#fresh'), 1)`)
+	exec(t, d, `INSERT INTO seen_markers (channel_id, message_id, updated) VALUES (test_channel_id('c', '#old'), 1, now() - interval '2 months')`)
 	if n, err := d.StaleSeenCount(ctx); err != nil || n != 1 {
 		t.Errorf("got %d, %v", n, err)
 	}
@@ -320,8 +320,8 @@ func TestPruneStaleSeen(t *testing.T) {
 	ctx := context.Background()
 	u := testenv.AddUser(t, d, "u")
 	testenv.AddConnection(t, d, "c", u, `{}`)
-	exec(t, d, `INSERT INTO seen_markers (channel_id, user_id, connection_id, channel, message_id) VALUES (test_channel_id('c', '#fresh'), '`+u+`', 'c', '#fresh', 1)`)
-	exec(t, d, `INSERT INTO seen_markers (channel_id, user_id, connection_id, channel, message_id, updated) VALUES (test_channel_id('c', '#old'), '`+u+`', 'c', '#old', 1, now() - interval '2 months')`)
+	exec(t, d, `INSERT INTO seen_markers (channel_id, message_id) VALUES (test_channel_id('c', '#fresh'), 1)`)
+	exec(t, d, `INSERT INTO seen_markers (channel_id, message_id, updated) VALUES (test_channel_id('c', '#old'), 1, now() - interval '2 months')`)
 	if n, err := d.PruneStaleSeen(ctx); err != nil || n != 1 {
 		t.Errorf("got %d, %v", n, err)
 	}
@@ -336,9 +336,9 @@ func rowsLeft(t *testing.T, d *db.DB, user, conn string) int {
 	var n int
 	err := d.Pool.QueryRow(context.Background(), `SELECT
 		(SELECT count(*) FROM connections WHERE id = $2 OR user_id = $1) +
-		(SELECT count(*) FROM logs WHERE connection_id = $2 OR user_id = $1) +
-		(SELECT count(*) FROM log_archives WHERE connection_id = $2 OR user_id = $1) +
-		(SELECT count(*) FROM seen_markers WHERE connection_id = $2 OR user_id = $1) +
+		(SELECT count(*) FROM logs_v WHERE connection_id = $2 OR user_id = $1) +
+		(SELECT count(*) FROM log_archives_v WHERE connection_id = $2 OR user_id = $1) +
+		(SELECT count(*) FROM seen_markers_v WHERE connection_id = $2 OR user_id = $1) +
 		(SELECT count(*) FROM private_chats WHERE connection_id = $2) +
 		(SELECT count(*) FROM prefs WHERE user_id = $1) +
 		(SELECT count(*) FROM web_push_subscriptions WHERE user_id = $1) +
@@ -387,12 +387,12 @@ func TestPruneSeenKeepsRecentRows(t *testing.T) {
 	ctx := context.Background()
 	u := testenv.AddUser(t, d, "u")
 	testenv.AddConnection(t, d, "c", u, `{}`)
-	exec(t, d, `INSERT INTO seen_markers (channel_id, user_id, connection_id, channel, message_id, updated)
-		VALUES (test_channel_id('c', '#fresh'), '`+u+`', 'c', '#fresh', 1, now() - interval '20 days'), (test_channel_id('c', '#old'), '`+u+`', 'c', '#old', 1, now() - interval '40 days')`)
+	exec(t, d, `INSERT INTO seen_markers (channel_id, message_id, updated)
+		VALUES (test_channel_id('c', '#fresh'), 1, now() - interval '20 days'), (test_channel_id('c', '#old'), 1, now() - interval '40 days')`)
 	if n, err := d.PruneStaleSeen(ctx); err != nil || n != 1 {
 		t.Fatalf("pruned %d, %v", n, err)
 	}
-	if got := one[string](t, d, `SELECT string_agg(channel, ',') FROM seen_markers`); got != "#fresh" {
+	if got := one[string](t, d, `SELECT string_agg(channel, ',') FROM seen_markers_v`); got != "#fresh" {
 		t.Errorf("left %s", got)
 	}
 }

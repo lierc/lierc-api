@@ -68,7 +68,7 @@ func TestSeenRoute(t *testing.T) {
 	e := setup(t)
 	a := testenv.AddUser(t, e.db, "alice")
 	testenv.AddConnection(t, e.db, "c1", a, "{}")
-	e.exec(`INSERT INTO seen_markers (channel_id, user_id, connection_id, channel, message_id) VALUES (test_channel_id('c1', '#a'), $1,'c1','#a',7)`, a)
+	e.exec(`INSERT INTO seen_markers (channel_id, message_id) VALUES (test_channel_id('c1', '#a'),7)`)
 	e.want("/seen", a, 200, `[{"connection":"c1","channel":"#a","message_id":7}]`)
 }
 
@@ -84,8 +84,8 @@ func TestWebPushKeys(t *testing.T) {
 
 func logRow(e *env, id int64, conn, user, channel string, command any, highlight bool) {
 	e.t.Helper()
-	e.exec(`INSERT INTO logs (channel_id, id, connection_id, user_id, channel, command, highlight, time, message) VALUES (test_channel_id($2, $4), $1,$2,$3,$4,$5,$6,now(),'{}')`,
-		id, conn, user, channel, command, highlight)
+	e.exec(`INSERT INTO logs (channel_id, id, command, highlight, time, message) VALUES (test_channel_id($2, $3), $1,$4,$5,now(),'{}')`,
+		id, conn, channel, command, highlight)
 }
 
 func TestChannelList(t *testing.T) {

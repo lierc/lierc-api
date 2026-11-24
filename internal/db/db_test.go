@@ -399,8 +399,8 @@ func TestEditConfigAllowsLogging(t *testing.T) {
 	_, err := d.EditConfig(ctx, "c1", func(saved []byte) ([]byte, error) {
 		ictx, cancel := context.WithTimeout(ctx, 2*time.Second)
 		defer cancel()
-		_, insertErr = d.Pool.Exec(ictx, `INSERT INTO logs (channel_id, connection_id, user_id, channel, time, message)
-			VALUES (test_channel_id('c1', '#a'), 'c1', $1, '#a', now(), '{}')`, u)
+		_, insertErr = d.Pool.Exec(ictx, `INSERT INTO logs (channel_id, time, message)
+			VALUES (test_channel_id('c1', '#a'), now(), '{}')`)
 		return saved, nil
 	})
 	if err != nil {
