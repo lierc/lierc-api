@@ -104,9 +104,11 @@ func (d *DB) UserCounts(ctx context.Context, id string) (map[string]int64, error
 func userCounts(ctx context.Context, r runner, id string) (map[string]int64, error) {
 	owned := sq.Eq{"user_id": id}
 	ofConns := sq.Expr("connection_id IN (?)", sub.Select("id").From("connections").Where(owned))
-	either := sq.Or{owned, ofConns}
+	// the conversations of its connections
+	ofChannels := sq.Expr("channel_id IN (?)", sub.Select("ch.id").From("channels AS ch").
+		Join("connections AS c ON c.id = ch.connection_id").Where(sq.Eq{"c.user_id": id}))
 	return countRows(ctx, r, []tableRows{
-		{"logs", either}, {"log_archives", either}, {"highlights", either}, {"seen_markers", either},
+		{"logs", ofChannels}, {"log_archives", ofChannels}, {"highlights", ofChannels}, {"seen_markers", ofChannels},
 		{"private_chats", ofConns},
 		{"prefs", owned}, {"web_push_subscriptions", owned}, {"connections", owned}, {"logins", owned},
 	})
@@ -205,13 +207,15 @@ func (d *DB) ConnectionCounts(ctx context.Context, id string) (map[string]int64,
 
 func connectionCounts(ctx context.Context, r runner, id string) (map[string]int64, error) {
 	ofConn := sq.Eq{"connection_id": id}
+	ofChannels := sq.Expr("channel_id IN (?)", sub.Select("id").From("channels").Where(ofConn))
 	return countRows(ctx, r, []tableRows{
-		{"logs", ofConn}, {"log_archives", ofConn}, {"highlights", ofConn}, {"seen_markers", ofConn}, {"private_chats", ofConn},
+		{"logs", ofChannels}, {"log_archives", ofChannels}, {"highlights", ofChannels}, {"seen_markers", ofChannels},
+		{"private_chats", ofConn},
 	})
 }
 
 // staleSeen is the seen rows prune-seen deletes: those not updated in a
-// month. (A connection's rows go with it: seen_markers_connection_id_fkey.)
+// month. (A connection's rows go with it, through its channels rows.)
 var staleSeen = sq.Expr("updated < now() - interval '1 month'")
 
 // StaleSeenCount counts the seen rows prune-seen would delete.

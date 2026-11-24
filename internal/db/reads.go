@@ -53,9 +53,10 @@ type SeenRow struct {
 
 // Seen is user's seen positions on connections that still exist.
 func (d *DB) Seen(ctx context.Context, user string) ([]SeenRow, error) {
-	rows, err := query(ctx, d.Pool, psql.Select("s.connection_id", "s.channel", "s.message_id::bigint").
-		From("seen_markers AS s").Join("connections AS c ON c.id = s.connection_id").
-		Where(sq.Eq{"s.user_id": user}))
+	rows, err := query(ctx, d.Pool, psql.Select("ch.connection_id", "ch.channel", "s.message_id::bigint").
+		From("seen_markers AS s").Join("channels AS ch ON ch.id = s.channel_id").
+		Join("connections AS c ON c.id = ch.connection_id").
+		Where(sq.Eq{"c.user_id": user}))
 	if err != nil {
 		return nil, err
 	}
@@ -63,10 +64,12 @@ func (d *DB) Seen(ctx context.Context, user string) ([]SeenRow, error) {
 }
 
 // ChannelNames is the channels conn has logs in, most recently active
-// first.
+// first: its channels rows, each with its newest logs id (one probe of
+// logs_channel_id_id_idx).
 func (d *DB) ChannelNames(ctx context.Context, conn string) ([]string, error) {
-	rows, err := query(ctx, d.Pool, psql.Select("channel").From("logs").Where(sq.Eq{"connection_id": conn}).
-		GroupBy("channel").OrderBy("max(id) DESC"))
+	rows, err := query(ctx, d.Pool, psql.Select("ch.channel").From("channels AS ch").
+		JoinClause("CROSS JOIN LATERAL (SELECT max(id) AS newest FROM logs WHERE channel_id = ch.id) l").
+		Where(sq.Eq{"ch.connection_id": conn}).Where("l.newest IS NOT NULL").OrderBy("l.newest DESC"))
 	if err != nil {
 		return nil, err
 	}
@@ -103,14 +106,15 @@ func (d *DB) Missed(ctx context.Context, user string, es []MissedEntry) (map[str
 	}
 	// unnest over three arrays doesn't fit the builder
 	rows, err := d.Pool.Query(ctx, `
-		SELECT l.connection_id, l.channel,
+		SELECT ch.connection_id, ch.channel,
 			SUM(CASE WHEN l.command = 'PRIVMSG' THEN 1 ELSE 0 END),
 			SUM(CASE WHEN l.command <> 'PRIVMSG' THEN 1 ELSE 0 END),
 			SUM(CASE WHEN l.highlight THEN 1 ELSE 0 END)
 		FROM unnest($2::text[], $3::text[], $4::bigint[]) AS e(connection_id, channel, after)
 		JOIN connections AS c ON c.id=e.connection_id AND c.user_id=$1
-		JOIN logs AS l ON l.connection_id=e.connection_id AND l.channel=e.channel AND l.id > e.after
-		GROUP BY l.connection_id, l.channel`, user, conns, chans, after)
+		JOIN channels AS ch ON ch.connection_id=e.connection_id AND ch.channel=e.channel
+		JOIN logs AS l ON l.channel_id=ch.id AND l.id > e.after
+		GROUP BY ch.id, ch.connection_id, ch.channel`, user, conns, chans, after)
 	if err != nil {
 		return nil, err
 	}

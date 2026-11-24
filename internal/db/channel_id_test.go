@@ -288,6 +288,19 @@ func storeReads(t *testing.T, d *db.DB, user string) map[string]string {
 	add("ArchiveCandidates", fmt.Sprint(c1), err)
 	c2, err := d.ArchiveCandidates(ctx, 2, 1, []string{"c2"})
 	add("ArchiveCandidates c2", fmt.Sprint(c2), err)
+	s1, err := d.Seen(ctx, user)
+	add("Seen", fmt.Sprint(s1), err)
+	n1, err := d.ChannelNames(ctx, "c1")
+	add("ChannelNames c1", fmt.Sprint(n1), err)
+	n2, err := d.ChannelNames(ctx, "c2")
+	add("ChannelNames c2", fmt.Sprint(n2), err)
+	mi, err := d.Missed(ctx, user, []db.MissedEntry{{Connection: "c1", Channel: "#a", After: 0},
+		{Connection: "c2", Channel: "#a", After: 0}, {Connection: "c1", Channel: "#b", After: 20}})
+	add("Missed", fmt.Sprint(mi), err)
+	uc, err := d.UserCounts(ctx, user)
+	add("UserCounts", fmt.Sprint(uc), err)
+	cc, err := d.ConnectionCounts(ctx, "c1")
+	add("ConnectionCounts c1", fmt.Sprint(cc), err)
 	return out
 }
 
@@ -311,5 +324,16 @@ func TestReadsIgnoreOldColumns(t *testing.T) {
 		if after[name] != v {
 			t.Errorf("%s reads the old columns:\nbefore %s\nafter  %s", name, v, after[name])
 		}
+	}
+}
+
+// Unread counts skip an entry whose conversation has no channels row and
+// count the others.
+func TestMissedUnknownChannel(t *testing.T) {
+	d := testenv.Postgres(t)
+	user := readsFixture(t, d)
+	got, err := d.Missed(ctx, user, []db.MissedEntry{{Connection: "c1", Channel: "#b", After: 0}, {Connection: "c1", Channel: "#none", After: 0}})
+	if err != nil || len(got) != 1 || len(got["c1"]) != 1 || got["c1"]["#b"].Messages != 8 {
+		t.Errorf("Missed = %v, %v; want c1 #b's 8 only", got, err)
 	}
 }
