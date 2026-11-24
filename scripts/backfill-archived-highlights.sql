@@ -1,3 +1,6 @@
+-- Written for the schema before 0011 (connection_id, user_id and channel
+-- on logs and log_archives): already run in production, kept as a record.
+--
 -- One-off, after migration 5 is deployed: copy into highlights the
 -- archive's highlights, and any in logs that the old logger wrote after
 -- the migration's own copy (until the new logger replaced it). It reads

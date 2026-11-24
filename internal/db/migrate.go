@@ -327,3 +327,46 @@ func lockConflict(err error) bool {
 	var pgErr *pgconn.PgError
 	return errors.As(err, &pgErr) && (pgErr.Code == "55P03" || pgErr.Code == "40P01") // lock_not_available, deadlock_detected
 }
+
+// waitMigratedPoll is how often WaitMigrated looks again.
+const waitMigratedPoll = 2 * time.Second
+
+// WaitMigrated returns once schema_migrations holds every embedded
+// migration, looking every 2 seconds (a line to logf, if set, each time it
+// waits), or with ctx's error when ctx ends first. lierc ingest calls it
+// before it starts: the playbook restarts lierc-api, which migrates, and
+// lierc-ingest right after, without waiting for the migration to finish.
+func (d *DB) WaitMigrated(ctx context.Context, logf func(string, ...any)) error {
+	sub, err := fs.Sub(embedded, "migrations")
+	if err != nil {
+		return err
+	}
+	ms, err := loadMigrations(sub)
+	if err != nil {
+		return err
+	}
+	want := make([]int, len(ms))
+	for i, m := range ms {
+		want[i] = m.version
+	}
+	for {
+		var missing int
+		// no schema_migrations yet (42P01): nothing applied
+		err := d.Pool.QueryRow(ctx, `SELECT count(*) FROM unnest($1::int[]) v
+			WHERE v NOT IN (SELECT version FROM schema_migrations)`, want).Scan(&missing)
+		switch {
+		case err == nil && missing == 0:
+			return nil
+		case logf == nil, ctx.Err() != nil:
+		case err != nil && !isCode(err, "42P01"):
+			logf("waiting for the schema: %v", err)
+		default:
+			logf("waiting for lierc-api to apply the migrations")
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(waitMigratedPoll):
+		}
+	}
+}

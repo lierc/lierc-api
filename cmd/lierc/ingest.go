@@ -36,6 +36,13 @@ func runIngest(ctx context.Context, args []string, getenv func(string) string, s
 	}
 	defer d.Close()
 
+	// lierc-api migrates the schema; this image's ingest writes the
+	// migrated one, so it waits for it (the playbook starts both at once)
+	if err := d.WaitMigrated(ctx, logger.Printf); err != nil {
+		logger.Print("stopped while waiting for the schema")
+		return 0
+	}
+
 	svc, err := logservice.New(getenv, d, logservice.Options{})
 	if err != nil {
 		logger.Printf("ingest: %v", err)

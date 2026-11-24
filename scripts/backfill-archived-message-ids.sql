@@ -1,3 +1,6 @@
+-- Written for the schema before 0011 (connection_id, user_id and channel
+-- on logs and log_archives): already run in production, kept as a record.
+--
 -- One-off, after migration 0007/0008 are deployed: map in message_ids the
 -- PRIVMSGs and NOTICEs with a msgid in archive blocks from the last 90
 -- days, archived before message_ids existed, so a reply to one of them

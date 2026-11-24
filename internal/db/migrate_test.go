@@ -379,3 +379,36 @@ $$;`)})
 		t.Fatal(err)
 	}
 }
+
+// WaitMigrated waits until every embedded migration is applied: lierc
+// ingest calls it, so a new ingest never writes to a schema lierc-api
+// hasn't migrated yet.
+func TestWaitMigrated(t *testing.T) {
+	d := testenv.EmptyPostgres(t)
+	if err := d.Migrate(ctx, db.MigrateOptions{FS: migrationsUpTo(t, 9)}); err != nil {
+		t.Fatal(err)
+	}
+	short, cancel := context.WithTimeout(ctx, 300*time.Millisecond)
+	defer cancel()
+	if err := d.WaitMigrated(short, nil); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("WaitMigrated before 0010 = %v, want the deadline", err)
+	}
+	done := make(chan error, 1)
+	go func() {
+		wctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+		defer cancel()
+		done <- d.WaitMigrated(wctx, t.Logf)
+	}()
+	time.Sleep(100 * time.Millisecond)
+	if err := d.Migrate(ctx, db.MigrateOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Errorf("WaitMigrated = %v", err)
+		}
+	case <-time.After(3 * time.Second):
+		t.Error("WaitMigrated still waiting 3s after the migrations")
+	}
+}
