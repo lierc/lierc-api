@@ -62,6 +62,7 @@ func TestSetSeenRoute(t *testing.T) {
 	e := setup(t)
 	a, b := testenv.AddUser(t, e.db, "alice"), testenv.AddUser(t, e.db, "bob")
 	testenv.AddConnection(t, e.db, "c1", a, "{}")
+	testenv.ChannelID(t, e.db, "c1", "#foo") // something was logged there
 	e.sendWant("POST", "/connection/c1/channel/%23Foo/seen", a, " 42 ", 204, "")
 	if v := e.row(`SELECT channel || ' ' || message_id FROM seen_markers WHERE user_id=$1`, a); v != "#foo 42" {
 		t.Errorf("seen = %s", v)

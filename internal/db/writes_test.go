@@ -37,6 +37,7 @@ func TestSetSeen(t *testing.T) {
 	ctx := context.Background()
 	a := testenv.AddUser(t, d, "alice")
 	testenv.AddConnection(t, d, "c1", a, "{}")
+	testenv.ChannelID(t, d, "c1", "#a") // something was logged there
 	if err := d.SetSeen(ctx, a, "c1", "#a", 5); err != nil {
 		t.Fatal(err)
 	}

@@ -122,8 +122,8 @@ moved AS (
 	WHERE id IN (SELECT id FROM below) AND (SELECT count(*) FROM below) = $4::int
 	RETURNING id, user_id, time, message, highlight
 )
-INSERT INTO log_archives (connection_id, user_id, channel, first_id, last_id, min_time, max_time, count, messages)
-SELECT $1, min(user_id), $2, min(id), max(id), min(time), max(time), count(*),
+INSERT INTO log_archives (channel_id, connection_id, user_id, channel, first_id, last_id, min_time, max_time, count, messages)
+SELECT (SELECT id FROM channels WHERE connection_id = $1 AND channel = $2), $1, min(user_id), $2, min(id), max(id), min(time), max(time), count(*),
 	json_agg(json_build_object(
 		'id', id,
 		'time', floor(extract(epoch from time))::bigint,

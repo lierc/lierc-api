@@ -41,14 +41,21 @@ func (d *DB) InsertLog(ctx context.Context, e LogEntry, channels []string, highl
 	}
 	defer tx.Rollback(ctx)
 
-	// one row per channel, in order, for the connection's owner: none (no
-	// row from connections) when the connection doesn't exist
+	// one row per channel, in order, under its channels row (made the
+	// first time; a gone connection fails its foreign key, ErrGone), for
+	// the connection's owner: none (no row from connections) when the
+	// connection doesn't exist. The old columns (user_id, connection_id,
+	// channel) are written too until 0011, for the image before 0010.
 	logged := make([]loggedRow, 0, len(channels))
 	for _, channel := range channels {
+		chID, err := channelID(ctx, tx, e.Connection, channel)
+		if err != nil {
+			return 0, gone(err)
+		}
 		var id int64
-		err := queryRow(ctx, tx, psql.Insert("logs").
-			Columns("user_id", "connection_id", "channel", "command", "message", "time", "self", "highlight").
-			Select(psql.Select("user_id", "id").
+		err = queryRow(ctx, tx, psql.Insert("logs").
+			Columns("channel_id", "user_id", "connection_id", "channel", "command", "message", "time", "self", "highlight").
+			Select(psql.Select().Column("?::integer", chID).Columns("user_id", "id").
 				Column("?::text", channel).Column("?::text", e.Command).Column("?::jsonb", e.Message).
 				Column("to_timestamp(?)", e.Time).Column("?::boolean", e.Self).Column("?::boolean", highlight).
 				From("connections").Where(sq.Eq{"id": e.Connection})).
@@ -59,7 +66,7 @@ func (d *DB) InsertLog(ctx context.Context, e LogEntry, channels []string, highl
 		if err != nil {
 			return 0, gone(err)
 		}
-		logged = append(logged, loggedRow{ID: id, Channel: channel})
+		logged = append(logged, loggedRow{ID: id, Channel: channel, ChannelID: chID})
 	}
 
 	if highlight {
@@ -67,7 +74,7 @@ func (d *DB) InsertLog(ctx context.Context, e LogEntry, channels []string, highl
 		for i, l := range logged {
 			ids[i] = l.ID
 		}
-		cols := []string{"id", "user_id", "connection_id", "channel", "time", "message", "self"}
+		cols := []string{"id", "channel_id", "user_id", "connection_id", "channel", "time", "message", "self"}
 		if _, err := exec(ctx, tx, psql.Insert("highlights").Columns(cols...).
 			Select(psql.Select(cols...).From("logs").Where(sq.Eq{"id": ids}))); err != nil {
 			return 0, gone(err)
@@ -82,10 +89,12 @@ func (d *DB) InsertLog(ctx context.Context, e LogEntry, channels []string, highl
 	return logged[len(logged)-1].ID, nil
 }
 
-// loggedRow is a logs row InsertLog stored: its id and channel.
+// loggedRow is a logs row InsertLog stored: its id, channel and the
+// channel's channels row.
 type loggedRow struct {
-	ID      int64
-	Channel string
+	ID        int64
+	Channel   string
+	ChannelID int32
 }
 
 // mapMessage maps a stored PRIVMSG or NOTICE that has a msgid in
@@ -118,13 +127,9 @@ func mapMessage(ctx context.Context, tx pgx.Tx, e LogEntry, logged []loggedRow) 
 		reply, root = &replyTo, &r
 	}
 	for _, l := range logged {
-		channel, err := channelID(ctx, tx, e.Connection, l.Channel)
-		if err != nil {
-			return err
-		}
 		if _, err := exec(ctx, tx, psql.Insert("message_ids").
 			Columns("channel_id", "msgid", "log_id", "reply_to", "thread_root").
-			Values(channel, msgid, l.ID, reply, root)); err != nil {
+			Values(l.ChannelID, msgid, l.ID, reply, root)); err != nil {
 			return err
 		}
 	}
@@ -132,15 +137,21 @@ func mapMessage(ctx context.Context, tx pgx.Tx, e LogEntry, logged []loggedRow) 
 }
 
 // channelID is the channels row of channel on conn, made the first time.
-// A row another transaction made meanwhile is found too: ON CONFLICT waits
-// for it, and the SELECT after it is a new statement, so it sees it.
+// It looks first and inserts only a missing row: ON CONFLICT DO NOTHING
+// would spend a channels id (int4) on every line. A row another
+// transaction makes meanwhile is found too: ON CONFLICT waits for it, and
+// the SELECT after it is a new statement, so it sees it.
 func channelID(ctx context.Context, tx pgx.Tx, conn, channel string) (int32, error) {
 	var id int32
-	err := queryRow(ctx, tx, psql.Insert("channels").Columns("connection_id", "channel").Values(conn, channel).
+	find := psql.Select("id").From("channels").Where(sq.Eq{"connection_id": conn, "channel": channel})
+	err := queryRow(ctx, tx, find).Scan(&id)
+	if !errors.Is(err, pgx.ErrNoRows) {
+		return id, err
+	}
+	err = queryRow(ctx, tx, psql.Insert("channels").Columns("connection_id", "channel").Values(conn, channel).
 		Suffix("ON CONFLICT DO NOTHING RETURNING id")).Scan(&id)
 	if errors.Is(err, pgx.ErrNoRows) {
-		err = queryRow(ctx, tx, psql.Select("id").From("channels").
-			Where(sq.Eq{"connection_id": conn, "channel": channel})).Scan(&id)
+		err = queryRow(ctx, tx, find).Scan(&id)
 	}
 	return id, err
 }
