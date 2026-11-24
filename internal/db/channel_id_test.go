@@ -3,6 +3,8 @@ package db_test
 import (
 	"errors"
 	"fmt"
+	"os"
+	"regexp"
 	"slices"
 	"strings"
 	"testing"
@@ -534,5 +536,23 @@ func TestPerUserReadsPlans(t *testing.T) {
 		if strings.Contains(plan, "Seq Scan on "+table) || !strings.Contains(plan, idx) || ms == 0 || ms > 100 {
 			t.Errorf("%s (%.1f ms) isn't a probe of %s per channel:\n%s", name, ms, idx, plan)
 		}
+	}
+}
+
+// 0011 runs after step 1's logger, which takes channels first (it looks
+// the conversation up before inserting into logs), then logs, highlights
+// and message_ids: 0011 locks them in that order, so a line in flight
+// can't deadlock with it.
+func TestMigration11LocksInLoggerOrder(t *testing.T) {
+	sql, err := os.ReadFile("migrations/0011_drop_old_conversation_columns.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := regexp.MustCompile(`(?m)^LOCK TABLE ([^;]+) IN ACCESS EXCLUSIVE MODE;`).FindSubmatch(sql)
+	if m == nil {
+		t.Fatal("no LOCK TABLE")
+	}
+	if got, want := string(m[1]), "channels, logs, highlights, message_ids, log_archives, seen_markers"; got != want {
+		t.Errorf("0011 locks %s, want %s", got, want)
 	}
 }

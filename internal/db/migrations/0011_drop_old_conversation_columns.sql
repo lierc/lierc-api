@@ -5,11 +5,14 @@
 -- primary key among them); a row reaches its connection through channels
 -- and its owner through connections. Irreversible.
 
--- Every lock up front, in the order the logger before this one takes them,
--- as 0010 does. Dropping the old foreign keys also locks connections and
--- users; nothing else holds those during the deploy (lierc-api is
--- restarting, ingest is stopped).
-LOCK TABLE logs, highlights, channels, message_ids, log_archives, seen_markers IN ACCESS EXCLUSIVE MODE;
+-- Every lock up front, in the order the logger before this one (step 1's)
+-- takes them: channels (it looks the conversation up first), then logs,
+-- highlights and message_ids; then the other two. A lock taken later, in
+-- another order, could deadlock with a logger insert in flight (ingest is
+-- stopped for the deploy; this is the guard). Dropping the old foreign
+-- keys also locks connections and users; nothing else holds those during
+-- the deploy (lierc-api is restarting, ingest is stopped).
+LOCK TABLE channels, logs, highlights, message_ids, log_archives, seen_markers IN ACCESS EXCLUSIVE MODE;
 
 -- Rows the image before 0010 wrote after it (a rollback, then this): their
 -- channel_id is empty, and their conversation may have no channels row.
