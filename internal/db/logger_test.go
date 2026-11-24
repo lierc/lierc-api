@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/lierc/lierc-api/internal/db"
 	"github.com/lierc/lierc-api/internal/testenv"
 )
@@ -330,7 +331,7 @@ func TestInsertLogMessageIDsGoneConnection(t *testing.T) {
 	if _, err := d.InsertLog(context.Background(), e, []string{"#a"}, false); !errors.Is(err, db.ErrGone) {
 		t.Errorf("InsertLog: %v, want ErrGone", err)
 	}
-	for _, table := range []string{"channels", "message_ids", "replies"} {
+	for _, table := range []string{"channels", "message_ids"} {
 		if n := count(t, d, table); n != 0 {
 			t.Errorf("%d %s rows, want 0", n, table)
 		}
@@ -354,11 +355,12 @@ func TestInsertLogAtomic(t *testing.T) {
 	}
 }
 
-// repliesRows is replies as "connection msgid reply_to thread_root" lines.
+// repliesRows is message_ids' replies as "connection channel msgid" ->
+// "reply_to thread_root".
 func repliesRows(t *testing.T, d *db.DB) map[string]string {
 	t.Helper()
-	rows, err := d.Pool.Query(context.Background(), `SELECT c.connection_id || ' ' || r.msgid, r.reply_to || ' ' || r.thread_root
-		FROM replies r JOIN channels c ON c.id = r.channel_id`)
+	rows, err := d.Pool.Query(context.Background(), `SELECT c.connection_id || ' ' || c.channel || ' ' || m.msgid, m.reply_to || ' ' || m.thread_root
+		FROM message_ids m JOIN channels c ON c.id = m.channel_id WHERE m.reply_to IS NOT NULL`)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -393,20 +395,66 @@ func TestInsertLogReplies(t *testing.T) {
 	say("c1", "e1", `,"+reply":""`)
 	say("c1", "s1", `,"+reply":"s1"`)
 	say("c2", "b1", `,"+reply":"r1"`)
+	// a reply logged under two channels: both its rows carry the link
+	logMsg(t, d, "c1", "PRIVMSG", `{"Command":"PRIVMSG","Params":["#a","x"],"Tags":{"msgid":"m2c","+reply":"r2"}}`, "#a", "#b")
 	// a reaction carries +reply too, but it's a TAGMSG: no row
 	logMsg(t, d, "c1", "TAGMSG", `{"Command":"TAGMSG","Params":["#a"],"Tags":{"msgid":"t1","+reply":"o","+draft/react":"👍"}}`, "#a")
 
 	want := map[string]string{
-		"c1 r1": "o o",
-		"c1 r2": "r1 o",
-		"c1 r3": "r2 o",
-		"c1 r4": "x x",
-		"c1 u1": "unknown unknown",
-		"c1 s1": "s1 s1",
-		"c2 b1": "r1 r1", // roots don't cross connections
+		"c1 #a r1":  "o o",
+		"c1 #a r2":  "r1 o",
+		"c1 #a r3":  "r2 o",
+		"c1 #a r4":  "x x",
+		"c1 #a u1":  "unknown unknown",
+		"c1 #a s1":  "s1 s1",
+		"c2 #a b1":  "r1 r1", // roots don't cross connections
+		"c1 #a m2c": "r2 o",
+		"c1 #b m2c": "r2 o",
 	}
 	got := repliesRows(t, d)
 	if fmt.Sprint(got) != fmt.Sprint(want) {
 		t.Errorf("replies:\n%v\nwant:\n%v", got, want)
+	}
+}
+
+// Migration 0009 moves each replies row onto its message_ids row, drops
+// replies (a row with no message_ids row goes with it), and indexes the
+// roots.
+func TestMigration9MovesReplies(t *testing.T) {
+	d := testenv.EmptyPostgres(t)
+	if err := d.Migrate(ctx, db.MigrateOptions{FS: migrationsUpTo(t, 8)}); err != nil {
+		t.Fatal(err)
+	}
+	testenv.EnsureConnection(t, d, "c1", "u1")
+	exec(t, d, `INSERT INTO channels (connection_id, channel) VALUES ('c1', '#a')`)
+	exec(t, d, `INSERT INTO message_ids (channel_id, msgid, log_id) SELECT id, 'r1', 10 FROM channels`)
+	exec(t, d, `INSERT INTO message_ids (channel_id, msgid, log_id) SELECT id, 'p', 11 FROM channels`)
+	exec(t, d, `INSERT INTO replies (channel_id, msgid, reply_to, thread_root) SELECT id, 'r1', 'o', 'o' FROM channels`)
+	exec(t, d, `INSERT INTO replies (channel_id, msgid, reply_to, thread_root) SELECT id, 'zz', 'o', 'o' FROM channels`)
+	if err := d.Migrate(ctx, db.MigrateOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]string{"c1 #a r1": "o o"}
+	if got := repliesRows(t, d); fmt.Sprint(got) != fmt.Sprint(want) {
+		t.Errorf("replies on message_ids: %v, want %v", got, want)
+	}
+	var gone bool
+	d.Pool.QueryRow(ctx, `SELECT to_regclass('replies') IS NULL`).Scan(&gone)
+	var idx int
+	d.Pool.QueryRow(ctx, `SELECT count(*) FROM pg_indexes WHERE indexname = 'message_ids_thread_root_idx'`).Scan(&idx)
+	if !gone || idx != 1 {
+		t.Errorf("replies dropped %v, thread root index %d", gone, idx)
+	}
+}
+
+// reply_to and thread_root are set together or not at all.
+func TestMessageIDsReplyCheck(t *testing.T) {
+	d := testenv.Postgres(t)
+	testenv.EnsureConnection(t, d, "c1", "u1")
+	exec(t, d, `INSERT INTO channels (connection_id, channel) VALUES ('c1', '#a')`)
+	_, err := d.Pool.Exec(ctx, `INSERT INTO message_ids (channel_id, msgid, log_id, reply_to) SELECT id, 'x', 1, 'o' FROM channels`)
+	var pe *pgconn.PgError
+	if !errors.As(err, &pe) || pe.Code != "23514" {
+		t.Errorf("half a reply link: %v, want a CHECK violation", err)
 	}
 }

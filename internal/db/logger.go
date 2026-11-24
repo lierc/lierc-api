@@ -25,8 +25,9 @@ type LogEntry struct {
 // a failure leaves nothing behind for NSQ's retry to duplicate:
 //   - a highlight also goes in highlights, with the same id;
 //   - a PRIVMSG or NOTICE with a msgid is mapped in message_ids under each
-//     channel it was stored in, and a reply goes in replies with its
-//     thread's root (mapMessage). Archiving leaves both tables alone.
+//     channel it was stored in; a reply's rows also carry what it answers
+//     and its thread's root (mapMessage). Archiving leaves message_ids
+//     alone.
 //
 // ErrGone when the connection doesn't exist or is deleted meanwhile:
 // nothing was stored. With no channels it stores nothing and returns 0.
@@ -88,9 +89,9 @@ type loggedRow struct {
 }
 
 // mapMessage maps a stored PRIVMSG or NOTICE that has a msgid in
-// message_ids, under each channel it was stored in (logged), and records
-// it in replies if it's a reply (+reply, else +draft/reply), with its
-// thread's root. Anything else is left alone.
+// message_ids, under each channel it was stored in (logged); a reply
+// (+reply, else +draft/reply) carries what it answers and its thread's
+// root on those rows. Anything else is left alone.
 func mapMessage(ctx context.Context, tx pgx.Tx, e LogEntry, logged []loggedRow) error {
 	if e.Command != "PRIVMSG" && e.Command != "NOTICE" {
 		return nil
@@ -107,27 +108,24 @@ func mapMessage(ctx context.Context, tx pgx.Tx, e LogEntry, logged []loggedRow) 
 	if replyTo == "" {
 		replyTo = m.Tags["+draft/reply"]
 	}
-	var root string
+	// a reply's links, on its own rows; NULL for anything else
+	var reply, root *string
 	if replyTo != "" {
-		var err error
-		if root, err = threadRoot(ctx, tx, e.Connection, replyTo); err != nil {
+		r, err := threadRoot(ctx, tx, e.Connection, replyTo)
+		if err != nil {
 			return err
 		}
+		reply, root = &replyTo, &r
 	}
 	for _, l := range logged {
 		channel, err := channelID(ctx, tx, e.Connection, l.Channel)
 		if err != nil {
 			return err
 		}
-		if _, err := exec(ctx, tx, psql.Insert("message_ids").Columns("channel_id", "msgid", "log_id").
-			Values(channel, msgid, l.ID)); err != nil {
+		if _, err := exec(ctx, tx, psql.Insert("message_ids").
+			Columns("channel_id", "msgid", "log_id", "reply_to", "thread_root").
+			Values(channel, msgid, l.ID, reply, root)); err != nil {
 			return err
-		}
-		if replyTo != "" {
-			if _, err := exec(ctx, tx, psql.Insert("replies").Columns("channel_id", "msgid", "reply_to", "thread_root").
-				Values(channel, msgid, replyTo, root)); err != nil {
-				return err
-			}
 		}
 	}
 	return nil
@@ -152,10 +150,11 @@ func channelID(ctx context.Context, tx pgx.Tx, conn, channel string) (int32, err
 // before: the logger stores one line at a time), else replyTo itself.
 func threadRoot(ctx context.Context, tx pgx.Tx, conn, replyTo string) (string, error) {
 	var root string
-	err := queryRow(ctx, tx, psql.Select("r.thread_root").From("replies AS r").
-		Join("channels AS c ON c.id = r.channel_id").
-		Where(sq.Eq{"r.msgid": replyTo, "c.connection_id": conn}).
-		OrderBy("r.channel_id").Limit(1)).Scan(&root)
+	err := queryRow(ctx, tx, psql.Select("m.thread_root").From("message_ids AS m").
+		Join("channels AS c ON c.id = m.channel_id").
+		Where(sq.Eq{"m.msgid": replyTo, "c.connection_id": conn}).
+		Where("m.thread_root IS NOT NULL").
+		OrderBy("m.log_id").Limit(1)).Scan(&root)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return replyTo, nil
 	}
