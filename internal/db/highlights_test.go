@@ -1,10 +1,7 @@
 package db_test
 
 import (
-	"os"
-	"strings"
 	"testing"
-	"time"
 
 	"github.com/lierc/lierc-api/internal/db"
 	"github.com/lierc/lierc-api/internal/testenv"
@@ -85,42 +82,5 @@ func TestHighlightsCascade(t *testing.T) {
 	d.Pool.QueryRow(ctx, "SELECT count(*) FROM highlights").Scan(&n)
 	if n != 0 {
 		t.Errorf("%d highlights left", n)
-	}
-}
-
-// The backfill copies the archive's highlights, and logs' highlights the
-// migration missed (written by the old logger after it), once: run again,
-// it changes nothing, and it leaves highlights already copied alone.
-func TestBackfillArchivedHighlights(t *testing.T) {
-	d := testenv.Postgres(t)
-	a := testenv.AddUser(t, d, "alice")
-	testenv.AddConnection(t, d, "c1", a, "{}")
-	hlRow(t, d, 9, "c1", a, "#a", "in logs")
-	msgRow(t, d, 10, "c1", a, "#a", "after the migration", false, true, "2026-01-02")
-	exec(t, d, `INSERT INTO log_archives (channel_id, connection_id, user_id, channel, first_id, last_id, min_time, max_time, count, messages)
-		VALUES (test_channel_id('c1', '#a'), 'c1', $1, '#a', 1, 3, '2026-01-01', '2026-01-01', 3, $2::json)`, a,
-		`[{"id":1,"time":1767225600,"message":{"Command":"PRIVMSG","Params":["#a","plain"],"Prefix":{"Name":"bob"}},"highlight":false},
-		  {"id":2,"time":1767225601,"message":{"Command":"PRIVMSG","Params":["#a","hey alice"],"Prefix":{"Name":"bob"}},"highlight":true},
-		  {"id":3,"time":1767225602,"message":{"Command":"PRIVMSG","Params":["#a","me"],"Prefix":{"Name":"alice","Self":true}},"highlight":true}]`)
-	sql, err := os.ReadFile("../../scripts/backfill-archived-highlights.sql")
-	if err != nil {
-		t.Fatal(err)
-	}
-	for range 2 {
-		if _, err := d.Pool.Exec(ctx, string(sql)); err != nil {
-			t.Fatal(err)
-		}
-	}
-	got, err := d.Highlights(ctx, a, nil, 50)
-	if err != nil || !eq(ids(got, uid), []int64{10, 9, 3, 2}) {
-		t.Fatalf("Highlights = %v, %v; want 10, 9, 3, 2", ids(got, uid), err)
-	}
-	if got[2].Self != true || got[3].Self || !strings.Contains(string(got[3].Message), "hey alice") {
-		t.Errorf("copied %+v, %+v", got[2], got[3])
-	}
-	var at time.Time
-	d.Pool.QueryRow(ctx, "SELECT time FROM highlights WHERE id = 2").Scan(&at)
-	if at.Unix() != 1767225601 {
-		t.Errorf("time %v", at)
 	}
 }

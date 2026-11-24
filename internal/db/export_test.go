@@ -24,3 +24,17 @@ func BlockHoldingSQL(ch, id int32) (string, []any, error) {
 func MessageIDsLookupSQL(conn, msgid string) (string, []any, error) {
 	return messageIDsLookup(conn, msgid).ToSql()
 }
+
+// LatestMessageIDSQL, LogSinceSQL and HighlightsSQL are the per-user
+// reads' SQL, for EXPLAIN in tests.
+func LatestMessageIDSQL(user string) (string, []any, error) {
+	return latestMessageIDQuery(user).ToSql()
+}
+
+func LogSinceSQL(user string, after int32) (string, []any, error) {
+	return logSinceQuery(user, after).ToSql()
+}
+
+func HighlightsSQL(user string, before *int32, limit int) (string, []any, error) {
+	return highlightsQuery(user, before, limit).ToSql()
+}

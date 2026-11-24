@@ -142,16 +142,21 @@ func (d *DB) LookupOwner(ctx context.Context, id string) (string, bool, error) {
 	return user, true, nil
 }
 
-// LatestMessageID is the id of user's newest log row, or 0 if there is none.
-// It takes the max for each highlight value, so each is one probe of
-// logs_user_id_highlight_idx (user_id, highlight, id DESC); a plain max(id)
-// for the user can instead scan the primary key back through every newer row.
+// LatestMessageID is the id of user's newest log row, or 0 if there is none:
+// the newest of each of the user's channels, one probe of
+// logs_channel_id_id_idx each. (A plain max(id) over the user's channels
+// can instead scan the primary key back through every newer row.)
 func (d *DB) LatestMessageID(ctx context.Context, user string) (int64, error) {
 	var id int64
-	err := d.Pool.QueryRow(ctx, `SELECT GREATEST(
-		COALESCE((SELECT max(id) FROM logs WHERE user_id=$1 AND highlight), 0),
-		COALESCE((SELECT max(id) FROM logs WHERE user_id=$1 AND NOT highlight), 0))`, user).Scan(&id)
+	err := queryRow(ctx, d.Pool, latestMessageIDQuery(user)).Scan(&id)
 	return id, err
+}
+
+func latestMessageIDQuery(user string) sq.Sqlizer {
+	return sq.Expr(`SELECT COALESCE(max(l.newest), 0)
+		FROM `+userChannels+`
+		CROSS JOIN LATERAL (SELECT max(id) AS newest FROM logs WHERE channel_id = ch.id) l
+		WHERE c.user_id = $1`, user)
 }
 
 func (d *DB) SaveLastLogin(ctx context.Context, user string) error {

@@ -38,30 +38,55 @@ const LogMax = 251
 // LogSince is user's messages with ids above after, oldest first, at most
 // LogMax of them.
 func (d *DB) LogSince(ctx context.Context, user string, after int32) ([]UserMessage, error) {
-	newest := userMessages(sub).Join("connections AS c ON c.id = l.connection_id").
-		Where(sq.Eq{"c.user_id": user}).Where(sq.Gt{"l.id": after}).
-		OrderBy("l.id DESC").Limit(LogMax)
-	rows, err := query(ctx, d.Pool, psql.Select("*").FromSelect(newest, "newest").OrderBy("id ASC"))
+	rows, err := query(ctx, d.Pool, logSinceQuery(user, after))
 	if err != nil {
 		return nil, err
 	}
 	return collect(rows, scanUserMessage)
 }
 
+// The per-user reads go channel by channel: the user's channels
+// (userChannels), each one's newest rows through its (channel_id, id DESC)
+// index, then one sort of at most channels × limit rows. As one
+// channel_id IN (...) ORDER BY id DESC LIMIT n, Postgres may read every
+// row the user has.
+const userChannels = `channels AS ch JOIN connections AS c ON c.id = ch.connection_id`
+
+func logSinceQuery(user string, after int32) sq.Sqlizer {
+	return sq.Expr(`SELECT * FROM (
+		SELECT l.id, l.message::text, ch.connection_id, l.self, l.highlight
+		FROM `+userChannels+`
+		CROSS JOIN LATERAL (
+			SELECT id, message, self, highlight FROM logs
+			WHERE channel_id = ch.id AND id > $2
+			ORDER BY id DESC LIMIT $3
+		) l
+		WHERE c.user_id = $1
+		ORDER BY l.id DESC LIMIT $3
+	) newest ORDER BY id ASC`, user, after, LogMax)
+}
+
 // Highlights is user's highlighted messages, newest first, below before
 // when it is set. They're read from highlights, not logs, so they're kept
 // when their log rows are archived.
 func (d *DB) Highlights(ctx context.Context, user string, before *int32, limit int) ([]UserMessage, error) {
-	q := psql.Select("l.id", "l.message::text", "l.connection_id", "l.self", "true").From("highlights AS l").
-		Where(sq.Eq{"l.user_id": user})
-	if before != nil {
-		q = q.Where(sq.Lt{"l.id": *before})
-	}
-	rows, err := query(ctx, d.Pool, q.OrderBy("l.id DESC").Suffix("LIMIT ?", limit))
+	rows, err := query(ctx, d.Pool, highlightsQuery(user, before, limit))
 	if err != nil {
 		return nil, err
 	}
 	return collect(rows, scanUserMessage)
+}
+
+func highlightsQuery(user string, before *int32, limit int) sq.Sqlizer {
+	return sq.Expr(`SELECT h.id, h.message::text, ch.connection_id, h.self, true
+		FROM `+userChannels+`
+		CROSS JOIN LATERAL (
+			SELECT id, message, self FROM highlights
+			WHERE channel_id = ch.id AND id < coalesce($2::int, 2147483647) -- no before: any
+			ORDER BY id DESC LIMIT $3
+		) h
+		WHERE c.user_id = $1
+		ORDER BY h.id DESC LIMIT $3`, user, before, limit)
 }
 
 // ChannelLogs is the newest limit messages of channel on conn, from log
@@ -283,12 +308,6 @@ func (d *DB) messages(ctx context.Context, sql string, args ...any) ([]Message, 
 		return nil, err
 	}
 	return collect(rows, scanMessage)
-}
-
-// userMessages selects a UserMessage's columns from log AS l, with b (psql,
-// or sub for a subquery).
-func userMessages(b sq.StatementBuilderType) sq.SelectBuilder {
-	return b.Select("l.id", "l.message::text", "l.connection_id", "l.self", "l.highlight").From("logs AS l")
 }
 
 func scanMessage(row pgx.CollectableRow) (Message, error) {

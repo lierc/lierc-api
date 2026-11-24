@@ -3,6 +3,7 @@ package db_test
 import (
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -301,6 +302,14 @@ func storeReads(t *testing.T, d *db.DB, user string) map[string]string {
 	add("UserCounts", fmt.Sprint(uc), err)
 	cc, err := d.ConnectionCounts(ctx, "c1")
 	add("ConnectionCounts c1", fmt.Sprint(cc), err)
+	li, err := d.LatestMessageID(ctx, user)
+	add("LatestMessageID", fmt.Sprint(li), err)
+	ls, err := d.LogSince(ctx, user, 3)
+	add("LogSince", ls, err)
+	h1, err := d.Highlights(ctx, user, nil, 50)
+	add("Highlights", h1, err)
+	h2, err := d.Highlights(ctx, user, &newest, 2)
+	add("Highlights before", h2, err)
 	return out
 }
 
@@ -335,5 +344,149 @@ func TestMissedUnknownChannel(t *testing.T) {
 	got, err := d.Missed(ctx, user, []db.MissedEntry{{Connection: "c1", Channel: "#b", After: 0}, {Connection: "c1", Channel: "#none", After: 0}})
 	if err != nil || len(got) != 1 || len(got["c1"]) != 1 || got["c1"]["#b"].Messages != 8 {
 		t.Errorf("Missed = %v, %v; want c1 #b's 8 only", got, err)
+	}
+}
+
+// bruteIDs is the ids a plain query over every row of user's gives, newest
+// first: the answer the per-channel reads must match.
+func bruteIDs(t *testing.T, d *db.DB, table, user, where string, limit int, args ...any) []int64 {
+	t.Helper()
+	rows, err := d.Pool.Query(ctx, `SELECT x.id FROM `+table+` x JOIN channels ch ON ch.id = x.channel_id
+		JOIN connections c ON c.id = ch.connection_id WHERE c.user_id = $1 AND `+where+`
+		ORDER BY x.id DESC LIMIT `+fmt.Sprint(limit), append([]any{user}, args...)...)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out []int64
+	for rows.Next() {
+		var id int64
+		rows.Scan(&id)
+		out = append(out, id)
+	}
+	return out
+}
+
+// perUserFixture: alice's three channels on two connections and bob's
+// one, with interleaved ids, 300 rows each (more than LogMax for alice), a
+// third of them highlights.
+func perUserFixture(t *testing.T, d *db.DB) (alice string) {
+	t.Helper()
+	a, b := testenv.AddUser(t, d, "alice"), testenv.AddUser(t, d, "bob")
+	testenv.AddConnection(t, d, "c1", a, "{}")
+	testenv.AddConnection(t, d, "c2", a, "{}")
+	testenv.AddConnection(t, d, "c3", b, "{}")
+	exec(t, d, `INSERT INTO logs (id, channel_id, connection_id, user_id, channel, command, highlight, time, message)
+		SELECT g * 4 + k, test_channel_id(conn, chan), conn, owner, chan, 'PRIVMSG', g % 3 = 0, now(), '{}'
+		FROM generate_series(1, 300) g,
+		(VALUES (0, 'c1', '#a'), (1, 'c2', '#a'), (2, 'c1', '#b'), (3, 'c3', '#a')) v(k, conn, chan)
+		JOIN connections o ON o.id = v.conn, LATERAL (SELECT o.user_id AS owner) w`)
+	exec(t, d, `INSERT INTO highlights (id, channel_id, connection_id, user_id, channel, time, message, self)
+		SELECT id, channel_id, connection_id, user_id, channel, time, message, self FROM logs WHERE highlight`)
+	return a
+}
+
+// The per-channel reads answer what a plain query over all the user's rows
+// would.
+func TestPerUserReadsMatchBruteForce(t *testing.T) {
+	d := testenv.Postgres(t)
+	a := perUserFixture(t, d)
+	latest, err := d.LatestMessageID(ctx, a)
+	if want := bruteIDs(t, d, "logs", a, "true", 1); err != nil || latest != want[0] {
+		t.Errorf("LatestMessageID = %d, %v; want %d", latest, err, want[0])
+	}
+	for _, after := range []int32{0, 900, 1190} {
+		got, err := d.LogSince(ctx, a, after)
+		if err != nil {
+			t.Fatal(err)
+		}
+		want := bruteIDs(t, d, "logs", a, "x.id > $2", db.LogMax, after)
+		slices.Reverse(want)
+		if !eq(ids(got, uid), want) {
+			t.Errorf("LogSince(%d): %d ids %v..., want %d %v...", after, len(got), ids(got, uid)[:min(3, len(got))], len(want), want[:min(3, len(want))])
+		}
+	}
+	for _, limit := range []int{1, 5, 1000} {
+		for _, before := range []*int32{nil, ptr(int32(600)), ptr(int32(9))} {
+			got, err := d.Highlights(ctx, a, before, limit)
+			if err != nil {
+				t.Fatal(err)
+			}
+			where, args := "true", []any{}
+			if before != nil {
+				where, args = "x.id < $2", []any{*before}
+			}
+			if want := bruteIDs(t, d, "highlights", a, where, limit, args...); !eq(ids(got, uid), want) {
+				t.Errorf("Highlights(%v, %d) = %v, want %v", before, limit, ids(got, uid), want)
+			}
+		}
+	}
+	// each row with its own connection
+	got, _ := d.LogSince(ctx, a, 1190)
+	for _, m := range got {
+		if want := []string{"c1", "c2", "c1"}[m.MessageId%4]; m.ConnectionId != want {
+			t.Errorf("message %d on %s, want %s", m.MessageId, m.ConnectionId, want)
+		}
+	}
+}
+
+func ptr[T any](v T) *T { return &v }
+
+// explain is EXPLAIN (ANALYZE, COSTS OFF) of sql, as text.
+func explain(t *testing.T, d *db.DB, sql string, args ...any) string {
+	t.Helper()
+	rows, err := d.Pool.Query(ctx, "EXPLAIN (ANALYZE, COSTS OFF) "+sql, args...)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	var plan string
+	for rows.Next() {
+		var line string
+		rows.Scan(&line)
+		plan += line + "\n"
+	}
+	return plan
+}
+
+// The per-user reads probe each channel's index, with far more channels
+// than anyone has (500; production's most is 40), not read every row the
+// user has.
+func TestPerUserReadsPlans(t *testing.T) {
+	d := testenv.Postgres(t)
+	a, b := testenv.AddUser(t, d, "alice"), testenv.AddUser(t, d, "bob")
+	testenv.AddConnection(t, d, "c1", a, "{}")
+	testenv.AddConnection(t, d, "c2", b, "{}")
+	for _, conn := range []string{"c1", "c2"} {
+		exec(t, d, `INSERT INTO logs (channel_id, connection_id, user_id, channel, command, highlight, time, message)
+			SELECT test_channel_id($1, '#c' || ch), $1, (SELECT user_id FROM connections WHERE id = $1), '#c' || ch,
+				'PRIVMSG', n % 8 = 0, now(), '{}'
+			FROM generate_series(1, 40) n, generate_series(1, 500) ch`, conn)
+	}
+	exec(t, d, `INSERT INTO highlights (id, channel_id, connection_id, user_id, channel, time, message, self)
+		SELECT id, channel_id, connection_id, user_id, channel, time, message, self FROM logs WHERE highlight`)
+	exec(t, d, `ANALYZE`)
+	before := int32(30000)
+	for name, q := range map[string]func() (string, []any, error){
+		"LatestMessageID":   func() (string, []any, error) { return db.LatestMessageIDSQL(a) },
+		"LogSince":          func() (string, []any, error) { return db.LogSinceSQL(a, 100) },
+		"Highlights":        func() (string, []any, error) { return db.HighlightsSQL(a, nil, 50) },
+		"Highlights before": func() (string, []any, error) { return db.HighlightsSQL(a, &before, 50) },
+	} {
+		sql, args, err := q()
+		if err != nil {
+			t.Fatal(err)
+		}
+		plan := explain(t, d, sql, args...)
+		table, idx := "logs", "logs_channel_id_id_idx"
+		if strings.HasPrefix(name, "Highlights") {
+			table, idx = "highlights", "highlights_channel_id_id_idx"
+		}
+		var ms float64
+		if i := strings.Index(plan, "Execution Time: "); i >= 0 {
+			fmt.Sscanf(plan[i:], "Execution Time: %f", &ms)
+		}
+		if strings.Contains(plan, "Seq Scan on "+table) || !strings.Contains(plan, idx) || ms == 0 || ms > 100 {
+			t.Errorf("%s (%.1f ms) isn't a probe of %s per channel:\n%s", name, ms, idx, plan)
+		}
 	}
 }
