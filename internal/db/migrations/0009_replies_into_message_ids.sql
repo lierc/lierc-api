@@ -4,6 +4,13 @@
 -- NULL, almost free, on the rows that aren't replies. A replies row with no
 -- message_ids row (there shouldn't be one) goes with the table.
 -- Adding nullable columns without a default doesn't rewrite the table.
+
+-- Both locks up front, in the order the logger takes them (channels, then
+-- message_ids): ALTER locks message_ids and DROP TABLE replies locks
+-- channels (its foreign key's triggers), and taking them the other way
+-- round could deadlock with a logger insert in flight during the deploy.
+LOCK TABLE channels, message_ids IN ACCESS EXCLUSIVE MODE;
+
 ALTER TABLE message_ids
   ADD COLUMN reply_to text,
   ADD COLUMN thread_root text,
