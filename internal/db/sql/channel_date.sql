@@ -7,26 +7,27 @@
 -- midnight there up to the midnight after $4, so a day that changes
 -- daylight saving time is 23 or 25 hours long.
 --
+-- The channel is found by its channels row; a conversation with none has
+-- no messages.
+--
 -- Only the archive blocks whose time span overlaps the range are unpacked.
 -- Their elements are filtered by their own time (whole seconds, which never
 -- moves a message across a day), not by the block's span.
-SELECT id, message::text AS message, connection_id, highlight
+SELECT id, message::text AS message, $1::text AS connection_id, highlight
 FROM logs
-WHERE connection_id = $1
-  AND channel = $2
+WHERE channel_id = (SELECT id FROM channels WHERE connection_id = $1 AND channel = $2)
   AND time >= (date($3)::timestamp AT TIME ZONE $8::text)
   AND time < ((date($4) + 1)::timestamp AT TIME ZONE $8::text)
   AND ($5::text IS NULL OR to_tsvector('english', message->'Params'->1) @@ websearch_to_tsquery($5::text))
   AND ($6::text IS NULL OR message->'Prefix'->>'Name' = $6::text)
 UNION ALL
-SELECT id, message, connection_id, highlight FROM (
+SELECT id, message, $1::text AS connection_id, highlight FROM (
   SELECT (e->>'id')::int AS id, e->'message' AS m, (e->'message')::text AS message,
-    a.connection_id, (e->>'highlight')::bool AS highlight,
+    (e->>'highlight')::bool AS highlight,
     to_timestamp((e->>'time')::bigint) AS time
   FROM log_archives a
   CROSS JOIN LATERAL json_array_elements(a.messages) e
-  WHERE a.connection_id = $1
-    AND a.channel = $2
+  WHERE a.channel_id = (SELECT id FROM channels WHERE connection_id = $1 AND channel = $2)
     AND a.min_time < ((date($4) + 1)::timestamp AT TIME ZONE $8::text)
     AND a.max_time >= (date($3)::timestamp AT TIME ZONE $8::text)
 ) archived

@@ -21,78 +21,57 @@ type ArchivedBlock struct {
 }
 
 // below selects the ids of connection $1, channel $2 older than its
-// newest $3 = keep, as CTEs named keep_id and below (oldest first, at most
-// $4).
+// newest $3 = keep, as CTEs named ch (its channels row), keep_id and below
+// (oldest first, at most $4).
 const below = `
+ch AS (
+	SELECT id FROM channels WHERE connection_id = $1 AND channel = $2
+),
 keep_id AS (
-	SELECT id FROM logs WHERE connection_id = $1 AND channel = $2
+	SELECT id FROM logs WHERE channel_id = (SELECT id FROM ch)
 	ORDER BY id DESC OFFSET $3::int - 1 LIMIT 1
 ),
 below AS (
 	SELECT id FROM logs
-	WHERE connection_id = $1 AND channel = $2 AND id < (SELECT id FROM keep_id)
+	WHERE channel_id = (SELECT id FROM ch) AND id < (SELECT id FROM keep_id)
 	ORDER BY id LIMIT $4::int
 )`
 
-// pairsAll walks the distinct (connection_id, channel) pairs of logs with a
-// loose index scan over logs (connection_id, channel, id DESC).
-const pairsAll = `
-pairs AS (
-	(SELECT connection_id, channel FROM logs ORDER BY connection_id, channel LIMIT 1)
-	UNION ALL
-	SELECT n.connection_id, n.channel FROM pairs p
-	CROSS JOIN LATERAL (
-		SELECT connection_id, channel FROM logs
-		WHERE (connection_id, channel) > (p.connection_id, p.channel)
-		ORDER BY connection_id, channel LIMIT 1
-	) n
-)`
-
-// pairsSome walks the channels of the connections in $3 the same way.
-const pairsSome = `
-pairs AS (
-	SELECT f.connection_id, f.channel FROM unnest($3::text[]) c(id)
-	CROSS JOIN LATERAL (
-		SELECT connection_id, channel FROM logs WHERE connection_id = c.id
-		ORDER BY channel LIMIT 1
-	) f
-	UNION ALL
-	SELECT n.connection_id, n.channel FROM pairs p
-	CROSS JOIN LATERAL (
-		SELECT connection_id, channel FROM logs
-		WHERE connection_id = p.connection_id AND channel > p.channel
-		ORDER BY channel LIMIT 1
-	) n
-)`
+// pairsAll is every channels row; pairsSome those of the connections in
+// $3.
+const (
+	pairsAll  = `pairs AS (SELECT id, connection_id, channel FROM channels)`
+	pairsSome = `pairs AS (SELECT id, connection_id, channel FROM channels WHERE connection_id = ANY($3::text[]))`
+)
 
 // candidates counts, for each pair, the messages older than its newest
-// $1 = keep, up to $2 = a block. Counting all of
-// them would read every archivable row, which on a large backlog takes
-// minutes; a block is all a caller needs to know.
+// $1 = keep, up to $2 = a block, through logs (channel_id, id DESC).
+// Counting all of them would read every archivable row, which on a large
+// backlog takes minutes; a block is all a caller needs to know.
 const candidates = `
 SELECT p.connection_id, p.channel, m.n
 FROM pairs p
 LEFT JOIN LATERAL (
-	SELECT id FROM logs WHERE connection_id = p.connection_id AND channel = p.channel
+	SELECT id FROM logs WHERE channel_id = p.id
 	ORDER BY id DESC OFFSET $1::int - 1 LIMIT 1
 ) k ON true
 CROSS JOIN LATERAL (
 	SELECT count(*)::int AS n FROM (
 		SELECT 1 FROM logs
-		WHERE connection_id = p.connection_id AND channel = p.channel AND id < k.id
+		WHERE channel_id = p.id AND id < k.id
 		LIMIT $2::int
 	) b
 ) m
 WHERE m.n > 0
 ORDER BY p.connection_id, p.channel`
 
-// ArchiveCandidates counts, for each (connection_id, channel) of logs (of conns,
-// when not empty), the messages older than its newest keep, up to block.
+// ArchiveCandidates counts, for each channel (of conns, when not empty),
+// the messages older than its newest keep, up to block.
 func (d *DB) ArchiveCandidates(ctx context.Context, keep int, block int, conns []string) ([]ChannelCount, error) {
-	sql := "WITH RECURSIVE " + pairsAll + candidates
+	sql := "WITH " + pairsAll + candidates
 	args := []any{keep, block}
 	if len(conns) > 0 {
-		sql = "WITH RECURSIVE " + pairsSome + candidates
+		sql = "WITH " + pairsSome + candidates
 		args = append(args, conns)
 	}
 	rows, err := d.Pool.Query(ctx, sql, args...)
@@ -120,10 +99,10 @@ func (d *DB) ArchiveBlock(ctx context.Context, conn, channel string, keep int, b
 moved AS (
 	DELETE FROM logs
 	WHERE id IN (SELECT id FROM below) AND (SELECT count(*) FROM below) = $4::int
-	RETURNING id, user_id, time, message, highlight
+	RETURNING id, time, message, highlight
 )
 INSERT INTO log_archives (channel_id, connection_id, user_id, channel, first_id, last_id, min_time, max_time, count, messages)
-SELECT (SELECT id FROM channels WHERE connection_id = $1 AND channel = $2), $1, min(user_id), $2, min(id), max(id), min(time), max(time), count(*),
+SELECT (SELECT id FROM ch), $1, (SELECT user_id FROM connections WHERE id = $1), $2, min(id), max(id), min(time), max(time), count(*),
 	json_agg(json_build_object(
 		'id', id,
 		'time', floor(extract(epoch from time))::bigint,

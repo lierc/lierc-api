@@ -422,11 +422,11 @@ func TestMessageByLogIDOneBlock(t *testing.T) {
 	}
 	exec(t, d, `ANALYZE log_archives`)
 	var idx string
-	if err := d.Pool.QueryRow(ctx, `SELECT indexname FROM pg_indexes WHERE tablename = 'log_archives' AND indexdef LIKE '%last_id%'`).Scan(&idx); err != nil {
+	if err := d.Pool.QueryRow(ctx, `SELECT indexname FROM pg_indexes WHERE indexname = 'log_archives_channel_id_last_id_idx'`).Scan(&idx); err != nil {
 		t.Fatal(err)
 	}
 	for _, id := range []int{250, 150250, 299250} { // the oldest, a middle and the newest block
-		sql, args, err := db.BlockHoldingSQL("c1", "#a", int32(id))
+		sql, args, err := db.BlockHoldingSQL(testenv.ChannelID(t, d, "c1", "#a"), int32(id))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -492,7 +492,7 @@ func TestMessageByMsgidIndexes(t *testing.T) {
 		t.Errorf("message_ids lookup doesn't use message_ids_msgid_idx:\n%s", p)
 	}
 	var idx string
-	d.Pool.QueryRow(ctx, `SELECT indexname FROM pg_indexes WHERE tablename = 'log_archives' AND indexdef LIKE '%last_id%'`).Scan(&idx)
+	d.Pool.QueryRow(ctx, `SELECT indexname FROM pg_indexes WHERE indexname = 'log_archives_channel_id_last_id_idx'`).Scan(&idx)
 	// the archive is tiny here, so a sequential scan is the cheaper plan;
 	// what matters is that the query can use the index at all
 	c, err := d.Pool.Acquire(ctx)
@@ -504,7 +504,7 @@ func TestMessageByMsgidIndexes(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer c.Exec(ctx, "RESET enable_seqscan")
-	bsql, bargs, err := db.BlockHoldingSQL("c1", "#a", 3)
+	bsql, bargs, err := db.BlockHoldingSQL(testenv.ChannelID(t, d, "c1", "#a"), 3)
 	if err != nil {
 		t.Fatal(err)
 	}

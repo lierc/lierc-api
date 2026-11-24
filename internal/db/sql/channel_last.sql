@@ -4,9 +4,10 @@
 SELECT id,
   jsonb_set(message, '{Params,1}', ts_headline('english', message->'Params'->1,
     websearch_to_tsquery($3::text), E'StartSel = \x02, StopSel = \x02'))::text AS message,
-  connection_id, highlight
+  $2::text AS connection_id, highlight
 FROM logs
-WHERE channel = $1 AND connection_id = $2 AND command = 'PRIVMSG'
+WHERE channel_id = (SELECT id FROM channels WHERE channel = $1 AND connection_id = $2)
+  AND command = 'PRIVMSG'
   AND time > (NOW() - '1 week'::interval)
   AND to_tsvector(message->'Params'->>1) @@ websearch_to_tsquery($3::text)
 ORDER BY id DESC LIMIT $4::int

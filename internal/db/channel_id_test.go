@@ -3,7 +3,9 @@ package db_test
 import (
 	"errors"
 	"fmt"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/lierc/lierc-api/internal/db"
 	"github.com/lierc/lierc-api/internal/testenv"
@@ -216,5 +218,98 @@ func TestSetSeenOtherUsersConnection(t *testing.T) {
 	d.Pool.QueryRow(ctx, `SELECT message_id FROM seen_markers`).Scan(&id)
 	if id != 5 {
 		t.Errorf("alice's marker is at %d, want 5", id)
+	}
+}
+
+// readsFixture logs, for alice, on c1 and c2 (both hers): #a on both (one
+// name, two connections), #b on c1; archives c1 #a's oldest messages into
+// two blocks; and sets her seen marker on c1 #a.
+func readsFixture(t *testing.T, d *db.DB) string {
+	t.Helper()
+	a := testenv.AddUser(t, d, "alice")
+	testenv.AddConnection(t, d, "c1", a, "{}")
+	testenv.AddConnection(t, d, "c2", a, "{}")
+	now := float64(time.Now().Unix())
+	n := 0
+	log := func(conn, channel, text string, highlight bool) {
+		t.Helper()
+		n++
+		msg := fmt.Sprintf(`{"Command":"PRIVMSG","Params":[%q,%q],"Prefix":{"Name":"bob"},"Tags":{"msgid":"m%d"}}`, channel, text, n)
+		if _, err := d.InsertLog(ctx, db.LogEntry{Connection: conn, Command: "PRIVMSG", Message: []byte(msg), Time: now}, []string{channel}, highlight); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for i := range 8 {
+		log("c1", "#a", fmt.Sprint("hello one ", i), i%3 == 0)
+		log("c2", "#a", fmt.Sprint("hello two ", i), i%4 == 0)
+		log("c1", "#b", fmt.Sprint("hello bee ", i), false)
+	}
+	for range 2 {
+		if _, ok, err := d.ArchiveBlock(ctx, "c1", "#a", 4, 2); !ok || err != nil {
+			t.Fatalf("ArchiveBlock: %v %v", ok, err)
+		}
+	}
+	if err := d.SetSeen(ctx, a, "c1", "#a", 10); err != nil {
+		t.Fatal(err)
+	}
+	return a
+}
+
+// storeReads is every Store read of readsFixture's data, printed.
+func storeReads(t *testing.T, d *db.DB, user string) map[string]string {
+	t.Helper()
+	out := map[string]string{}
+	add := func(name string, v any, err error) {
+		if err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		out[name] = fmt.Sprintf("%s", v)
+	}
+	today := time.Now().UTC().Format("2006-01-02")
+	hello := "hello"
+	var newest int32
+	d.Pool.QueryRow(ctx, `SELECT max(id) FROM logs`).Scan(&newest)
+
+	v1, err := d.ChannelLogs(ctx, "c1", "#a", 50)
+	add("ChannelLogs c1", v1, err)
+	v2, err := d.ChannelLogs(ctx, "c2", "#a", 50)
+	add("ChannelLogs c2", v2, err)
+	v3, err := d.ChannelLogsBefore(ctx, "c1", "#a", newest, 3)
+	add("ChannelLogsBefore", v3, err)
+	v4, err := d.ChannelDate(ctx, "c1", "#a", today, today, "UTC", nil, nil, 100)
+	add("ChannelDate", v4, err)
+	v5, err := d.ChannelLast(ctx, "c1", "#a", &hello, 50)
+	add("ChannelLast", v5, err)
+	m1, ok1, err := d.MessageByMsgid(ctx, "c1", "m22") // in logs
+	add("MessageByMsgid logs", fmt.Sprint(m1, ok1), err)
+	m2, ok2, err := d.MessageByMsgid(ctx, "c1", "m1") // archived
+	add("MessageByMsgid block", fmt.Sprint(m2, ok2), err)
+	c1, err := d.ArchiveCandidates(ctx, 2, 1, nil)
+	add("ArchiveCandidates", fmt.Sprint(c1), err)
+	c2, err := d.ArchiveCandidates(ctx, 2, 1, []string{"c2"})
+	add("ArchiveCandidates c2", fmt.Sprint(c2), err)
+	return out
+}
+
+// The reads go through channel_id: with the old columns made to lie
+// (channel prefixed, c1 and c2 swapped), every read answers the same.
+func TestReadsIgnoreOldColumns(t *testing.T) {
+	d := testenv.Postgres(t)
+	user := readsFixture(t, d)
+	before := storeReads(t, d, user)
+	for name, v := range before {
+		if v == "[]" || strings.HasSuffix(v, "false") {
+			t.Errorf("%s found nothing: the fixture doesn't exercise it", name)
+		}
+	}
+	for _, tbl := range channelIDTables {
+		exec(t, d, `UPDATE `+tbl+` SET channel = 'x' || channel,
+			connection_id = CASE connection_id WHEN 'c1' THEN 'c2' ELSE 'c1' END`)
+	}
+	after := storeReads(t, d, user)
+	for name, v := range before {
+		if after[name] != v {
+			t.Errorf("%s reads the old columns:\nbefore %s\nafter  %s", name, v, after[name])
+		}
 	}
 }

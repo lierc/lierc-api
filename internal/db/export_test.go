@@ -16,8 +16,8 @@ func SetListenPing(d time.Duration) func() {
 }
 
 // BlockHoldingSQL is the archive block lookup's SQL, for EXPLAIN in tests.
-func BlockHoldingSQL(conn, channel string, id int32) (string, []any, error) {
-	return blockHoldingQuery(conn, channel, id).ToSql()
+func BlockHoldingSQL(ch, id int32) (string, []any, error) {
+	return blockHoldingQuery(ch, id).ToSql()
 }
 
 // MessageIDsLookupSQL is the message_ids lookup's SQL, for EXPLAIN in tests.

@@ -87,8 +87,13 @@ func (d *DB) channelPage(ctx context.Context, conn, channel string, before *int3
 	}
 	defer tx.Rollback(ctx)
 
-	q := psql.Select("id", "message::text", "connection_id", "highlight").From("logs").
-		Where(sq.Eq{"connection_id": conn, "channel": channel})
+	// the channel's channels row: none, no messages
+	ch, ok, err := lookupChannel(ctx, tx, conn, channel)
+	if err != nil || !ok {
+		return []Message{}, err
+	}
+	q := psql.Select("id", "message::text").Column("?::text", conn).Column("highlight").From("logs").
+		Where(sq.Eq{"channel_id": ch})
 	if before != nil {
 		q = q.Where(sq.Lt{"id": *before})
 	}
@@ -105,19 +110,19 @@ func (d *DB) channelPage(ctx context.Context, conn, channel string, before *int3
 	// ending below it (any, without before); then each next older one
 	cursor := before
 	var block blockRef
-	ok := false
+	ok = false
 	if len(page) < limit {
 		if before != nil {
-			block, ok, err = blockHolding(ctx, tx, conn, channel, *before)
+			block, ok, err = blockHolding(ctx, tx, ch, *before)
 			if err == nil && (!ok || block.first >= *before) {
-				block, ok, err = blockBelow(ctx, tx, conn, channel, before)
+				block, ok, err = blockBelow(ctx, tx, ch, before)
 			}
 		} else {
-			block, ok, err = blockBelow(ctx, tx, conn, channel, nil)
+			block, ok, err = blockBelow(ctx, tx, ch, nil)
 		}
 	}
-	for ; err == nil && ok && len(page) < limit; block, ok, err = blockBelow(ctx, tx, conn, channel, &block.first) {
-		e := archivedMessages(block.id)
+	for ; err == nil && ok && len(page) < limit; block, ok, err = blockBelow(ctx, tx, ch, &block.first) {
+		e := archivedMessages(conn, block.id)
 		if cursor != nil {
 			e = e.Where("(e->>'id')::int < ?", *cursor)
 		}
@@ -138,30 +143,42 @@ func (d *DB) channelPage(ctx context.Context, conn, channel string, before *int3
 	return page, tx.Commit(ctx)
 }
 
+// lookupChannel is the id of channel on conn's channels row; ok is false
+// when there's none (nothing was ever logged there).
+func lookupChannel(ctx context.Context, r runner, conn, channel string) (int32, bool, error) {
+	var id int32
+	err := queryRow(ctx, r, psql.Select("id").From("channels").
+		Where(sq.Eq{"connection_id": conn, "channel": channel})).Scan(&id)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return 0, false, nil
+	}
+	return id, err == nil, err
+}
+
 // blockRef is an archive block: its row id and the first message id in it.
 type blockRef struct {
 	id, first int32
 }
 
-// blockHolding is the archive block of channel on conn whose range holds
+// blockHolding is the archive block of channel ch whose range holds
 // message id: the first ending at or after it (a channel's blocks never
-// overlap), one probe of the (connection_id, channel, last_id) index. ok is
-// false when none ends at or after it; a block found may still start
-// after id (id isn't archived).
-func blockHolding(ctx context.Context, r runner, conn, channel string, id int32) (blockRef, bool, error) {
-	return oneBlock(ctx, r, blockHoldingQuery(conn, channel, id))
+// overlap), one probe of the (channel_id, last_id) index. ok is false
+// when none ends at or after it; a block found may still start after id
+// (id isn't archived).
+func blockHolding(ctx context.Context, r runner, ch, id int32) (blockRef, bool, error) {
+	return oneBlock(ctx, r, blockHoldingQuery(ch, id))
 }
 
-func blockHoldingQuery(conn, channel string, id int32) sq.SelectBuilder {
+func blockHoldingQuery(ch, id int32) sq.SelectBuilder {
 	return psql.Select("id", "first_id").From("log_archives").
-		Where(sq.Eq{"connection_id": conn, "channel": channel}).Where(sq.GtOrEq{"last_id": id}).
+		Where(sq.Eq{"channel_id": ch}).Where(sq.GtOrEq{"last_id": id}).
 		OrderBy("last_id").Limit(1)
 }
 
-// blockBelow is the newest archive block of channel on conn ending below
-// id (the newest of all, when id is nil): one probe of the same index.
-func blockBelow(ctx context.Context, r runner, conn, channel string, id *int32) (blockRef, bool, error) {
-	q := psql.Select("id", "first_id").From("log_archives").Where(sq.Eq{"connection_id": conn, "channel": channel})
+// blockBelow is the newest archive block of channel ch ending below id
+// (the newest of all, when id is nil): one probe of the same index.
+func blockBelow(ctx context.Context, r runner, ch int32, id *int32) (blockRef, bool, error) {
+	q := psql.Select("id", "first_id").From("log_archives").Where(sq.Eq{"channel_id": ch})
 	if id != nil {
 		q = q.Where(sq.Lt{"last_id": *id})
 	}
@@ -177,10 +194,10 @@ func oneBlock(ctx context.Context, r runner, q sq.SelectBuilder) (blockRef, bool
 	return b, err == nil, err
 }
 
-// archivedMessages selects the messages of archive block id, unpacked, as
-// Message's columns; callers add filters and order.
-func archivedMessages(block int32) sq.SelectBuilder {
-	return psql.Select("(e->>'id')::int", "(e->'message')::text", "a.connection_id", "(e->>'highlight')::bool").
+// archivedMessages selects the messages of archive block id, on conn,
+// unpacked, as Message's columns; callers add filters and order.
+func archivedMessages(conn string, block int32) sq.SelectBuilder {
+	return psql.Select("(e->>'id')::int", "(e->'message')::text").Column("?::text", conn).Column("(e->>'highlight')::bool").
 		From("log_archives AS a").JoinClause("CROSS JOIN LATERAL json_array_elements(a.messages) e").
 		Where(sq.Eq{"a.id": block})
 }
@@ -197,9 +214,8 @@ func (d *DB) ChannelLast(ctx context.Context, conn, channel string, query *strin
 // logged, and it's read from logs, else unpacked from the archive block
 // holding it.
 func (d *DB) MessageByMsgid(ctx context.Context, conn, msgid string) (Message, bool, error) {
-	var channel string
-	var logID int32
-	err := queryRow(ctx, d.Pool, messageIDsLookup(conn, msgid)).Scan(&channel, &logID)
+	var ch, logID int32
+	err := queryRow(ctx, d.Pool, messageIDsLookup(conn, msgid)).Scan(&ch, &logID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Message{}, false, nil
 	}
@@ -207,25 +223,25 @@ func (d *DB) MessageByMsgid(ctx context.Context, conn, msgid string) (Message, b
 		return Message{}, false, err
 	}
 	chat := sq.Eq{"command": []string{"PRIVMSG", "NOTICE"}}
-	if m, ok, err := d.oneMessage(ctx, psql.Select("id", "message::text", "connection_id", "highlight").From("logs").
-		Where(sq.Eq{"id": logID, "connection_id": conn}).Where(chat)); ok || err != nil {
+	if m, ok, err := d.oneMessage(ctx, psql.Select("id", "message::text").Column("?::text", conn).Column("highlight").From("logs").
+		Where(sq.Eq{"id": logID, "channel_id": ch}).Where(chat)); ok || err != nil {
 		return m, ok, err
 	}
-	block, ok, err := blockHolding(ctx, d.Pool, conn, channel, logID)
+	block, ok, err := blockHolding(ctx, d.Pool, ch, logID)
 	if err != nil || !ok || block.first > logID {
 		return Message{}, false, err
 	}
-	return d.oneMessage(ctx, archivedMessages(block.id).
+	return d.oneMessage(ctx, archivedMessages(conn, block.id).
 		Where("(e->>'id')::int = ?", logID).
 		Where("e->'message'->>'Command' IN ('PRIVMSG', 'NOTICE')"))
 }
 
-// messageIDsLookup is where conn's copy of msgid was logged, its channel
-// and logs id, from message_ids through message_ids_msgid_idx: each
+// messageIDsLookup is where conn's copy of msgid was logged, its channels
+// row and logs id, from message_ids through message_ids_msgid_idx: each
 // connection logs its own copy, so the msgid alone isn't enough; the
 // earliest if it was logged twice.
 func messageIDsLookup(conn, msgid string) sq.SelectBuilder {
-	return psql.Select("c.channel", "m.log_id").From("message_ids AS m").
+	return psql.Select("m.channel_id", "m.log_id").From("message_ids AS m").
 		Join("channels AS c ON c.id = m.channel_id").
 		Where(sq.Eq{"m.msgid": msgid, "c.connection_id": conn}).
 		OrderBy("m.log_id").Limit(1)
